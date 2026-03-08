@@ -1,0 +1,24 @@
+{
+  "id": "community.stremio-nuvio-importer",
+  "name": "Stremio Backup Importer",
+  "description": "Importa la tua libreria Stremio in NUVIO con un click",
+  "version": "1.0.0",
+  "resources": [
+    "catalog"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "catalogs": [
+    {
+      "type": "movie",
+      "id": "stremio-import",
+      "name": "📦 Stremio Importer"
+    }
+  ],
+  "behaviorHints": {
+    "configurable": true,
+    "configurationRequired": false
+  }
+}
