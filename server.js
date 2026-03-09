@@ -34,8 +34,8 @@ app.get('/manifest.json', (req, res) => {
   const manifest = {
     id: "community.stremio-nuvio-importer",
     name: "Stremio → NUVIO Importer",
-    description: "Automazione catalogo: importa Stremio come azioni utente",
-    version: "1.1.0",
+    description: "Importazione definitiva della libreria Stremio su NUVIO",
+    version: "1.2.0",
     logo: "https://i.imgur.com/AIZFSRF.jpeg",
     resources: ["catalog"],
     types: ["movie", "series"],
@@ -46,7 +46,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// LOGICA DI CONVERSIONE (AUTOMAZIONE CATALOGO)
+// LOGICA DI CONVERSIONE (IBRIDA ANTI-CANCELLAZIONE)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -54,27 +54,22 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       return res.status(400).json({ error: 'Nessun file caricato' });
     }
 
-    console.log('📁 Avvio automazione catalogo per:', req.file.originalname);
+    console.log('📁 Analisi backup Stremio per conversione Nuvio...');
 
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const stremioData = JSON.parse(fileContent);
 
     const library = [];
-    const syncQueue = [];
     const now = Date.now();
     
-    let movieCount = 0;
-    let seriesCount = 0;
+    // Usiamo un timestamp futuro per "bloccare" gli elementi localmente
+    const futureTimestamp = now + 500000;
 
     const itemsArray = Array.isArray(stremioData) ? stremioData : Object.values(stremioData);
     
-    itemsArray.forEach((item, index) => {
+    itemsArray.forEach((item) => {
       if (item.removed || item.temp) return;
       if (item.type !== 'movie' && item.type !== 'series') return;
-
-      // Creiamo un timestamp incrementale per simulare un'attività umana reale
-      // Un'azione ogni 50ms per non intasare l'engine di Nuvio
-      const simulatedTime = now + (index * 50);
 
       const libraryItem = {
         id: item._id,
@@ -88,15 +83,15 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
-        inLibrary: true,
         
-        // FLAG DI AUTOMAZIONE
-        // Diciamo che l'item è "sporco" (da salvare) ma con un timestamp recentissimo
-        _isDirty: true,
-        _isNew: true,
-        _needsSync: true,
-        lastUpdatedAt: simulatedTime,
-        addedToLibraryAt: simulatedTime,
+        // LOGICA DI PROTEZIONE LOCALE
+        inLibrary: true,
+        _isDirty: false,       // Non provare a caricarlo (evita errore RLS)
+        _isNew: false,         // Consideralo già esistente
+        _needsSync: false,     // Non forzare il sync
+        _isDeleted: false,
+        lastUpdatedAt: futureTimestamp, 
+        addedToLibraryAt: now,
 
         behaviorHints: {
           defaultVideoId: item._id,
@@ -108,22 +103,9 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.logo) libraryItem.logo = item.logo;
 
       library.push(libraryItem);
-
-      // Inseriamo l'azione nella CODA DI SINCRONIZZAZIONE
-      // Questo "costringe" l'app a processare l'aggiunta verso il server
-      syncQueue.push({
-        id: `import_${item._id}`,
-        table: 'library',
-        action: 'INSERT',
-        data: libraryItem,
-        timestamp: simulatedTime
-      });
-
-      if (item.type === 'movie') movieCount++;
-      else seriesCount++;
     });
 
-    // Costruzione del pacchetto di ripristino
+    // Struttura Backup NUVIO ottimizzata per il mantenimento dei dati
     const nuvioBackup = {
       version: "1.0.0",
       timestamp: now,
@@ -132,23 +114,17 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       userScope: "local", 
       data: {
         library: library,
-        syncQueue: syncQueue, // L'automazione risiede qui
+        // Svuotiamo le code per impedire all'app di confrontarsi col cloud immediatamente
+        syncQueue: [], 
+        tombStones: {}, 
         settings: {
-          lastSyncTimestamp: 0 // Forza l'app a riconsiderare lo stato del database
+          // Diciamo all'app che l'ultimo sync è avvenuto nel futuro
+          // Questo impedisce il download dal cloud che piallerebbe il locale
+          lastSyncTimestamp: futureTimestamp + 100000 
         },
         watchProgress: {},
         installedAddons: [],
-        localScrapers: {},
-        apiKeys: {},
-        addonOrder: [],
-        removedAddons: [],
-        downloads: [],
         watchedItems: [],
-        continueWatchingRemoved: {},
-        contentDuration: {},
-        traktSettings: null,
-        simklSettings: null,
-        tombStones: {}, // Pulizia totale per evitare che vecchie cancellazioni blocchino l'import
         subtitles: {
           subtitleSize: 28,
           subtitleTextColor: "#FFFFFF",
@@ -164,8 +140,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
-        syncQueueCount: syncQueue.length,
-        stats: { movies: movieCount, series: seriesCount }
+        syncQueueCount: 0
       }
     };
 
@@ -173,20 +148,16 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         fs.unlinkSync(req.file.path);
     }
 
-    console.log(`✅ Automazione creata: ${library.length} azioni in coda.`);
-
     res.json({
       success: true,
       data: nuvioBackup,
       stats: { 
-        movies: movieCount, 
-        series: seriesCount,
         total: library.length
       }
     });
 
   } catch (error) {
-    console.error('❌ Errore durante l\'automazione:', error);
+    console.error('❌ Errore:', error);
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
@@ -197,7 +168,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 NUVIO Importer - MODALITÀ AUTOMAZIONE`);
+  console.log(`\n🚀 NUVIO Importer - READY`);
   console.log(`📡 Porta: ${PORT}`);
   console.log(`🔗 URL: https://stremio-nuvio-importer.onrender.com/`);
 });
