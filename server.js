@@ -4,6 +4,10 @@ const path    = require('path');
 const fs      = require('fs');
 const cors    = require('cors');
 
+// node-fetch v2 (CommonJS) — funziona su Node 14+ a differenza del fetch nativo
+// Assicurati di avere nel package.json: "node-fetch": "^2.7.0"
+const fetch = require('node-fetch');
+
 const app    = express();
 const upload = multer({ dest: 'uploads/' });
 
@@ -14,10 +18,13 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.static('public'));
 
-// ── Supabase helpers (server → Supabase, niente CORS) ──────────────────────
+// ── Supabase helpers ────────────────────────────────────────────────────────
 
-async function sbFetch(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}${path}`, {
+async function sbFetch(urlPath, options = {}) {
+  const url = `${SUPABASE_URL}${urlPath}`;
+  console.log(`→ Supabase: ${options.method || 'GET'} ${url}`);
+
+  const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -25,12 +32,18 @@ async function sbFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
   if (!res.ok) {
     const msg = data?.message || data?.error_description || data?.msg || text || `HTTP ${res.status}`;
+    console.error(`← Supabase error ${res.status}:`, msg);
     throw new Error(msg);
   }
+
+  console.log(`← Supabase OK ${res.status}`);
   return data;
 }
 
@@ -44,11 +57,9 @@ async function sbRpc(fnName, payload, token) {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
-app.get('/',         (req, res) => res.redirect('/configure'));
-app.get('/configure',(req, res) => res.sendFile(path.join(__dirname, 'public', 'configure.html')));
-
-// Health check — usato dal frontend per svegliare Render prima delle call vere
-app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/',          (req, res) => res.redirect('/configure'));
+app.get('/configure', (req, res) => res.sendFile(path.join(__dirname, 'public', 'configure.html')));
+app.get('/health',    (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 app.get('/manifest.json', (req, res) => res.json({
   id: 'community.stremio-nuvio-importer',
@@ -71,10 +82,9 @@ app.get('/catalog/movie/stremio-import.json', (req, res) => res.json({
 }));
 
 // ── LOGIN ────────────────────────────────────────────────────────────────────
-// Il server fa il login su Supabase ed restituisce il token al browser.
-// Così il browser non tocca mai Supabase direttamente (no CORS issue).
 app.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
+
   if (!email || !password)
     return res.status(400).json({ error: 'Email e password richiesti' });
 
@@ -85,17 +95,17 @@ app.post('/login', async (req, res) => {
     });
 
     if (!data?.access_token)
-      return res.status(401).json({ error: 'Login fallito, token mancante' });
+      return res.status(401).json({ error: 'Login fallito — token mancante' });
 
-    console.log(`✅ Login: ${data.user?.email}`);
+    console.log(`✅ Login OK: ${data.user?.email}`);
     res.json({ token: data.access_token, email: data.user?.email });
 
   } catch (err) {
-    console.error('Login error:', err.message);
-    const msg = err.message.includes('Invalid login')
+    console.error('❌ Login error:', err.message);
+    const friendly = err.message.toLowerCase().includes('invalid login')
       ? 'Email o password errati'
       : err.message;
-    res.status(401).json({ error: msg });
+    res.status(401).json({ error: friendly });
   }
 });
 
@@ -103,12 +113,8 @@ app.post('/login', async (req, res) => {
 app.post('/import', upload.single('backup'), async (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
 
-  if (!token) {
-    return res.status(401).json({ error: 'Non autenticato — fai prima il login' });
-  }
-  if (!req.file) {
-    return res.status(400).json({ error: 'Nessun file caricato' });
-  }
+  if (!token) return res.status(401).json({ error: 'Non autenticato' });
+  if (!req.file) return res.status(400).json({ error: 'Nessun file caricato' });
 
   let backupData;
   try {
@@ -131,13 +137,13 @@ app.post('/import', upload.single('backup'), async (req, res) => {
       try {
         await sbRpc('sync_push_watch_progress', { p_entries: progress }, token);
         results.progress = progress.length;
-      } catch (e) { console.warn('progress (non bloccante):', e.message); }
+      } catch (e) { console.warn('⚠️ progress (non bloccante):', e.message); }
     }
     if (watched.length > 0) {
       try {
         await sbRpc('sync_push_watched_items', { p_items: watched }, token);
         results.watched = watched.length;
-      } catch (e) { console.warn('watched (non bloccante):', e.message); }
+      } catch (e) { console.warn('⚠️ watched (non bloccante):', e.message); }
     }
 
     res.json({
@@ -147,8 +153,8 @@ app.post('/import', upload.single('backup'), async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Import error:', err.message);
-    const status = err.message.includes('JWT') || err.message.includes('auth') ? 401 : 500;
+    console.error('❌ Import error:', err.message);
+    const status = /jwt|auth|token/i.test(err.message) ? 401 : 500;
     res.status(status).json({ error: err.message });
   }
 });
@@ -208,6 +214,6 @@ function convertBackup(raw) {
 // ── START ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 NUVIO Importer su porta ${PORT}`);
+  console.log(`\n🚀 NUVIO Importer — porta ${PORT}`);
   console.log(`🌐 https://stremio-nuvio-importer.onrender.com/configure\n`);
 });
