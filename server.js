@@ -28,34 +28,25 @@ app.get('/configure', (req, res) => {
 });
 
 // ============================================
-// MANIFEST DELL'ADDON (Standard Stremio/Nuvio)
+// MANIFEST DELL'ADDON
 // ============================================
 app.get('/manifest.json', (req, res) => {
   const manifest = {
     id: "community.stremio-nuvio-importer",
     name: "Stremio → NUVIO Importer",
-    description: "Converti il backup di Stremio nel formato nativo di NUVIO",
-    version: "1.0.2",
+    description: "Automazione catalogo: importa Stremio come azioni utente",
+    version: "1.1.0",
     logo: "https://i.imgur.com/AIZFSRF.jpeg",
     resources: ["catalog"],
     types: ["movie", "series"],
-    catalogs: [
-      {
-        type: "movie",
-        id: "stremio-importer",
-        name: "📦 Importer"
-      }
-    ],
-    behaviorHints: {
-      configurable: true,
-      configurationRequired: false
-    }
+    catalogs: [{ type: "movie", id: "stremio-importer", name: "📦 Importer" }],
+    behaviorHints: { configurable: true, configurationRequired: false }
   };
   res.json(manifest);
 });
 
 // ============================================
-// LOGICA DI CONVERSIONE ANTI-CANCELLAZIONE
+// LOGICA DI CONVERSIONE (AUTOMAZIONE CATALOGO)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -63,27 +54,27 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       return res.status(400).json({ error: 'Nessun file caricato' });
     }
 
-    console.log('📁 Conversione file:', req.file.originalname);
+    console.log('📁 Avvio automazione catalogo per:', req.file.originalname);
 
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const stremioData = JSON.parse(fileContent);
 
     const library = [];
-    const watchProgress = {};
+    const syncQueue = [];
     const now = Date.now();
-    
-    // Impostiamo un timestamp molto nel futuro per assicurarci che 
-    // questi dati "vincano" su eventuali dati vecchi nel database.
-    const futureUpdate = now + 100000; 
     
     let movieCount = 0;
     let seriesCount = 0;
 
     const itemsArray = Array.isArray(stremioData) ? stremioData : Object.values(stremioData);
     
-    itemsArray.forEach(item => {
+    itemsArray.forEach((item, index) => {
       if (item.removed || item.temp) return;
       if (item.type !== 'movie' && item.type !== 'series') return;
+
+      // Creiamo un timestamp incrementale per simulare un'attività umana reale
+      // Un'azione ogni 50ms per non intasare l'engine di Nuvio
+      const simulatedTime = now + (index * 50);
 
       const libraryItem = {
         id: item._id,
@@ -97,16 +88,15 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
-        
-        // --- LOGICA "SILENT SYNC" ---
-        // Diciamo all'app che l'item è già sincronizzato (_isDirty: false)
-        // così l'app non prova a fare l'upload immediato che verrebbe bloccato dalle RLS.
         inLibrary: true,
-        _isDirty: false,           
-        _isNew: false,             
-        _needsSync: false,
-        lastUpdatedAt: futureUpdate, 
-        addedToLibraryAt: new Date(item._ctime || item._mtime || now).getTime(),
+        
+        // FLAG DI AUTOMAZIONE
+        // Diciamo che l'item è "sporco" (da salvare) ma con un timestamp recentissimo
+        _isDirty: true,
+        _isNew: true,
+        _needsSync: true,
+        lastUpdatedAt: simulatedTime,
+        addedToLibraryAt: simulatedTime,
 
         behaviorHints: {
           defaultVideoId: item._id,
@@ -119,48 +109,48 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
       library.push(libraryItem);
 
+      // Inseriamo l'azione nella CODA DI SINCRONIZZAZIONE
+      // Questo "costringe" l'app a processare l'aggiunta verso il server
+      syncQueue.push({
+        id: `import_${item._id}`,
+        table: 'library',
+        action: 'INSERT',
+        data: libraryItem,
+        timestamp: simulatedTime
+      });
+
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
-
-      // Progressi di visione impostati come "già salvati"
-      if (item.state?.timeOffset > 0) {
-        const progressKey = `watch_progress:${item.type}:${item._id}`;
-        watchProgress[progressKey] = {
-          currentTime: item.state.timeOffset,
-          duration: item.state.duration || 0,
-          lastUpdated: futureUpdate,
-          _isDirty: false
-        };
-      }
     });
 
-    // Struttura Backup NUVIO con Scope Utente
+    // Costruzione del pacchetto di ripristino
     const nuvioBackup = {
       version: "1.0.0",
       timestamp: now,
       appVersion: "1.0.0",
       platform: "android",
-      userScope: "user", // "user" indica che il backup appartiene a una sessione cloud
+      userScope: "local", 
       data: {
-        settings: {},
+        library: library,
+        syncQueue: syncQueue, // L'automazione risiede qui
+        settings: {
+          lastSyncTimestamp: 0 // Forza l'app a riconsiderare lo stato del database
+        },
+        watchProgress: {},
         installedAddons: [],
         localScrapers: {},
         apiKeys: {},
         addonOrder: [],
         removedAddons: [],
         downloads: [],
-        library: library,
-        watchProgress: watchProgress,
         watchedItems: [],
         continueWatchingRemoved: {},
         contentDuration: {},
-        syncQueue: [], // Coda vuota per evitare tentativi di sync fallimentari
         traktSettings: null,
         simklSettings: null,
-        tombStones: {}, // Reset delle cancellazioni passate
+        tombStones: {}, // Pulizia totale per evitare che vecchie cancellazioni blocchino l'import
         subtitles: {
           subtitleSize: 28,
-          subtitleBackground: false,
           subtitleTextColor: "#FFFFFF",
           subtitleBgOpacity: 0.7,
           subtitleTextShadow: true,
@@ -168,24 +158,22 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
           subtitleOutlineColor: "#000000",
           subtitleOutlineWidth: 3,
           subtitleAlign: "center",
-          subtitleBottomOffset: 20,
-          subtitleLetterSpacing: 0,
-          subtitleLineHeightMultiplier: 1.2
+          subtitleBottomOffset: 20
         }
       },
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
-        watchProgressCount: Object.keys(watchProgress).length,
-        downloadsCount: 0,
-        addonsCount: 0
+        syncQueueCount: syncQueue.length,
+        stats: { movies: movieCount, series: seriesCount }
       }
     };
 
-    // Pulizia file temporaneo
     if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
     }
+
+    console.log(`✅ Automazione creata: ${library.length} azioni in coda.`);
 
     res.json({
       success: true,
@@ -193,13 +181,12 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       stats: { 
         movies: movieCount, 
         series: seriesCount,
-        progress: Object.keys(watchProgress).length,
         total: library.length
       }
     });
 
   } catch (error) {
-    console.error('❌ Errore:', error);
+    console.error('❌ Errore durante l\'automazione:', error);
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
@@ -210,7 +197,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 NUVIO Importer (Anti-Delete Version)`);
+  console.log(`\n🚀 NUVIO Importer - MODALITÀ AUTOMAZIONE`);
   console.log(`📡 Porta: ${PORT}`);
   console.log(`🔗 URL: https://stremio-nuvio-importer.onrender.com/`);
 });
