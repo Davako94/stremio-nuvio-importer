@@ -51,11 +51,14 @@
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 30px;
-      border-left: 4px solid #00ff9f;
+      border-left: 4px solid #00a8ff;
+    }
+    .status-card.connected {
+      border-left-color: #00ff9f;
     }
     .status-icon { font-size: 24px; margin-bottom: 10px; }
-    .status-title { font-weight: bold; color: #00ff9f; margin-bottom: 5px; }
-    .status-desc { color: #ccc; font-size: 14px; }
+    .status-title { font-weight: bold; margin-bottom: 5px; }
+    .status-desc { color: #aaa; font-size: 14px; }
     
     .upload-area {
       border: 2px dashed #444;
@@ -97,12 +100,11 @@
       border: none;
       padding: 16px;
       width: 100%;
-      border-radius: 12px;
+      border-radius: 10px;
       font-size: 16px;
       font-weight: bold;
       cursor: pointer;
       transition: transform 0.2s, opacity 0.2s;
-      margin: 10px 0;
     }
     button:hover:not(:disabled) { transform: translateY(-2px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -159,12 +161,15 @@
     .stat-value { font-size: 24px; font-weight: bold; color: #00a8ff; }
     .stat-label { color: #aaa; font-size: 12px; margin-top: 5px; }
     
-    .footer {
+    .howto {
       margin-top: 30px;
-      text-align: center;
-      color: #666;
-      font-size: 12px;
+      padding: 20px;
+      background: #2a2a2a;
+      border-radius: 10px;
     }
+    .howto h3 { color: #00a8ff; margin-bottom: 15px; font-size: 16px; }
+    .howto ol { padding-left: 20px; color: #ccc; font-size: 14px; }
+    .howto li { margin: 10px 0; }
     
     .badge {
       display: inline-block;
@@ -176,6 +181,13 @@
     }
     .badge.stremio { background: #7e57c2; color: white; }
     .badge.nuvio { background: #00a8ff; color: white; }
+    
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -186,16 +198,16 @@
 
     <h1>Stremio Backup Importer</h1>
     <div class="subtitle">
-      Importa la tua libreria Stremio in NUVIO con un click
+      Importa la tua libreria Stremio in NUVIO in pochi secondi
       <span class="badge stremio">Stremio</span>
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- STATUS: connesso a NUVIO -->
-    <div class="status-card">
+    <!-- Status connessione -->
+    <div id="statusCard" class="status-card">
       <div class="status-icon">🔌</div>
-      <div class="status-title">Connesso a NUVIO</div>
-      <div class="status-desc" id="statusDesc">Pronto per importare</div>
+      <div class="status-title">Connessione a NUVIO</div>
+      <div class="status-desc" id="statusDesc">Verifica in corso...</div>
     </div>
 
     <!-- Upload area -->
@@ -229,6 +241,8 @@
     <div id="stats" style="display: none;">
       <div class="stats">
         <div class="stat-card"><div class="stat-value" id="statLibrary">0</div><div class="stat-label">Film/Serie</div></div>
+        <div class="stat-card"><div class="stat-value" id="statProgress">0</div><div class="stat-label">Progressi</div></div>
+        <div class="stat-card"><div class="stat-value" id="statWatched">0</div><div class="stat-label">Visti</div></div>
       </div>
     </div>
 
@@ -243,39 +257,78 @@
     </div>
 
     <div class="footer">
-      <p>🔒 I dati vengono scritti direttamente nella tua libreria NUVIO</p>
+      <p>🔒 I tuoi dati vengono inviati direttamente a NUVIO</p>
       <p>Made for NUVIO community</p>
     </div>
   </div>
 
   <script>
     let selectedFile = null;
+    let isConnectedToNuvio = false;
 
     // ============================================
-    // RILEVA SE SIAMO IN NUVIO
+    // VERIFICA SE SIAMO IN NUVIO (WebView)
     // ============================================
-    const isInNuvio = window.ReactNativeWebView ? true : false;
-    const statusDesc = document.getElementById('statusDesc');
-    
-    if (isInNuvio) {
-      statusDesc.innerHTML = '✅ Connesso! Pronto per importare';
+    function checkNuvioConnection() {
+      const statusCard = document.getElementById('statusCard');
+      const statusDesc = document.getElementById('statusDesc');
       
-      // Ascolta conferme da NUVIO
+      // Metodo 1: Verifica presenza di ReactNativeWebView
+      if (window.ReactNativeWebView) {
+        isConnectedToNuvio = true;
+        statusCard.classList.add('connected');
+        statusDesc.innerHTML = '✅ Connesso a NUVIO! Pronto per importare';
+        return true;
+      }
+      
+      // Metodo 2: Verifica user agent (alcune webview)
+      const ua = navigator.userAgent.toLowerCase();
+      if (ua.includes('nuvio') || ua.includes('react-native')) {
+        isConnectedToNuvio = true;
+        statusCard.classList.add('connected');
+        statusDesc.innerHTML = '✅ Connesso a NUVIO! Pronto per importare';
+        return true;
+      }
+      
+      // Non siamo in NUVIO
+      isConnectedToNuvio = false;
+      statusCard.classList.remove('connected');
+      statusDesc.innerHTML = '⚠️ Apri questa pagina dall\'addon in NUVIO';
+      return false;
+    }
+
+    // ============================================
+    // ASCOLTA RISPOSTE DA NUVIO
+    // ============================================
+    function setupMessageListener() {
       window.addEventListener('message', (event) => {
         try {
           const reply = JSON.parse(event.data);
+          
           if (reply.type === 'IMPORT_SUCCESS') {
+            // Import completato
             document.getElementById('progress').style.display = 'none';
             showResult(`✅ Importati ${reply.count} elementi in NUVIO!`, 'success');
-            document.getElementById('stats').style.display = 'block';
+            
+            // Aggiorna stats
             document.getElementById('statLibrary').textContent = reply.count;
+            document.getElementById('stats').style.display = 'block';
+            
+            // Riabilita bottone
+            document.getElementById('importBtn').disabled = false;
+            document.getElementById('importBtn').textContent = '🚀 Importa in NUVIO';
           }
-        } catch (e) {}
+        } catch (e) {
+          // Ignora messaggi non JSON
+        }
       });
-    } else {
-      statusDesc.innerHTML = '⚠️ Apri questa pagina DALL\'APP NUVIO';
-      statusDesc.style.color = '#ffa500';
     }
+
+    // ============================================
+    // INIZIALIZZA
+    // ============================================
+    checkNuvioConnection();
+    setupMessageListener();
 
     // ============================================
     // UPLOAD AREA
@@ -333,50 +386,54 @@
     // ============================================
     importBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
-      if (!isInNuvio) {
-        showResult('❌ Apri questa pagina DALL\'APP NUVIO', 'error');
+      
+      if (!isConnectedToNuvio) {
+        showResult('❌ Devi aprire questa pagina dall\'addon in NUVIO', 'error');
         return;
       }
 
       const formData = new FormData();
       formData.append('backup', selectedFile);
 
+      // Disabilita UI
       importBtn.disabled = true;
-      importBtn.textContent = '⏳ Importazione...';
+      importBtn.textContent = '⏳ Conversione...';
       
-      const progress = document.getElementById('progress');
-      const progressFill = document.getElementById('progressFill');
-      const progressStep = document.getElementById('progressStep');
-      
-      progress.style.display = 'block';
-      progressFill.style.width = '30%';
-      progressStep.textContent = 'Conversione in corso...';
+      showProgress(true, 'Conversione in corso...', 30);
 
       try {
-        const res = await fetch('/import', {
+        // 1. CONVERTI IL BACKUP
+        const res = await fetch('/convert', {
           method: 'POST',
           body: formData
         });
 
         const data = await res.json();
 
-        if (data.success) {
-          progressFill.style.width = '80%';
-          progressStep.textContent = 'Invio a NUVIO...';
-          
-          // Invia i dati a NUVIO
+        if (!data.success) {
+          throw new Error(data.error || 'Errore conversione');
+        }
+
+        showProgress(true, 'Invio a NUVIO...', 70);
+
+        // 2. INVIA I DATI ALL'ADDON NUVIO
+        if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'IMPORT_LIBRARY',
             data: data.data
           }));
           
-          // Il risultato arriverà via message event
+          showProgress(true, 'Attesa conferma...', 90);
+          // La conferma arriverà via message listener
         } else {
-          throw new Error(data.error);
+          throw new Error('Non connesso a NUVIO');
         }
+
       } catch (err) {
-        progress.style.display = 'none';
+        showProgress(false);
         showResult('❌ ' + err.message, 'error');
+        
+        // Riabilita UI
         importBtn.disabled = false;
         importBtn.textContent = '🚀 Importa in NUVIO';
       }
@@ -385,6 +442,20 @@
     // ============================================
     // UTILS
     // ============================================
+    function showProgress(show, step, percent) {
+      const progress = document.getElementById('progress');
+      const stepEl = document.getElementById('progressStep');
+      const fill = document.getElementById('progressFill');
+
+      if (show) {
+        progress.style.display = 'block';
+        stepEl.textContent = step || '';
+        fill.style.width = (percent || 0) + '%';
+      } else {
+        progress.style.display = 'none';
+      }
+    }
+
     function showResult(message, type) {
       const result = document.getElementById('result');
       result.textContent = message;

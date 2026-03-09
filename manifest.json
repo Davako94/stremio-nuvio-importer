@@ -3,13 +3,9 @@
   "name": "Stremio Backup Importer",
   "description": "Importa la tua libreria Stremio in NUVIO con un click",
   "version": "1.0.0",
-  "resources": [
-    "catalog"
-  ],
-  "types": [
-    "movie",
-    "series"
-  ],
+  "logo": "https://i.imgur.com/AIZFSRF.jpeg",
+  "resources": ["catalog"],
+  "types": ["movie", "series"],
   "catalogs": [
     {
       "type": "movie",

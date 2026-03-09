@@ -61,9 +61,9 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI E RESTITUISCI DATI
+// CONVERTI BACKUP
 // ============================================
-app.post('/import', upload.single('backup'), async (req, res) => {
+app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Nessun file caricato' });
@@ -74,20 +74,25 @@ app.post('/import', upload.single('backup'), async (req, res) => {
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const backupData = JSON.parse(fileContent);
 
-    // Converte nel formato NUVIO
-    const libraryObject = {};
+    // Converte nel formato NUVIO (basato su useLibrary.ts)
+    const libraryData = {};
     let movieCount = 0;
     let seriesCount = 0;
 
     const itemsArray = Array.isArray(backupData) ? backupData : Object.values(backupData);
     
     itemsArray.forEach(item => {
+      // Salta elementi rimossi o temporanei
       if (item.removed || item.temp) return;
+      
+      // Accetta solo film e serie
       if (item.type !== 'movie' && item.type !== 'series') return;
 
+      // Crea la chiave nel formato "tipo:id"
       const key = `${item.type}:${item._id}`;
       
-      libraryObject[key] = {
+      // Crea l'oggetto nel formato StreamingContent
+      libraryData[key] = {
         id: item._id,
         type: item.type,
         name: item.name || '',
@@ -102,6 +107,7 @@ app.post('/import', upload.single('backup'), async (req, res) => {
       else seriesCount++;
     });
 
+    // Pulisce file temporaneo
     fs.unlinkSync(req.file.path);
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
@@ -109,7 +115,7 @@ app.post('/import', upload.single('backup'), async (req, res) => {
     // Restituisce i dati - l'addon li riceverà e li scriverà
     res.json({
       success: true,
-      data: libraryObject,
+      data: libraryData,
       stats: { 
         movies: movieCount, 
         series: seriesCount, 
@@ -118,7 +124,7 @@ app.post('/import', upload.single('backup'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Errore:', error);
+    console.error('❌ Errore conversione:', error);
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
