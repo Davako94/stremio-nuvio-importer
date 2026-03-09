@@ -19,6 +19,13 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
+// HOME PAGE - Reindirizza a configure
+// ============================================
+app.get('/', (req, res) => {
+  res.redirect('/configure');
+});
+
+// ============================================
 // HEALTH CHECK (Render lo usa per verificare che l'app funzioni)
 // ============================================
 app.get('/health', (req, res) => {
