@@ -28,14 +28,14 @@ app.get('/configure', (req, res) => {
 });
 
 // ============================================
-// MANIFEST DELL'ADDON
+// MANIFEST DELL'ADDON (Standard Stremio/Nuvio)
 // ============================================
 app.get('/manifest.json', (req, res) => {
   const manifest = {
     id: "community.stremio-nuvio-importer",
     name: "Stremio → NUVIO Importer",
     description: "Converti il backup di Stremio nel formato nativo di NUVIO",
-    version: "1.0.1",
+    version: "1.0.2",
     logo: "https://i.imgur.com/AIZFSRF.jpeg",
     resources: ["catalog"],
     types: ["movie", "series"],
@@ -55,7 +55,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// LOGICA DI CONVERSIONE (CORRETTA PER SYNC)
+// LOGICA DI CONVERSIONE ANTI-CANCELLAZIONE
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -72,9 +72,9 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     const watchProgress = {};
     const now = Date.now();
     
-    // TRUCCO SYNC: Impostiamo la data di modifica 10 secondi nel futuro
-    // Questo costringe Nuvio a considerare la versione locale "più nuova" del cloud
-    const futureUpdate = now + 10000; 
+    // Impostiamo un timestamp molto nel futuro per assicurarci che 
+    // questi dati "vincano" su eventuali dati vecchi nel database.
+    const futureUpdate = now + 100000; 
     
     let movieCount = 0;
     let seriesCount = 0;
@@ -85,26 +85,27 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.removed || item.temp) return;
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      // Costruzione dell'item compatibile con il Sync di NUVIO
       const libraryItem = {
         id: item._id,
-        contentId: item._id, // Fondamentale per il database
+        contentId: item._id,
         type: item.type,
         name: item.name || '',
         poster: item.poster || '',
-        posterShape: (item.posterShape || 'poster').toLowerCase(), // Nuvio spesso lo vuole minuscolo
+        posterShape: (item.posterShape || 'poster').toLowerCase(),
         year: item.year || '',
         releaseInfo: item.year || '',
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
         
-        // FLAG DI OVERRIDE (Forzano Nuvio a tenere l'item e inviarlo al server)
+        // --- LOGICA "SILENT SYNC" ---
+        // Diciamo all'app che l'item è già sincronizzato (_isDirty: false)
+        // così l'app non prova a fare l'upload immediato che verrebbe bloccato dalle RLS.
         inLibrary: true,
-        _isDirty: true,           
-        _isNew: true,             
-        _needsSync: true,         // Indica esplicitamente che necessita upload
-        lastUpdatedAt: futureUpdate, // Il timestamp futuro garantisce la vittoria sui conflitti
+        _isDirty: false,           
+        _isNew: false,             
+        _needsSync: false,
+        lastUpdatedAt: futureUpdate, 
         addedToLibraryAt: new Date(item._ctime || item._mtime || now).getTime(),
 
         behaviorHints: {
@@ -121,27 +122,25 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
 
-      // Gestione Watch Progress con flag di dirty e timestamp futuro
+      // Progressi di visione impostati come "già salvati"
       if (item.state?.timeOffset > 0) {
-        const progressKey = `local:watch_progress:${item.type}:${item._id}`;
+        const progressKey = `watch_progress:${item.type}:${item._id}`;
         watchProgress[progressKey] = {
           currentTime: item.state.timeOffset,
           duration: item.state.duration || 0,
           lastUpdated: futureUpdate,
-          _isDirty: true,
-          _isNew: true
+          _isDirty: false
         };
       }
     });
 
-    // Struttura finale del Backup NUVIO
+    // Struttura Backup NUVIO con Scope Utente
     const nuvioBackup = {
       version: "1.0.0",
       timestamp: now,
       appVersion: "1.0.0",
       platform: "android",
-      userScope: "local",
-      forceSync: true, // FLAG GLOBALE: Forza l'engine di Nuvio a eseguire il sync in upload
+      userScope: "user", // "user" indica che il backup appartiene a una sessione cloud
       data: {
         settings: {},
         installedAddons: [],
@@ -155,10 +154,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         watchedItems: [],
         continueWatchingRemoved: {},
         contentDuration: {},
-        syncQueue: library.map(i => i.id), // Inseriamo esplicitamente tutti gli ID nella coda di sincronizzazione
+        syncQueue: [], // Coda vuota per evitare tentativi di sync fallimentari
         traktSettings: null,
         simklSettings: null,
-        tombStones: {},
+        tombStones: {}, // Reset delle cancellazioni passate
         subtitles: {
           subtitleSize: 28,
           subtitleBackground: false,
@@ -183,7 +182,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       }
     };
 
-    fs.unlinkSync(req.file.path);
+    // Pulizia file temporaneo
+    if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+    }
 
     res.json({
       success: true,
@@ -198,7 +200,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
   } catch (error) {
     console.error('❌ Errore:', error);
-    if (req.file) fs.unlinkSync(req.file.path);
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
 });
@@ -208,7 +210,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 NUVIO Importer Ready`);
+  console.log(`\n🚀 NUVIO Importer (Anti-Delete Version)`);
   console.log(`📡 Porta: ${PORT}`);
   console.log(`🔗 URL: https://stremio-nuvio-importer.onrender.com/`);
 });
