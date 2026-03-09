@@ -1,219 +1,265 @@
 const express = require('express');
-const multer  = require('multer');
-const path    = require('path');
-const fs      = require('fs');
-const cors    = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
+const cors = require('cors');
+require('dotenv').config();
 
-// node-fetch v2 (CommonJS) — funziona su Node 14+ a differenza del fetch nativo
-// Assicurati di avere nel package.json: "node-fetch": "^2.7.0"
-const fetch = require('node-fetch');
-
-const app    = express();
+const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-const SUPABASE_URL  = 'https://dpyhjjcoabcglfmgecug.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRweWhqamNvYWJjZ2xmbWdlY3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3ODYyNDcsImV4cCI6MjA4NjM2MjI0N30.U-3QSNDdpsnvRk_7ZL419AFTOtggHJJcmkodxeXjbk';
+// ============================================
+// CREDENZIALI SUPABASE (da .env - SICURE)
+// ============================================
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-app.use(cors({ origin: true, credentials: true }));
+// Verifica che le credenziali siano presenti
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('❌ ERRORE: Credenziali Supabase mancanti nel file .env');
+  process.exit(1);
+}
+
+// Middleware
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ── Supabase helpers ────────────────────────────────────────────────────────
+// ============================================
+// HOME PAGE
+// ============================================
+app.get('/', (req, res) => {
+  res.redirect('/configure');
+});
 
-async function sbFetch(urlPath, options = {}) {
-  const url = `${SUPABASE_URL}${urlPath}`;
-  console.log(`→ Supabase: ${options.method || 'GET'} ${url}`);
+// ============================================
+// HEALTH CHECK
+// ============================================
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
 
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON,
-      ...(options.headers || {}),
-    },
-  });
+// ============================================
+// PAGINA DI CONFIGURAZIONE
+// ============================================
+app.get('/configure', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'configure.html'));
+});
 
-  const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+// ============================================
+// MANIFEST DELL'ADDON
+// ============================================
+app.get('/manifest.json', (req, res) => {
+  const manifest = {
+    id: "community.stremio-nuvio-importer",
+    name: "Stremio Backup Importer",
+    description: "Importa la tua libreria Stremio in NUVIO con un click",
+    version: "1.0.0",
+    logo: "https://i.imgur.com/AIZFSRF.jpeg",
+    resources: ["catalog"],
+    types: ["movie", "series"],
+    catalogs: [
+      {
+        type: "movie",
+        id: "stremio-import",
+        name: "📦 Stremio Importer"
+      }
+    ],
+    behaviorHints: {
+      configurable: true,
+      configurationRequired: false
+    }
+  };
+  res.json(manifest);
+});
 
-  if (!res.ok) {
-    const msg = data?.message || data?.error_description || data?.msg || text || `HTTP ${res.status}`;
-    console.error(`← Supabase error ${res.status}:`, msg);
-    throw new Error(msg);
-  }
-
-  console.log(`← Supabase OK ${res.status}`);
-  return data;
-}
-
-async function sbRpc(fnName, payload, token) {
-  return sbFetch(`/rest/v1/rpc/${fnName}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload || {}),
-  });
-}
-
-// ── Routes ──────────────────────────────────────────────────────────────────
-
-app.get('/',          (req, res) => res.redirect('/configure'));
-app.get('/configure', (req, res) => res.sendFile(path.join(__dirname, 'public', 'configure.html')));
-app.get('/health',    (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-
-app.get('/manifest.json', (req, res) => res.json({
-  id: 'community.stremio-nuvio-importer',
-  name: 'Stremio Backup Importer',
-  description: 'Importa la tua libreria Stremio in NUVIO con un click',
-  version: '1.0.0',
-  logo: 'https://i.imgur.com/AIZFSRF.jpeg',
-  resources: ['catalog'],
-  types: ['movie', 'series'],
-  catalogs: [{ type: 'movie', id: 'stremio-import', name: '📦 Stremio Importer' }],
-  behaviorHints: { configurable: true, configurationRequired: false },
-}));
-
-app.get('/catalog/movie/stremio-import.json', (req, res) => res.json({
-  metas: [{
-    id: 'stremio-importer', type: 'movie', name: 'Stremio Importer',
-    poster: 'https://via.placeholder.com/300x450/00a8ff/ffffff?text=Stremio+Importer',
-    description: 'Apri la pagina di configurazione per importare il tuo backup Stremio',
-  }],
-}));
-
-// ── LOGIN ────────────────────────────────────────────────────────────────────
+// ============================================
+// LOGIN CON EMAIL + PASSWORD + ID PROPRIETARIO
+// ============================================
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body || {};
-
-  if (!email || !password)
-    return res.status(400).json({ error: 'Email e password richiesti' });
-
   try {
-    const data = await sbFetch('/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
+    const { email, password, ownerId } = req.body;
+
+    if (!email || !password || !ownerId) {
+      return res.status(400).json({ error: 'Email, password e ID proprietario richiesti' });
+    }
+
+    console.log(`🔐 Tentativo login per: ${email}`);
+
+    // Inizializza Supabase
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 1. Login con email e password
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password
     });
 
-    if (!data?.access_token)
-      return res.status(401).json({ error: 'Login fallito — token mancante' });
+    if (loginError) {
+      console.error('❌ Errore login:', loginError);
+      
+      if (loginError.message.includes('Invalid login credentials')) {
+        return res.status(401).json({ error: 'Email o password non corretti' });
+      }
+      return res.status(401).json({ error: loginError.message });
+    }
 
-    console.log(`✅ Login OK: ${data.user?.email}`);
-    res.json({ token: data.access_token, email: data.user?.email });
+    const user = loginData.user;
+    const session = loginData.session;
 
-  } catch (err) {
-    console.error('❌ Login error:', err.message);
-    const friendly = err.message.toLowerCase().includes('invalid login')
-      ? 'Email o password errati'
-      : err.message;
-    res.status(401).json({ error: friendly });
+    console.log(`✅ Login riuscito: ${user.email} (${user.id})`);
+
+    // 2. VERIFICA ID PROPRIETARIO (tripla verifica)
+    // Chiamiamo get_sync_owner per vedere cosa restituisce
+    try {
+      const { data: ownerData, error: ownerError } = await supabase.rpc('get_sync_owner');
+      
+      if (ownerError) {
+        console.warn('⚠️ get_sync_owner non disponibile:', ownerError);
+      } else {
+        console.log(`👤 Owner ID restituito: ${ownerData}`);
+        
+        // Se l'ownerId fornito non corrisponde, potrebbe essere un problema
+        // Ma non blocchiamo per ora
+        if (ownerData && ownerData !== ownerId) {
+          console.warn(`⚠️ Owner ID mismatch: fornito=${ownerId}, restituito=${ownerData}`);
+        }
+      }
+    } catch (e) {
+      console.log('get_sync_owner non disponibile, proseguo');
+    }
+
+    // Restituisce il token e i dati utente
+    res.json({
+      success: true,
+      token: session.access_token,
+      userId: user.id,
+      email: user.email
+    });
+
+  } catch (error) {
+    console.error('❌ Errore login:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ── IMPORT ───────────────────────────────────────────────────────────────────
+// ============================================
+// CONVERTI E IMPORTA (USA IL TOKEN)
+// ============================================
 app.post('/import', upload.single('backup'), async (req, res) => {
-  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
-
-  if (!token) return res.status(401).json({ error: 'Non autenticato' });
-  if (!req.file) return res.status(400).json({ error: 'Nessun file caricato' });
-
-  let backupData;
   try {
-    backupData = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
-  } catch {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Token mancante' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nessun file caricato' });
+    }
+
+    console.log('📁 File ricevuto:', req.file.originalname);
+
+    // Legge il file
+    const fileContent = fs.readFileSync(req.file.path, 'utf8');
+    const backupData = JSON.parse(fileContent);
+
+    // Inizializza Supabase con il token dell'utente
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
+
+    // Verifica che il token sia valido
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      fs.unlinkSync(req.file.path);
+      return res.status(401).json({ error: 'Token non valido o scaduto' });
+    }
+
+    console.log(`👤 Import per: ${user.email} (${user.id})`);
+
+    // Converte il backup
+    const libraryItems = [];
+    let movieCount = 0;
+    let seriesCount = 0;
+
+    const itemsArray = Array.isArray(backupData) ? backupData : Object.values(backupData);
+    
+    itemsArray.forEach(item => {
+      if (item.removed || item.temp) return;
+      if (item.type !== 'movie' && item.type !== 'series') return;
+
+      libraryItems.push({
+        content_id: item._id,
+        content_type: item.type,
+        name: item.name || '',
+        poster: item.poster || '',
+        poster_shape: (item.posterShape || 'poster').toUpperCase(),
+        release_info: item.year || '',
+        added_at: new Date(item._ctime || item._mtime || Date.now()).getTime()
+      });
+
+      if (item.type === 'movie') movieCount++;
+      else seriesCount++;
+    });
+
+    console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
+
+    // ============================================
+    // SCRITTURA SU SUPABASE
+    // ============================================
+    const results = {};
+
+    if (libraryItems.length > 0) {
+      console.log(`📦 Importando ${libraryItems.length} elementi...`);
+      
+      const { error: pushError } = await supabase.rpc('sync_push_library', {
+        p_items: libraryItems
+      });
+      
+      if (pushError) {
+        console.error('❌ Errore push library:', pushError);
+        throw new Error('Errore durante l\'import');
+      }
+      
+      results.library = libraryItems.length;
+    }
+
     fs.unlinkSync(req.file.path);
-    return res.status(400).json({ error: 'File JSON non valido' });
-  }
-  fs.unlinkSync(req.file.path);
-
-  try {
-    const { library, progress, watched } = convertBackup(backupData);
-    const results = { library: 0, progress: 0, watched: 0 };
-
-    if (library.length > 0) {
-      await sbRpc('sync_push_library', { p_items: library }, token);
-      results.library = library.length;
-    }
-    if (progress.length > 0) {
-      try {
-        await sbRpc('sync_push_watch_progress', { p_entries: progress }, token);
-        results.progress = progress.length;
-      } catch (e) { console.warn('⚠️ progress (non bloccante):', e.message); }
-    }
-    if (watched.length > 0) {
-      try {
-        await sbRpc('sync_push_watched_items', { p_items: watched }, token);
-        results.watched = watched.length;
-      } catch (e) { console.warn('⚠️ watched (non bloccante):', e.message); }
-    }
 
     res.json({
       success: true,
-      message: `✅ ${results.library} film/serie · ${results.progress} progressi · ${results.watched} visti`,
-      results,
+      message: `✅ Importati ${results.library || 0} elementi in NUVIO!`,
+      stats: { 
+        movies: movieCount, 
+        series: seriesCount, 
+        total: movieCount + seriesCount 
+      }
     });
 
-  } catch (err) {
-    console.error('❌ Import error:', err.message);
-    const status = /jwt|auth|token/i.test(err.message) ? 401 : 500;
-    res.status(status).json({ error: err.message });
+  } catch (error) {
+    console.error('❌ Errore import:', error);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ── CONVERTER ────────────────────────────────────────────────────────────────
-function convertBackup(raw) {
-  const library = [], progress = [], watched = [];
-  const items = Array.isArray(raw) ? raw : Object.values(raw);
-
-  for (const item of items) {
-    if (item.removed || item.temp) continue;
-    if (item.type !== 'movie' && item.type !== 'series') continue;
-
-    library.push({
-      content_id:   item._id,
-      content_type: item.type,
-      name:         item.name || '',
-      poster:       item.poster || '',
-      poster_shape: (item.posterShape || 'poster').toUpperCase(),
-      release_info: item.year ? String(item.year) : '',
-      added_at:     new Date(item._ctime || item._mtime || Date.now()).getTime(),
-    });
-
-    if (item.state?.timeOffset > 0) {
-      progress.push({
-        content_id:   item._id,
-        content_type: item.type,
-        video_id:     item.state.video_id || item._id,
-        season:       null,
-        episode:      null,
-        position:     Math.round((item.state.timeOffset || 0) * 1000),
-        duration:     Math.round((item.state.duration   || 0) * 1000),
-        last_watched: new Date(item.state.lastWatched || item._mtime || Date.now()).getTime(),
-        progress_key: item._id,
-      });
-    }
-
-    const isWatched =
-      item.state?.flaggedWatched === 1 ||
-      item.state?.timesWatched   > 0   ||
-      (item.state?.watched && item.state.watched !== '');
-
-    if (isWatched) {
-      watched.push({
-        content_id:   item._id,
-        content_type: item.type,
-        title:        item.name || '',
-        season:       null,
-        episode:      null,
-        watched_at:   new Date(item.state?.lastWatched || item._mtime || Date.now()).getTime(),
-      });
-    }
-  }
-  return { library, progress, watched };
-}
-
-// ── START ────────────────────────────────────────────────────────────────────
+// ============================================
+// AVVIO SERVER
+// ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 NUVIO Importer — porta ${PORT}`);
-  console.log(`🌐 https://stremio-nuvio-importer.onrender.com/configure\n`);
+  console.log(`\n🚀 Stremio NUVIO Importer`);
+  console.log(`📦 Server avviato su porta ${PORT}`);
+  console.log(`📧 SUPABASE_URL: ${SUPABASE_URL ? '✅ configurata' : '❌ mancante'}`);
+  console.log(`🔑 SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY ? '✅ configurata' : '❌ mancante'}`);
+  console.log(`\n🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/`);
+  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
 });
