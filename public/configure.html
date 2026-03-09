@@ -5,12 +5,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    /* STILI INVARIATI - sono perfetti così */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0a0a0a;
@@ -21,7 +17,6 @@
       justify-content: center;
       padding: 20px;
     }
-
     .container {
       max-width: 600px;
       width: 100%;
@@ -30,7 +25,13 @@
       padding: 40px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.5);
     }
-
+    .logo-container { text-align: center; margin-bottom: 20px; }
+    .logo {
+      max-width: 120px;
+      max-height: 120px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
     h1 {
       font-size: 28px;
       margin-bottom: 10px;
@@ -39,41 +40,22 @@
       -webkit-text-fill-color: transparent;
       display: inline-block;
     }
-
     .subtitle {
       color: #aaa;
       margin-bottom: 30px;
       font-size: 14px;
       line-height: 1.5;
     }
-
-    .status-card {
+    .info-card {
       background: #2a2a2a;
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 30px;
       border-left: 4px solid #00a8ff;
     }
-
-    .status-card.connected {
-      border-left-color: #00ff9f;
-    }
-
-    .status-icon {
-      font-size: 24px;
-      margin-bottom: 10px;
-    }
-
-    .status-title {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-
-    .status-desc {
-      color: #aaa;
-      font-size: 13px;
-    }
-
+    .info-icon { font-size: 24px; margin-bottom: 10px; }
+    .info-title { font-weight: bold; margin-bottom: 5px; }
+    .info-desc { color: #aaa; font-size: 13px; }
     .upload-area {
       border: 2px dashed #444;
       border-radius: 12px;
@@ -83,33 +65,11 @@
       transition: all 0.3s;
       margin-bottom: 20px;
     }
-
-    .upload-area:hover {
-      border-color: #00a8ff;
-      background: rgba(0,168,255,0.05);
-    }
-
-    .upload-area.dragover {
-      border-color: #00a8ff;
-      background: rgba(0,168,255,0.1);
-    }
-
-    .upload-icon {
-      font-size: 48px;
-      margin-bottom: 15px;
-    }
-
-    .upload-text {
-      color: #ccc;
-      font-size: 16px;
-    }
-
-    .upload-hint {
-      color: #888;
-      font-size: 13px;
-      margin-top: 10px;
-    }
-
+    .upload-area:hover { border-color: #00a8ff; background: rgba(0,168,255,0.05); }
+    .upload-area.dragover { border-color: #00a8ff; background: rgba(0,168,255,0.1); }
+    .upload-icon { font-size: 48px; margin-bottom: 15px; }
+    .upload-text { color: #ccc; font-size: 16px; }
+    .upload-hint { color: #888; font-size: 13px; margin-top: 10px; }
     .file-info {
       background: #2a2a2a;
       border-radius: 8px;
@@ -119,22 +79,9 @@
       align-items: center;
       gap: 10px;
     }
-
-    .file-icon {
-      font-size: 24px;
-    }
-
-    .file-name {
-      flex: 1;
-      font-weight: 500;
-      color: #00a8ff;
-    }
-
-    .file-size {
-      color: #aaa;
-      font-size: 12px;
-    }
-
+    .file-icon { font-size: 24px; }
+    .file-name { flex: 1; font-weight: 500; color: #00a8ff; }
+    .file-size { color: #aaa; font-size: 12px; }
     button {
       background: linear-gradient(135deg, #00a8ff, #9b59b6);
       color: white;
@@ -147,21 +94,12 @@
       cursor: pointer;
       transition: transform 0.2s, opacity 0.2s;
     }
-
-    button:hover:not(:disabled) {
-      transform: translateY(-2px);
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
+    button:hover:not(:disabled) { transform: translateY(-2px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     .progress {
       margin-top: 20px;
       display: none;
     }
-
     .progress-bar {
       width: 100%;
       height: 6px;
@@ -170,100 +108,59 @@
       overflow: hidden;
       margin-bottom: 10px;
     }
-
     .progress-fill {
       height: 100%;
       background: linear-gradient(90deg, #00a8ff, #9b59b6);
       transition: width 0.3s;
       width: 0%;
     }
-
-    .progress-step {
-      color: #00a8ff;
-      font-size: 14px;
-      text-align: center;
-    }
-
+    .progress-step { color: #00a8ff; font-size: 14px; text-align: center; }
     .result {
       margin-top: 20px;
       padding: 16px;
       border-radius: 10px;
       display: none;
     }
-
     .result.success {
       background: rgba(0,255,159,0.1);
       border: 1px solid #00ff9f;
       color: #00ff9f;
     }
-
     .result.error {
       background: rgba(255,107,107,0.1);
       border: 1px solid #ff6b6b;
       color: #ff6b6b;
     }
-
     .stats {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       margin-top: 20px;
     }
-
     .stat-card {
       background: #2a2a2a;
       padding: 15px;
       border-radius: 8px;
       text-align: center;
     }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: bold;
-      color: #00a8ff;
-    }
-
-    .stat-label {
-      color: #aaa;
-      font-size: 12px;
-      margin-top: 5px;
-    }
-
+    .stat-value { font-size: 24px; font-weight: bold; color: #00a8ff; }
+    .stat-label { color: #aaa; font-size: 12px; margin-top: 5px; }
     .footer {
       margin-top: 30px;
       text-align: center;
       color: #666;
       font-size: 12px;
     }
-
-    .footer a {
-      color: #00a8ff;
-      text-decoration: none;
-    }
-
+    .footer a { color: #00a8ff; text-decoration: none; }
     .howto {
       margin-top: 30px;
       padding: 20px;
       background: #2a2a2a;
       border-radius: 10px;
     }
-
-    .howto h3 {
-      color: #00a8ff;
-      margin-bottom: 15px;
-      font-size: 16px;
-    }
-
-    .howto ol {
-      padding-left: 20px;
-      color: #ccc;
-      font-size: 14px;
-    }
-
-    .howto li {
-      margin: 10px 0;
-    }
-
+    .howto h3 { color: #00a8ff; margin-bottom: 15px; font-size: 16px; }
+    .howto ol { padding-left: 20px; color: #ccc; font-size: 14px; }
+    .howto li { margin: 10px 0; }
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -272,20 +169,17 @@
       font-weight: bold;
       margin-left: 8px;
     }
-
-    .badge.stremio {
-      background: #7e57c2;
-      color: white;
-    }
-
-    .badge.nuvio {
-      background: #00a8ff;
-      color: white;
-    }
+    .badge.stremio { background: #7e57c2; color: white; }
+    .badge.nuvio { background: #00a8ff; color: white; }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- LOGO AGGIUNTO -->
+    <div class="logo-container">
+      <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="Stremio NUVIO Importer Logo" class="logo">
+    </div>
+
     <h1>Stremio Backup Importer</h1>
     <div class="subtitle">
       Importa la tua libreria Stremio in NUVIO in pochi secondi
@@ -293,11 +187,14 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- Status connessione -->
-    <div id="statusCard" class="status-card">
-      <div class="status-icon">🔌</div>
-      <div class="status-title">Verifica connessione...</div>
-      <div class="status-desc" id="statusDesc">Controllo autenticazione NUVIO</div>
+    <!-- CARD INFORMATIVA (SOSTITUISCE IL CONTROLLO SESSIONE) -->
+    <div class="info-card">
+      <div class="info-icon">ℹ️</div>
+      <div class="info-title">Come funziona</div>
+      <div class="info-desc" id="infoDesc">
+        Se hai aperto NUVIO in questa finestra, l'import userà la tua sessione.<br>
+        <small>Altrimenti, apri NUVIO, poi torna qui e ricarica la pagina.</small>
+      </div>
     </div>
 
     <!-- Upload area -->
@@ -308,7 +205,7 @@
       <input type="file" id="fileInput" accept=".json" style="display: none;">
     </div>
 
-    <!-- File info (nascosto inizialmente) -->
+    <!-- File info -->
     <div id="fileInfo" class="file-info" style="display: none;">
       <span class="file-icon">📄</span>
       <span class="file-name" id="fileName"></span>
@@ -318,32 +215,21 @@
     <!-- Bottone import -->
     <button id="importBtn" disabled>🚀 Importa Libreria</button>
 
-    <!-- Progress bar (nascosta inizialmente) -->
+    <!-- Progress bar -->
     <div id="progress" class="progress">
-      <div class="progress-bar">
-        <div class="progress-fill" id="progressFill"></div>
-      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-step" id="progressStep"></div>
     </div>
 
-    <!-- Result (nascosto inizialmente) -->
+    <!-- Result -->
     <div id="result" class="result"></div>
 
-    <!-- Stats (nascoste inizialmente) -->
+    <!-- Stats -->
     <div id="stats" style="display: none;">
       <div class="stats">
-        <div class="stat-card">
-          <div class="stat-value" id="statLibrary">0</div>
-          <div class="stat-label">Film/Serie</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="statProgress">0</div>
-          <div class="stat-label">Progressi</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="statWatched">0</div>
-          <div class="stat-label">Visti</div>
-        </div>
+        <div class="stat-card"><div class="stat-value" id="statLibrary">0</div><div class="stat-label">Film/Serie</div></div>
+        <div class="stat-card"><div class="stat-value" id="statProgress">0</div><div class="stat-label">Progressi</div></div>
+        <div class="stat-card"><div class="stat-value" id="statWatched">0</div><div class="stat-label">Visti</div></div>
       </div>
     </div>
 
@@ -351,63 +237,21 @@
     <div class="howto">
       <h3>📖 Come ottenere il backup Stremio</h3>
       <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Libreria → Esporta</li>
-        <li><strong>Stremio Manager (Bestia):</strong> Backup completo</li>
+        <li><strong>Stremio Sidekick:</strong> Vai su Librery → Backup</li>
+        <li><strong>Stremio Manager (Bestia):</strong> Vai su Dashboard → Backup Libreria</li>
         <li>Il file avrà estensione .json</li>
         <li>Caricalo qui sopra e clicca Importa</li>
       </ol>
     </div>
 
     <div class="footer">
-      <p>🔒 I tuoi dati vanno direttamente a Supabase • Nessun server intermedio</p>
+      <p>🔒 I tuoi dati vengono inviati direttamente a NUVIO • Nessun server intermedio</p>
       <p>Made for NUVIO community</p>
     </div>
   </div>
 
   <script>
     let selectedFile = null;
-    let authToken = null;
-
-    // ============================================
-    // VERIFICA AUTENTICAZIONE ALL'AVVIO
-    // ============================================
-    async function checkAuth() {
-      try {
-        const res = await fetch('/session', {
-          headers: getAuthHeaders()
-        });
-        const data = await res.json();
-
-        const statusCard = document.getElementById('statusCard');
-        const statusDesc = document.getElementById('statusDesc');
-
-        if (data.authenticated) {
-          statusCard.classList.add('connected');
-          statusDesc.innerHTML = `
-            ✅ Connesso come ${data.user.email || 'utente anonimo'}<br>
-            <small style="color: #666;">ID: ${data.user.id.substring(0,8)}...</small>
-          `;
-          authToken = data.user.id;
-        } else {
-          statusCard.classList.remove('connected');
-          statusDesc.innerHTML = `
-            ⚠️ Non connesso a NUVIO<br>
-            <small>Apri NUVIO e riprova</small>
-          `;
-        }
-      } catch (err) {
-        console.error('Auth check failed:', err);
-      }
-    }
-
-    // ============================================
-    // HEADERS CON TOKEN (se presente)
-    // ============================================
-    function getAuthHeaders() {
-      // NUVIO passa automaticamente il token, noi dobbiamo solo leggerlo
-      // Il browser lo include già nei cookie
-      return {};
-    }
 
     // ============================================
     // UPLOAD AREA
@@ -448,13 +292,9 @@
 
     function handleFileSelect(file) {
       selectedFile = file;
-      
-      // Mostra info file
       fileName.textContent = file.name;
       fileSize.textContent = formatFileSize(file.size);
       fileInfo.style.display = 'flex';
-      
-      // Abilita bottone
       importBtn.disabled = false;
     }
 
@@ -476,22 +316,27 @@
       // Disabilita UI
       importBtn.disabled = true;
       importBtn.textContent = '⏳ Importazione...';
-      
       showProgress(true, 'Preparazione...', 10);
 
       try {
+        // Chiamata all'endpoint /import - i cookie di sessione vengono inviati automaticamente
         const res = await fetch('/import', {
           method: 'POST',
-          body: formData,
-          headers: getAuthHeaders()
+          body: formData
+          // NOTA: NON inviamo headers di autorizzazione, confidiamo nei cookie
         });
 
         const data = await res.json();
 
+        if (!res.ok) {
+          // Gestione errori HTTP (es. 401 Non autorizzato)
+          throw new Error(data.error || `Errore HTTP: ${res.status}`);
+        }
+
         if (data.success) {
           showProgress(false);
           showResult(data.message, 'success');
-          
+
           // Mostra stats
           document.getElementById('statLibrary').textContent = data.results.library || 0;
           document.getElementById('statProgress').textContent = data.results.progress || 0;
@@ -502,7 +347,12 @@
         }
       } catch (err) {
         showProgress(false);
-        showResult('❌ ' + err.message, 'error');
+        // Messaggio più amichevole per errori di autenticazione
+        if (err.message.includes('401') || err.message.includes('Non autenticato')) {
+          showResult('❌ Sessione non valida. Apri NUVIO, ricarica questa pagina e riprova.', 'error');
+        } else {
+          showResult('❌ ' + err.message, 'error');
+        }
       } finally {
         // Riabilita UI
         importBtn.disabled = false;
@@ -517,7 +367,7 @@
       const progress = document.getElementById('progress');
       const stepEl = document.getElementById('progressStep');
       const fill = document.getElementById('progressFill');
-      
+
       if (show) {
         progress.style.display = 'block';
         stepEl.textContent = step || '';
@@ -538,9 +388,6 @@
         result.style.display = 'none';
       }, 5000);
     }
-
-    // Avvia verifica autenticazione
-    checkAuth();
   </script>
 </body>
 </html>
