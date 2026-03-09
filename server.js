@@ -13,10 +13,10 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// HOME PAGE
+// HOME PAGE - Reindirizza a configure
 // ============================================
 app.get('/', (req, res) => {
-  res.redirect('/convert');
+  res.redirect('/configure');
 });
 
 // ============================================
@@ -27,7 +27,7 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// PAGINA DI CONVERSIONE
+// PAGINA DI CONFIGURAZIONE (e conversione)
 // ============================================
 app.get('/configure', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -61,7 +61,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP (VERSIONE DEFINITIVA)
+// CONVERTI BACKUP (POST)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -103,7 +103,6 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         releaseInfo: item.year || '',
         addedToLibraryAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
         inLibrary: true,
-        // Campi opzionali (se presenti)
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || []
@@ -135,11 +134,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       platform: "android",
       userScope: "local",
       data: {
-        settings: {}, // Vuoto - l'utente mantiene le sue impostazioni
-        installedAddons: [], // Vuoto - non tocchiamo gli addon
+        settings: {},
+        installedAddons: [],
         library: library,
         watchProgress: watchProgress,
-        watchedItems: [], // Opzionale
+        watchedItems: [],
         downloads: [],
         localScrapers: {},
         apiKeys: {},
@@ -188,6 +187,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Stremio → NUVIO Converter`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-converter.onrender.com/`);
-  console.log(`🔧 Convertitore: https://stremio-nuvio-converter.onrender.com/convert`);
+  console.log(`🔧 Configurazione: https://stremio-nuvio-converter.onrender.com/configure`);
   console.log(`📋 Manifest: https://stremio-nuvio-converter.onrender.com/manifest.json\n`);
+  console.log(`📤 Endpoint POST: /convert (per upload)`);
 });
