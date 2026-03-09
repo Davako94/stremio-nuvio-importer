@@ -4,8 +4,6 @@
   <title>Stremio Importer — NUVIO</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Supabase JS direttamente dal CDN — niente server intermedio -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;700&display=swap');
 
@@ -52,6 +50,29 @@
     }
     .subtitle { color: var(--muted); font-size: 14px; }
 
+    /* WAKE UP BANNER */
+    #wakeBanner {
+      background: rgba(45,140,255,0.08);
+      border: 1px solid rgba(45,140,255,0.2);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #wakeBanner.hidden { display: none; }
+    .spinner {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid rgba(45,140,255,0.3);
+      border-top-color: var(--blue);
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* STEPS */
     .steps { display: flex; align-items: center; justify-content: center; margin-bottom: 28px; }
     .step { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
@@ -78,7 +99,8 @@
     .field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
     .field input {
       width: 100%; padding: 12px 14px; background: var(--card2); border: 1px solid var(--border);
-      border-radius: 10px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; transition: border-color 0.2s;
+      border-radius: 10px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif;
+      transition: border-color 0.2s;
     }
     .field input:focus { outline: none; border-color: var(--blue); }
     .field input::placeholder { color: var(--muted); }
@@ -92,10 +114,7 @@
     .btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
-    .status {
-      font-size: 13px; margin-top: 12px; padding: 10px 14px; border-radius: 8px;
-      display: none; line-height: 1.4;
-    }
+    .status { font-size: 13px; margin-top: 12px; padding: 10px 14px; border-radius: 8px; line-height: 1.4; display: none; }
     .status.error   { background: rgba(255,77,106,0.1); border: 1px solid rgba(255,77,106,0.3); color: var(--red); display:block; }
     .status.success { background: rgba(16,208,122,0.08); border: 1px solid rgba(16,208,122,0.25); color: var(--green); display:block; }
     .status.info    { background: rgba(45,140,255,0.08); border: 1px solid rgba(45,140,255,0.2); color: var(--blue); display:block; }
@@ -113,9 +132,8 @@
 
     .file-preview { display: none; align-items: center; gap: 12px; padding: 14px; background: var(--card2); border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; }
     .file-preview.show { display: flex; }
-    .fp-icon { font-size: 24px; }
     .fp-name { font-weight: 600; font-size: 14px; color: var(--blue); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .fp-size { font-size: 12px; color: var(--muted); }
+    .fp-size { font-size: 12px; color: var(--muted); flex-shrink:0; }
 
     .progress-wrap { display: none; margin-top: 16px; }
     .progress-wrap.show { display: block; }
@@ -136,12 +154,12 @@
     .info-box {
       background: rgba(45,140,255,0.05); border: 1px solid rgba(45,140,255,0.15);
       border-radius: 10px; padding: 14px 16px; font-size: 13px; color: var(--muted); line-height: 1.6;
+      margin-bottom: 16px;
     }
     .info-box strong { color: var(--text); }
 
     .footer { text-align:center; margin-top:24px; font-size:12px; color: var(--muted); line-height:1.8; }
     input[type="file"] { display:none; }
-
     code { background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:4px; font-family:'Space Mono',monospace; font-size:12px; }
   </style>
 </head>
@@ -152,6 +170,12 @@
     <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="NUVIO" class="logo">
     <div class="title">Stremio → <span>NUVIO</span></div>
     <div class="subtitle">Importa la tua libreria in pochi secondi</div>
+  </div>
+
+  <!-- Banner sveglia Render (sparisce quando il server risponde) -->
+  <div id="wakeBanner">
+    <div class="spinner"></div>
+    <span id="wakeMsg">Avvio del server in corso, attendi qualche secondo…</span>
   </div>
 
   <div class="steps">
@@ -165,9 +189,9 @@
   <!-- STEP 1: LOGIN -->
   <div class="card" id="cardLogin">
     <div class="card-label">Step 1 — Accesso NUVIO</div>
-    <div class="info-box" style="margin-bottom:16px;">
-      Inserisci email e password del tuo account NUVIO.<br>
-      <strong>Non servono sync code, ID o altro</strong> — solo le credenziali normali.
+    <div class="info-box">
+      Inserisci <strong>email e password</strong> del tuo account NUVIO.<br>
+      Non servono sync code o altri ID.
     </div>
     <div class="field">
       <label>Email</label>
@@ -177,27 +201,27 @@
       <label>Password</label>
       <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <button class="btn" id="loginBtn" onclick="doLogin()">Accedi</button>
+    <button class="btn" id="loginBtn" onclick="doLogin()" disabled>Accedi</button>
     <div class="status" id="loginStatus"></div>
   </div>
 
-  <!-- STEP 2 + 3 (hidden until logged in) -->
+  <!-- STEP 2 + 3 -->
   <div id="importSection" style="display:none;">
 
     <div class="card">
       <div class="card-label">Step 2 — Seleziona il backup Stremio</div>
-      <div class="info-box" style="margin-bottom:16px;">
-        Esporta la libreria con <strong>Stremio Sidekick</strong> o <strong>Stremio Manager</strong>
+      <div class="info-box">
+        Esporta con <strong>Stremio Sidekick</strong> o <strong>Stremio Manager</strong>
         e carica il file <code>.json</code> qui sotto.
       </div>
-      <div class="upload-zone locked" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
         <div class="upload-icon">📂</div>
         <div class="upload-title">Clicca o trascina il file</div>
         <div class="upload-sub">Accetta file .json</div>
       </div>
       <input type="file" id="fileInput" accept=".json" onchange="onFileChosen(event)">
       <div class="file-preview" id="filePreview">
-        <div class="fp-icon">📄</div>
+        <span style="font-size:22px">📄</span>
         <div class="fp-name" id="previewName"></div>
         <div class="fp-size" id="previewSize"></div>
       </div>
@@ -221,61 +245,95 @@
   </div>
 
   <div class="footer">
-    🔒 Comunica direttamente con NUVIO — nessun server intermedio<br>
+    🔒 Le credenziali vengono usate solo per questo import<br>
     Made for NUVIO community
   </div>
 
 </div>
 
 <script>
-// ============================================================
-// SUPABASE — chiamato DIRETTAMENTE dal browser
-// Questo elimina completamente il "failed to fetch" perché
-// non passa più per il tuo server su Render
-// ============================================================
-const SUPABASE_URL  = 'https://tupmspjgifldbheqzmbk.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cG1zcGpnaWZsZGJoZXF6bWJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQyNjU4MTAsImV4cCI6MjAxOTg0MTgxMH0.F5k4q8d9GjLkQyP2VX3wF1zF6HjLkQyP2VX3wF1zF6H';
+// URL base: se la pagina è servita dallo stesso server usa path relativi,
+// altrimenti imposta qui l'URL completo di Render.
+const BASE = '';   // lascia vuoto = stesso dominio
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+let authToken    = null;
 let selectedFile = null;
+let serverReady  = false;
 
-// ============================================================
-// LOGIN
-// ============================================================
+// ── Wake up Render ──────────────────────────────────────────────────────────
+// Render free tier mette in sleep il server dopo 15 min di inattività.
+// Il ping su /health lo sveglia PRIMA che l'utente clicchi "Accedi",
+// così non c'è attesa al momento del login vero.
+async function wakeServer() {
+  const banner  = document.getElementById('wakeBanner');
+  const wakeMsg = document.getElementById('wakeMsg');
+  const loginBtn = document.getElementById('loginBtn');
+
+  // Riprova ogni 3 s finché il server risponde (max 60 s)
+  const start = Date.now();
+  while (Date.now() - start < 60000) {
+    try {
+      const res = await fetch(BASE + '/health', { cache: 'no-store' });
+      if (res.ok) {
+        serverReady = true;
+        banner.classList.add('hidden');
+        loginBtn.disabled = false;
+        return;
+      }
+    } catch (_) { /* server ancora sleeping */ }
+    wakeMsg.textContent = 'Server in avvio… (' + Math.round((Date.now()-start)/1000) + 's)';
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  // Timeout — abilita il bottone comunque e mostra avviso
+  banner.innerHTML = '⚠️ Il server ci mette più del solito. Prova ad accedere comunque.';
+  loginBtn.disabled = false;
+}
+
+wakeServer();
+
+// ── LOGIN ───────────────────────────────────────────────────────────────────
 async function doLogin() {
   const email    = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
   const btn      = document.getElementById('loginBtn');
 
-  if (!email || !password) { showStatus('loginStatus','❌ Inserisci email e password','error'); return; }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Accesso...';
-  showStatus('loginStatus','Connessione a NUVIO...','info');
-
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    const msg = error.message.includes('Invalid login') ? '❌ Email o password errati' : '❌ ' + error.message;
-    showStatus('loginStatus', msg, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Accedi';
+  if (!email || !password) {
+    showStatus('loginStatus', '❌ Inserisci email e password', 'error');
     return;
   }
 
-  showStatus('loginStatus', `✅ Benvenuto, ${data.user.email}`, 'success');
-  btn.textContent = '✅ Connesso';
+  btn.disabled = true;
+  btn.textContent = '⏳ Accesso…';
+  showStatus('loginStatus', 'Connessione a NUVIO…', 'info');
 
-  setStep(1);
-  const sec = document.getElementById('importSection');
-  sec.style.display = 'block';
-  document.getElementById('uploadZone').classList.remove('locked');
-  sec.scrollIntoView({ behavior:'smooth', block:'start' });
+  try {
+    const res = await fetch(BASE + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || `Errore ${res.status}`);
+
+    authToken = data.token;
+    showStatus('loginStatus', `✅ Benvenuto, ${data.email}`, 'success');
+    btn.textContent = '✅ Connesso';
+
+    setStep(1);
+    const sec = document.getElementById('importSection');
+    sec.style.display = 'block';
+    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (err) {
+    showStatus('loginStatus', '❌ ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Accedi';
+  }
 }
 
-// ============================================================
-// SELEZIONE FILE
-// ============================================================
+// ── FILE SELECT ─────────────────────────────────────────────────────────────
 function onFileChosen(e) {
   const f = e.target.files[0];
   if (f) selectFile(f);
@@ -298,131 +356,55 @@ zone.addEventListener('drop', e => {
   e.preventDefault(); zone.classList.remove('active');
   const f = e.dataTransfer.files[0];
   if (f && (f.type === 'application/json' || f.name.endsWith('.json'))) selectFile(f);
-  else showStatus('importStatus','❌ Seleziona un file .json valido','error');
+  else showStatus('importStatus', '❌ Seleziona un file .json valido', 'error');
 });
 
-// ============================================================
-// IMPORT — browser → Supabase diretto
-// ============================================================
+// ── IMPORT ──────────────────────────────────────────────────────────────────
 async function doImport() {
-  if (!selectedFile) return;
+  if (!selectedFile || !authToken) return;
+
   const btn = document.getElementById('importBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ Importazione...';
-  showProgress(true,'Lettura file...',5);
+  btn.textContent = '⏳ Importazione…';
+  showProgress(true, 'Caricamento file…', 10);
   clearStatus('importStatus');
 
+  const formData = new FormData();
+  formData.append('backup', selectedFile);
+
   try {
-    const text = await selectedFile.text();
-    let raw;
-    try { raw = JSON.parse(text); } catch { throw new Error('Il file non è un JSON valido'); }
+    showProgress(true, 'Invio al server…', 30);
 
-    showProgress(true,'Conversione dati...',20);
-    const { library, progress, watched } = convertBackup(raw);
-    const r = { library:0, progress:0, watched:0 };
+    const res = await fetch(BASE + '/import', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${authToken}` },
+      body: formData,
+    });
 
-    showProgress(true, `Caricamento ${library.length} titoli...`, 40);
-    if (library.length > 0) {
-      const { error } = await sb.rpc('sync_push_library', { p_items: library });
-      if (error) throw new Error('Libreria: ' + error.message);
-      r.library = library.length;
-    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Errore ${res.status}`);
 
-    showProgress(true,'Progressi di visione...',65);
-    if (progress.length > 0) {
-      const { error } = await sb.rpc('sync_push_watch_progress', { p_entries: progress });
-      if (!error) r.progress = progress.length;
-      else console.warn('Progressi:', error.message);
-    }
-
-    showProgress(true,'Elementi visti...',85);
-    if (watched.length > 0) {
-      const { error } = await sb.rpc('sync_push_watched_items', { p_items: watched });
-      if (!error) r.watched = watched.length;
-      else console.warn('Visti:', error.message);
-    }
-
-    showProgress(true,'Completato!',100);
-    await new Promise(res => setTimeout(res, 400));
+    showProgress(true, 'Completato!', 100);
+    await new Promise(r => setTimeout(r, 400));
     showProgress(false);
 
-    showStatus('importStatus',
-      `✅ ${r.library} film/serie · ${r.progress} progressi · ${r.watched} visti importati`,
-      'success'
-    );
-    document.getElementById('statLib').textContent   = r.library;
-    document.getElementById('statProg').textContent  = r.progress;
-    document.getElementById('statWatch').textContent = r.watched;
+    showStatus('importStatus', data.message, 'success');
+    document.getElementById('statLib').textContent   = data.results?.library  || 0;
+    document.getElementById('statProg').textContent  = data.results?.progress || 0;
+    document.getElementById('statWatch').textContent = data.results?.watched  || 0;
     document.getElementById('statsGrid').classList.add('show');
     setStep(3);
 
-  } catch(err) {
+  } catch (err) {
     showProgress(false);
     showStatus('importStatus', '❌ ' + err.message, 'error');
-    console.error(err);
   }
 
   btn.disabled = false;
   btn.textContent = '🚀 Importa di nuovo';
 }
 
-// ============================================================
-// CONVERTER
-// ============================================================
-function convertBackup(raw) {
-  const library=[], progress=[], watched=[];
-  const items = Array.isArray(raw) ? raw : Object.values(raw);
-
-  for (const item of items) {
-    if (item.removed || item.temp) continue;
-    if (item.type !== 'movie' && item.type !== 'series') continue;
-
-    library.push({
-      content_id:   item._id,
-      content_type: item.type,
-      name:         item.name || '',
-      poster:       item.poster || '',
-      poster_shape: (item.posterShape || 'poster').toUpperCase(),
-      release_info: item.year ? String(item.year) : '',
-      added_at:     new Date(item._ctime || item._mtime || Date.now()).getTime(),
-    });
-
-    if (item.state?.timeOffset > 0) {
-      progress.push({
-        content_id:   item._id,
-        content_type: item.type,
-        video_id:     item.state.video_id || item._id,
-        season:       null,
-        episode:      null,
-        position:     Math.round((item.state.timeOffset || 0) * 1000),
-        duration:     Math.round((item.state.duration   || 0) * 1000),
-        last_watched: new Date(item.state.lastWatched || item._mtime || Date.now()).getTime(),
-        progress_key: item._id,
-      });
-    }
-
-    const isWatched =
-      item.state?.flaggedWatched === 1 ||
-      item.state?.timesWatched > 0 ||
-      (item.state?.watched && item.state.watched !== '');
-
-    if (isWatched) {
-      watched.push({
-        content_id:   item._id,
-        content_type: item.type,
-        title:        item.name || '',
-        season:       null,
-        episode:      null,
-        watched_at:   new Date(item.state?.lastWatched || item._mtime || Date.now()).getTime(),
-      });
-    }
-  }
-  return { library, progress, watched };
-}
-
-// ============================================================
-// HELPERS UI
-// ============================================================
+// ── HELPERS ─────────────────────────────────────────────────────────────────
 function showStatus(id, msg, type) {
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -434,29 +416,25 @@ function showProgress(v, label, pct) {
   const w = document.getElementById('progressWrap');
   if (!v) { w.classList.remove('show'); return; }
   w.classList.add('show');
-  document.getElementById('progressLabel').textContent = label||'';
-  document.getElementById('progressFill').style.width  = (pct||0)+'%';
+  document.getElementById('progressLabel').textContent = label || '';
+  document.getElementById('progressFill').style.width  = (pct || 0) + '%';
 }
 
 function fmtSize(b) {
-  if (b<1024) return b+' B';
-  if (b<1048576) return (b/1024).toFixed(1)+' KB';
-  return (b/1048576).toFixed(1)+' MB';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
 }
 
 function setStep(n) {
-  for (let i=1;i<=3;i++) {
-    document.getElementById('step'+i).className =
-      'step'+(i<n?' done':i===n?' active':'');
-  }
-  for (let i=1;i<=2;i++) {
-    document.getElementById('line'+i).className =
-      'step-line'+(i<n?' done':'');
-  }
+  for (let i = 1; i <= 3; i++)
+    document.getElementById('step' + i).className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  for (let i = 1; i <= 2; i++)
+    document.getElementById('line' + i).className = 'step-line' + (i < n ? ' done' : '');
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key==='Enter' && !document.getElementById('loginBtn').disabled) doLogin();
+  if (e.key === 'Enter' && !document.getElementById('loginBtn').disabled) doLogin();
 });
 </script>
 </body>
