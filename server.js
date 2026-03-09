@@ -9,17 +9,9 @@ require('dotenv').config();
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// ============================================
-// CREDENZIALI SUPABASE (da .env - SICURE)
-// ============================================
+// Credenziali Supabase (dal tuo .env)
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-
-// Verifica che le credenziali siano presenti
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('❌ ERRORE: Credenziali Supabase mancanti nel file .env');
-  process.exit(1);
-}
 
 // Middleware
 app.use(cors());
@@ -75,14 +67,14 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// LOGIN CON EMAIL + PASSWORD + ID PROPRIETARIO
+// LOGIN CON SUPABASE (EMAIL + PASSWORD)
 // ============================================
 app.post('/login', async (req, res) => {
   try {
-    const { email, password, ownerId } = req.body;
+    const { email, password } = req.body;
 
-    if (!email || !password || !ownerId) {
-      return res.status(400).json({ error: 'Email, password e ID proprietario richiesti' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email e password richiesti' });
     }
 
     console.log(`🔐 Tentativo login per: ${email}`);
@@ -90,47 +82,26 @@ app.post('/login', async (req, res) => {
     // Inizializza Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 1. Login con email e password
-    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+    // TENTATIVO DI LOGIN DIRETTO SU SUPABASE
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password
     });
 
-    if (loginError) {
-      console.error('❌ Errore login:', loginError);
+    if (error) {
+      console.error('❌ Errore login Supabase:', error);
       
-      if (loginError.message.includes('Invalid login credentials')) {
+      if (error.message.includes('Invalid login credentials')) {
         return res.status(401).json({ error: 'Email o password non corretti' });
       }
-      return res.status(401).json({ error: loginError.message });
+      return res.status(401).json({ error: error.message });
     }
 
-    const user = loginData.user;
-    const session = loginData.session;
+    const user = data.user;
+    const session = data.session;
 
-    console.log(`✅ Login riuscito: ${user.email} (${user.id})`);
+    console.log(`✅ Login riuscito su Supabase: ${user.email} (${user.id})`);
 
-    // 2. VERIFICA ID PROPRIETARIO (tripla verifica)
-    // Chiamiamo get_sync_owner per vedere cosa restituisce
-    try {
-      const { data: ownerData, error: ownerError } = await supabase.rpc('get_sync_owner');
-      
-      if (ownerError) {
-        console.warn('⚠️ get_sync_owner non disponibile:', ownerError);
-      } else {
-        console.log(`👤 Owner ID restituito: ${ownerData}`);
-        
-        // Se l'ownerId fornito non corrisponde, potrebbe essere un problema
-        // Ma non blocchiamo per ora
-        if (ownerData && ownerData !== ownerId) {
-          console.warn(`⚠️ Owner ID mismatch: fornito=${ownerId}, restituito=${ownerData}`);
-        }
-      }
-    } catch (e) {
-      console.log('get_sync_owner non disponibile, proseguo');
-    }
-
-    // Restituisce il token e i dati utente
     res.json({
       success: true,
       token: session.access_token,
@@ -159,13 +130,10 @@ app.post('/import', upload.single('backup'), async (req, res) => {
       return res.status(400).json({ error: 'Nessun file caricato' });
     }
 
-    console.log('📁 File ricevuto:', req.file.originalname);
-
-    // Legge il file
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const backupData = JSON.parse(fileContent);
 
-    // Inizializza Supabase con il token dell'utente
+    // Inizializza Supabase con il token
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: {
@@ -174,15 +142,15 @@ app.post('/import', upload.single('backup'), async (req, res) => {
       }
     });
 
-    // Verifica che il token sia valido
+    // Verifica token
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
       fs.unlinkSync(req.file.path);
-      return res.status(401).json({ error: 'Token non valido o scaduto' });
+      return res.status(401).json({ error: 'Token non valido' });
     }
 
-    console.log(`👤 Import per: ${user.email} (${user.id})`);
+    console.log(`👤 Import per: ${user.email}`);
 
     // Converte il backup
     const libraryItems = [];
@@ -209,22 +177,16 @@ app.post('/import', upload.single('backup'), async (req, res) => {
       else seriesCount++;
     });
 
-    console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
-
-    // ============================================
-    // SCRITTURA SU SUPABASE
-    // ============================================
+    // Importa su Supabase
     const results = {};
 
     if (libraryItems.length > 0) {
-      console.log(`📦 Importando ${libraryItems.length} elementi...`);
-      
       const { error: pushError } = await supabase.rpc('sync_push_library', {
         p_items: libraryItems
       });
       
       if (pushError) {
-        console.error('❌ Errore push library:', pushError);
+        console.error('❌ Errore push:', pushError);
         throw new Error('Errore durante l\'import');
       }
       
@@ -236,11 +198,7 @@ app.post('/import', upload.single('backup'), async (req, res) => {
     res.json({
       success: true,
       message: `✅ Importati ${results.library || 0} elementi in NUVIO!`,
-      stats: { 
-        movies: movieCount, 
-        series: seriesCount, 
-        total: movieCount + seriesCount 
-      }
+      stats: { total: movieCount + seriesCount }
     });
 
   } catch (error) {
@@ -257,9 +215,5 @@ const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Stremio NUVIO Importer`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`📧 SUPABASE_URL: ${SUPABASE_URL ? '✅ configurata' : '❌ mancante'}`);
-  console.log(`🔑 SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY ? '✅ configurata' : '❌ mancante'}`);
-  console.log(`\n🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/`);
-  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/\n`);
 });
