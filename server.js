@@ -49,7 +49,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CON STREAMS E METADATI COMPLETI
+// CONVERTI BACKUP - VERSIONE CON ID ORIGINALI
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -65,8 +65,6 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     const library = [];
     const watchProgress = {};
     const continueWatching = [];
-    const streams = {}; // <-- NOVITÀ: streams per ogni film/serie
-    const metaMap = {}; // <-- NOVITÀ: mappa dei metadati completi
     
     let movieCount = 0;
     let seriesCount = 0;
@@ -79,63 +77,18 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.removed || item.temp) return;
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      const cleanId = item._id.replace(/[^a-zA-Z0-9]/g, '_');
+      // IMPORTANTE: NON MODIFICARE L'ID!
+      const originalId = item._id;  // Mantieni l'ID originale di Stremio (es. "tt1234567:en" o "tt9876543:1:5")
+      
+      // Estrai l'ID base IMDB per gli addon
+      const imdbId = originalId.split(':')[0]; // Prende "tt1234567" da "tt1234567:en"
       
       // ============================================
-      // METADATI COMPLETI (per evitare 404)
-      // ============================================
-      const metaItem = {
-        id: cleanId,
-        type: item.type,
-        name: item.name || 'Senza titolo',
-        poster: item.poster || '',
-        posterShape: item.posterShape || 'poster',
-        background: item.background || item.poster || '',
-        logo: item.logo || '',
-        description: item.description || 'Descrizione non disponibile',
-        releaseInfo: item.year ? String(item.year) : '',
-        imdbRating: item.imdbRating || 'N/A',
-        genres: item.genres || [],
-        cast: item.cast || [],
-        directors: item.directors || [],
-        writers: item.writers || [],
-        runtime: item.runtime || 'N/A',
-        
-        // Per serie TV
-        totalSeasons: item.totalSeasons || 1,
-        totalEpisodes: item.totalEpisodes || 0,
-        
-        // Video associati (FONDAMENTALE per evitare 404!)
-        videos: item.videos || [{
-          id: cleanId,
-          title: item.name || 'Senza titolo',
-          released: new Date().toISOString(),
-          season: 1,
-          episode: 1,
-          available: true
-        }],
-        
-        // Streams (FONDAMENTALE per evitare 404!)
-        streams: item.streams || [{
-          url: 'https://v2.vidsrc.me/embed/' + cleanId.split(':')[1] || cleanId,
-          name: 'Auto Stream',
-          description: 'Stream automatico'
-        }]
-      };
-
-      // Salva nei metadati globali
-      metaMap[cleanId] = metaItem;
-      
-      // ============================================
-      // STREAMS (per evitare 404)
-      // ============================================
-      streams[cleanId] = metaItem.streams;
-
-      // ============================================
-      // LIBRARY ITEM
+      // LIBRARY ITEM CON ID ORIGINALE
       // ============================================
       const libraryItem = {
-        id: cleanId,
+        id: originalId,  // <-- USIAMO L'ID ORIGINALE!
+        _id: originalId,
         type: item.type,
         name: item.name || 'Senza titolo',
         poster: item.poster || '',
@@ -149,18 +102,22 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
         
+        // Campi extra per gli addon
+        imdb_id: imdbId,  // <-- AGGIUNTO: ID IMDB puro
+        tmdb_id: item.tmdb_id || '',
+        
+        // Per serie TV
         totalEpisodes: item.totalEpisodes || 0,
         totalSeasons: item.totalSeasons || 0,
         
-        // Riferimento ai metadati completi
-        meta: metaItem,
-        
-        // Streams inclusi direttamente
-        streams: metaItem.streams,
-        
-        // Link ai video
-        videos: metaItem.videos
+        // Se è un episodio, aggiungi season/episode
+        season: item.season || (originalId.includes(':') ? originalId.split(':')[1] : null),
+        episode: item.episode || (originalId.includes(':') ? originalId.split(':')[2] : null)
       };
+
+      // Aggiungi campi extra se presenti
+      if (item.background) libraryItem.banner = item.background;
+      if (item.logo) libraryItem.logo = item.logo;
 
       library.push(libraryItem);
 
@@ -174,17 +131,17 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         const timeOffset = item.state.timeOffset;
         const duration = item.state.duration || 3600;
         
-        const progressKey = `@user:local:@watch_progress:${item.type}:${cleanId}`;
+        const progressKey = `@user:local:@watch_progress:${item.type}:${originalId}`;
         watchProgress[progressKey] = {
           currentTime: timeOffset,
           duration: duration,
           lastUpdated: oneMinuteAgo,
-          videoId: cleanId
+          videoId: originalId
         };
 
         if (item.type === 'movie') {
           continueWatching.push({
-            id: cleanId,
+            id: originalId,
             type: item.type,
             name: item.name || '',
             poster: item.poster || '',
@@ -193,16 +150,33 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             duration: duration,
             lastWatched: oneMinuteAgo,
             progress: (timeOffset / duration) * 100,
-            videoId: cleanId,
-            streams: metaItem.streams,
-            meta: metaItem
+            videoId: originalId,
+            imdb_id: imdbId  // <-- AGGIUNTO
+          });
+        } else if (item.type === 'series') {
+          // Per serie, usa l'ID completo dell'episodio
+          const episodeId = originalId; // Già contiene season:episode
+          continueWatching.push({
+            id: episodeId,
+            type: 'episode',
+            name: item.name || '',
+            poster: item.poster || '',
+            season: item.state.season || originalId.split(':')[1],
+            episode: item.state.episode || originalId.split(':')[2],
+            currentTime: timeOffset,
+            duration: duration,
+            lastWatched: oneMinuteAgo,
+            progress: (timeOffset / duration) * 100,
+            videoId: episodeId,
+            imdb_id: imdbId,  // <-- AGGIUNTO
+            seriesId: originalId.split(':')[0] // ID della serie
           });
         }
       }
     });
 
     // ============================================
-    // BACKUP COMPLETO - CON TUTTO QUELLO CHE SERVE
+    // BACKUP COMPLETO
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -217,20 +191,9 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
           language: "it"
         },
         
-        // DATI PRINCIPALI
         library: library,
         watchProgress: watchProgress,
         continueWatching: continueWatching,
-        
-        // METADATI E STREAMS (FONDAMENTALI!)
-        meta: metaMap,
-        streams: streams,
-        metaCache: metaMap,
-        metaStorage: metaMap,
-        
-        // Aggiunte per evitare 404
-        videoStreams: streams,
-        streamCache: streams,
         
         installedAddons: [],
         localScrapers: {},
@@ -264,8 +227,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         totalItems: library.length,
         libraryCount: library.length,
         watchProgressCount: Object.keys(watchProgress).length,
-        continueWatchingCount: continueWatching.length,
-        streamsCount: Object.keys(streams).length
+        continueWatchingCount: continueWatching.length
       }
     };
 
@@ -273,8 +235,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
     console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
-    console.log(`🎬 Streams generati: ${Object.keys(streams).length}`);
-    console.log(`📁 Backup creato con metadati completi`);
+    console.log(`📁 Backup creato con ID ORIGINALI mantenuti`);
 
     res.json({
       success: true,
@@ -284,7 +245,6 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         series: seriesCount,
         progress: Object.keys(watchProgress).length,
         continueWatching: continueWatching.length,
-        streams: Object.keys(streams).length,
         total: movieCount + seriesCount
       }
     });

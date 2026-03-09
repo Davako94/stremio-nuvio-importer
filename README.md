@@ -29,9 +29,9 @@
 
 ## 🎯 Cos'è?
 
-**Stremio NUVIO Importer** è un addon ufficiale per **NUVIO** che ti permette di portare tutta la tua libreria di film e serie da **Stremio** con un semplice click.
+**Stremio NUVIO Importer** è un addon per **NUVIO** che ti permette di portare tutta la tua libreria di film e serie da **Stremio** con due semplici click.
 
-Niente più aggiunte manuali: carichi il file di backup e i tuoi contenuti compaiono magicamente in NUVIO, su tutti i tuoi dispositivi.
+Niente più aggiunte manuali: carichi il file di backup, lo ripristini dentro l'app e i tuoi contenuti compaiono magicamente in NUVIO, su tutti i tuoi dispositivi.
 
 ---
 
@@ -39,16 +39,19 @@ Niente più aggiunte manuali: carichi il file di backup e i tuoi contenuti compa
 
 1. **Esporti** la tua libreria da Stremio usando uno dei tool amici della community
 2. **Carichi** il file in questo addon
-3. **I tuoi film e serie** vengono aggiunti automaticamente a NUVIO
-4. **La magia** della sincronizzazione integrata di NUVIO li rende disponibili su tutti i tuoi dispositivi
+3. **Scarichi** il file .json generato
+4. **Log OUT** da SYNC e TRAKT (o simkl) 
+5. **Importa** il backup nella sezione "backup & ripristino"
+6. **Controlla** se ha funzionato bene
+7. **Riattiva** il SYNC e TRAKT
 
-Nessuna configurazione tecnica. Nessun account extra. Funziona e basta.
+IMPORTANTE! RICORDATI DI DISATTIVARE IL SYNC E TRAKT **PRIMA** DI IMPORTARE IL FILE!!
 
 ---
 
 ## ✅ Requisiti
 
-- Un account **NUVIO** (gratuito o a pagamento)
+- Un account **NUVIO**
 - Un file di backup della tua libreria **Stremio** (vedi sotto come ottenerlo)
 - Una connessione internet
 
@@ -58,7 +61,7 @@ Nessuna configurazione tecnica. Nessun account extra. Funziona e basta.
 
 ### Aggiungi l'addon in NUVIO (consigliato)
 
-1. Apri **NUVIO** sul tuo dispositivo (Android, iOS, Web, TV)
+1. Apri **NUVIO** sul tuo dispositivo (Android, iOS)
 2. Vai nella sezione **Addon**
 3. Clicca su **"Aggiungi addon"** e inserisci questo indirizzo:
    ```
@@ -85,28 +88,27 @@ Puoi usare uno di questi due strumenti gratuiti creati dalla community. Entrambi
 #### **Opzione B – Stremio Manager (by Bestia)**
 1. Vai su [**Stremio Manager**](https://stremio-manager.com/auth)
 2. Fai il login (puoi anche usare l'accesso come ospite)
-3. Vai su **Libreria → Backup**
+3. Vai su **Dashboard → Libreria → Backup Libreria**
 4. Clicca su **"Crea backup"** e scarica il file
 
 > **Nota:** Entrambi i tool generano lo stesso tipo di file. Il nostro addon li riconosce entrambi senza problemi.
 
 ### 2️⃣ Importa in NUVIO
 
-#### **Metodo consigliato – Dall'interno di NUVIO**
-1. Apri NUVIO e vai nella sezione **Addon**
-2. Trova l'addon **Stremio Backup Importer** nella lista
-3. Clicca su **"Configura"** (si aprirà una pagina web dentro l'app)
-4. Nella pagina:
+#### **Come fare? segui BENE**
+1. Apri NUVIO e vai nella sezione **impostazioni → Nuvio Sync → Disconnetti**
+2. Poi vai nella sezione **impostazioni Trakt → Esci**
+3. Trova l'addon **Stremio Backup Importer** nella sezione "Addons"
+4. Clicca su **"Configura"** (si aprirà una pagina web)
+5. Nella pagina:
    - Clicca sull'area di caricamento
    - Seleziona il file `.json` che hai scaricato da Stremio
    - Clicca su **"Importa Libreria"**
-5. In pochi secondi vedrai un riepilogo degli elementi importati
-
-#### **Metodo alternativo – Dal browser**
-Se preferisci usare un browser (o non hai installato l'addon):
-1. Apri [**https://stremio-nuvio-importer.onrender.com/configure**](https://stremio-nuvio-importer.onrender.com/configure)
-2. **Importante:** Devi aver aperto NUVIO almeno una volta su quel dispositivo, perché la connessione viene riconosciuta automaticamente
-3. Carica il file e attendi la conferma
+   - Clicca su **"Converti per NUVIO"**
+   - Clicca su **"Scarica Backup NUVIO"** e salva il file
+6. Ritorna nell'app NUVIO e vai in: **Data → Backup e Ripristino → Esegui Backup** per sicurezza
+7. Dopodichè **Data → Backup e Ripristino → Ripristina backup** e carica il file .json che hai scaricato dall'addon di **Stremio NUVIO importer**
+8. Alla fine, se ha funzionato e hai tutta la libreria in modo corretto, puoi riattivare il Sync e loggarti con Trakt
 
 ---
 
