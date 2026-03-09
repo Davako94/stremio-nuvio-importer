@@ -1,7 +1,7 @@
 # 📦 Stremio NUVIO Importer
 
 <div align="center">
-  <img src="https://via.placeholder.com/150x150/00a8ff/ffffff?text=S→N" alt="Stremio to NUVIO Logo" width="120" height="120"/>
+  <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="Stremio to NUVIO Logo" width="120" height="120"/>
   <h3>Importa la tua libreria Stremio in NUVIO con un click</h3>
   <p><i>Plug & Play • Nessuna configurazione richiesta</i></p>
 
