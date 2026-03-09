@@ -5,7 +5,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    /* STILI INVARIATI - sono perfetti così */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -26,12 +25,7 @@
       box-shadow: 0 20px 40px rgba(0,0,0,0.5);
     }
     .logo-container { text-align: center; margin-bottom: 20px; }
-    .logo {
-      max-width: 120px;
-      max-height: 120px;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    }
+    .logo { max-width: 120px; max-height: 120px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     h1 {
       font-size: 28px;
       margin-bottom: 10px;
@@ -40,12 +34,7 @@
       -webkit-text-fill-color: transparent;
       display: inline-block;
     }
-    .subtitle {
-      color: #aaa;
-      margin-bottom: 30px;
-      font-size: 14px;
-      line-height: 1.5;
-    }
+    .subtitle { color: #aaa; margin-bottom: 30px; font-size: 14px; line-height: 1.5; }
     .sync-card {
       background: #2a2a2a;
       border-radius: 12px;
@@ -53,20 +42,9 @@
       margin-bottom: 30px;
       border-left: 4px solid #00a8ff;
     }
-    .sync-card .title {
-      font-weight: bold;
-      margin-bottom: 15px;
-      color: #00a8ff;
-    }
-    .input-group {
-      margin-bottom: 15px;
-    }
-    .input-group label {
-      display: block;
-      margin-bottom: 5px;
-      color: #aaa;
-      font-size: 13px;
-    }
+    .sync-card .title { font-weight: bold; margin-bottom: 15px; color: #00a8ff; }
+    .input-group { margin-bottom: 15px; }
+    .input-group label { display: block; margin-bottom: 5px; color: #aaa; font-size: 13px; }
     .input-group input {
       width: 100%;
       padding: 12px 15px;
@@ -78,17 +56,9 @@
       font-family: monospace;
       letter-spacing: 2px;
     }
-    .input-group input:focus {
-      outline: none;
-      border-color: #00a8ff;
-    }
-    .input-row {
-      display: flex;
-      gap: 15px;
-    }
-    .input-row .input-group {
-      flex: 1;
-    }
+    .input-group input:focus { outline: none; border-color: #00a8ff; }
+    .input-row { display: flex; gap: 15px; }
+    .input-row .input-group { flex: 1; }
     .btn-secondary {
       background: #2a2a2a;
       color: white;
@@ -101,14 +71,8 @@
       margin-top: 5px;
       transition: all 0.2s;
     }
-    .btn-secondary:hover {
-      background: #3a3a3a;
-      border-color: #00a8ff;
-    }
-    .btn-secondary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    .btn-secondary:hover { background: #3a3a3a; border-color: #00a8ff; }
+    .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
     .badge-success {
       background: #00a869;
       color: white;
@@ -128,11 +92,7 @@
     }
     .upload-area:hover { border-color: #00a8ff; background: rgba(0,168,255,0.05); }
     .upload-area.dragover { border-color: #00a8ff; background: rgba(0,168,255,0.1); }
-    .upload-area.disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      pointer-events: none;
-    }
+    .upload-area.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
     .upload-icon { font-size: 48px; margin-bottom: 15px; }
     .upload-text { color: #ccc; font-size: 16px; }
     .upload-hint { color: #888; font-size: 13px; margin-top: 10px; }
@@ -162,79 +122,24 @@
     }
     button:hover:not(:disabled) { transform: translateY(-2px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .progress {
-      margin-top: 20px;
-      display: none;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: #2a2a2a;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-bottom: 10px;
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #00a8ff, #9b59b6);
-      transition: width 0.3s;
-      width: 0%;
-    }
+    .progress { margin-top: 20px; display: none; }
+    .progress-bar { width: 100%; height: 6px; background: #2a2a2a; border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #00a8ff, #9b59b6); transition: width 0.3s; width: 0%; }
     .progress-step { color: #00a8ff; font-size: 14px; text-align: center; }
-    .result {
-      margin-top: 20px;
-      padding: 16px;
-      border-radius: 10px;
-      display: none;
-    }
-    .result.success {
-      background: rgba(0,255,159,0.1);
-      border: 1px solid #00ff9f;
-      color: #00ff9f;
-    }
-    .result.error {
-      background: rgba(255,107,107,0.1);
-      border: 1px solid #ff6b6b;
-      color: #ff6b6b;
-    }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-top: 20px;
-    }
-    .stat-card {
-      background: #2a2a2a;
-      padding: 15px;
-      border-radius: 8px;
-      text-align: center;
-    }
+    .result { margin-top: 20px; padding: 16px; border-radius: 10px; display: none; }
+    .result.success { background: rgba(0,255,159,0.1); border: 1px solid #00ff9f; color: #00ff9f; }
+    .result.error { background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; color: #ff6b6b; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+    .stat-card { background: #2a2a2a; padding: 15px; border-radius: 8px; text-align: center; }
     .stat-value { font-size: 24px; font-weight: bold; color: #00a8ff; }
     .stat-label { color: #aaa; font-size: 12px; margin-top: 5px; }
-    .footer {
-      margin-top: 30px;
-      text-align: center;
-      color: #666;
-      font-size: 12px;
-    }
+    .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
     .footer a { color: #00a8ff; text-decoration: none; }
-    .howto {
-      margin-top: 30px;
-      padding: 20px;
-      background: #2a2a2a;
-      border-radius: 10px;
-    }
+    .howto { margin-top: 30px; padding: 20px; background: #2a2a2a; border-radius: 10px; }
     .howto h3 { color: #00a8ff; margin-bottom: 15px; font-size: 16px; }
     .howto ol { padding-left: 20px; color: #ccc; font-size: 14px; }
     .howto li { margin: 10px 0; }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: bold;
-      margin-left: 8px;
-    }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 8px; }
     .badge.stremio { background: #7e57c2; color: white; }
     .badge.nuvio { background: #00a8ff; color: white; }
   </style>
@@ -252,13 +157,12 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- CARD SYNC CODE -->
+    <!-- SYNC CODE CARD -->
     <div class="sync-card">
       <div class="title">🔐 Collega il tuo account NUVIO</div>
       <p style="color: #ccc; font-size: 14px; margin-bottom: 20px;">
         Apri NUVIO → Impostazioni → Dispositivi collegati → Genera codice
       </p>
-
       <div class="input-row">
         <div class="input-group">
           <label>📱 Sync Code</label>
@@ -269,12 +173,11 @@
           <input type="password" id="pin" maxlength="4" placeholder="1234">
         </div>
       </div>
-
       <button class="btn-secondary" id="connectBtn">🔌 Connetti a NUVIO</button>
       <div id="connectionStatus" style="margin-top: 15px; font-size: 13px; color: #aaa;"></div>
     </div>
 
-    <!-- Upload area (disabilitata finché non è connesso) -->
+    <!-- UPLOAD AREA -->
     <div id="uploadArea" class="upload-area disabled">
       <div class="upload-icon">📁</div>
       <div class="upload-text">Connetti prima l'account NUVIO</div>
@@ -282,26 +185,21 @@
       <input type="file" id="fileInput" accept=".json" style="display: none;" disabled>
     </div>
 
-    <!-- File info -->
     <div id="fileInfo" class="file-info" style="display: none;">
       <span class="file-icon">📄</span>
       <span class="file-name" id="fileName"></span>
       <span class="file-size" id="fileSize"></span>
     </div>
 
-    <!-- Bottone import (disabilitato finché non è connesso) -->
     <button id="importBtn" disabled>🚀 Importa Libreria</button>
 
-    <!-- Progress bar -->
     <div id="progress" class="progress">
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-step" id="progressStep"></div>
     </div>
 
-    <!-- Result -->
     <div id="result" class="result"></div>
 
-    <!-- Stats -->
     <div id="stats" style="display: none;">
       <div class="stats">
         <div class="stat-card"><div class="stat-value" id="statLibrary">0</div><div class="stat-label">Film/Serie</div></div>
@@ -310,11 +208,10 @@
       </div>
     </div>
 
-    <!-- How to -->
     <div class="howto">
       <h3>📖 Come ottenere il backup Stremio</h3>
       <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Librery → Backup</li>
+        <li><strong>Stremio Sidekick:</strong> Vai su Library → Backup</li>
         <li><strong>Stremio Manager (Bestia):</strong> Vai su Dashboard → Backup Libreria</li>
         <li>Il file avrà estensione .json</li>
         <li>Caricalo qui sopra e clicca Importa</li>
@@ -330,12 +227,9 @@
   <script>
     let selectedFile = null;
     let isConnected = false;
-    let supabaseClient = null;
-    let ownerId = null;
+    let accessToken = null;   // <-- stores the Supabase token from /connect
 
-    // ============================================
-    // FORMATTA INPUT SYNC CODE
-    // ============================================
+    // Format sync code as XXXX-XXXX-...
     document.getElementById('syncCode').addEventListener('input', function(e) {
       let value = e.target.value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
       let parts = [];
@@ -346,7 +240,7 @@
     });
 
     // ============================================
-    // CONNESSIONE A NUVIO VIA SYNC CODE
+    // CONNECT
     // ============================================
     document.getElementById('connectBtn').addEventListener('click', async () => {
       const syncCode = document.getElementById('syncCode').value.trim();
@@ -369,29 +263,30 @@
         const res = await fetch('/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: syncCode, pin })
+          body: JSON.stringify({ code: syncCode, pin }),
         });
 
         const data = await res.json();
 
-        if (data.success) {
-          isConnected = true;
-          ownerId = data.ownerId;
-          supabaseClient = true; // Lo useremo lato server, non serve qui
-
-          statusEl.innerHTML = `✅ Connesso! ID: ${ownerId.substring(0,8)}... <span class="badge-success">Pronto</span>`;
-          statusEl.style.color = '#00ff9f';
-
-          // Abilita upload area e bottone import
-          document.getElementById('uploadArea').classList.remove('disabled');
-          document.getElementById('uploadArea').querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
-          document.getElementById('fileInput').disabled = false;
-          document.getElementById('importBtn').disabled = false;
-
-          connectBtn.textContent = '✅ Connesso';
-        } else {
+        if (!res.ok || !data.success) {
           throw new Error(data.error || 'Errore connessione');
         }
+
+        // KEY FIX: store the access token for use in /import
+        accessToken = data.accessToken;
+        isConnected = true;
+
+        statusEl.innerHTML = `✅ Connesso! ID: ${data.ownerId.substring(0, 8)}... <span class="badge-success">Pronto</span>`;
+        statusEl.style.color = '#00ff9f';
+
+        // Enable upload
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.classList.remove('disabled');
+        uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
+        document.getElementById('fileInput').disabled = false;
+        document.getElementById('importBtn').disabled = false;
+
+        connectBtn.textContent = '✅ Connesso';
       } catch (err) {
         statusEl.innerHTML = `❌ ${err.message}`;
         statusEl.style.color = '#ff6b6b';
@@ -406,30 +301,19 @@
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
     const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
     const importBtn = document.getElementById('importBtn');
 
-    uploadArea.addEventListener('click', () => {
-      if (isConnected) fileInput.click();
-    });
+    uploadArea.addEventListener('click', () => { if (isConnected) fileInput.click(); });
 
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
       if (isConnected) uploadArea.classList.add('dragover');
     });
-
-    uploadArea.addEventListener('dragleave', () => {
-      uploadArea.classList.remove('dragover');
-    });
-
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('dragover');
-      if (!isConnected) {
-        showResult('Prima connetti l\'account NUVIO', 'error');
-        return;
-      }
+      if (!isConnected) { showResult('Prima connetti l\'account NUVIO', 'error'); return; }
       const file = e.dataTransfer.files[0];
       if (file && file.type === 'application/json') {
         handleFileSelect(file);
@@ -437,16 +321,14 @@
         showResult('Per favore seleziona un file JSON valido', 'error');
       }
     });
-
     fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleFileSelect(file);
+      if (e.target.files[0]) handleFileSelect(e.target.files[0]);
     });
 
     function handleFileSelect(file) {
       selectedFile = file;
-      fileName.textContent = file.name;
-      fileSize.textContent = formatFileSize(file.size);
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('fileSize').textContent = formatFileSize(file.size);
       fileInfo.style.display = 'flex';
     }
 
@@ -457,11 +339,11 @@
     }
 
     // ============================================
-    // IMPORTAZIONE
+    // IMPORT — sends Authorization header with token
     // ============================================
-    document.getElementById('importBtn').addEventListener('click', async () => {
+    importBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
-      if (!isConnected) {
+      if (!isConnected || !accessToken) {
         showResult('Prima connetti l\'account NUVIO', 'error');
         return;
       }
@@ -471,31 +353,32 @@
 
       importBtn.disabled = true;
       importBtn.textContent = '⏳ Importazione...';
-      showProgress(true, 'Preparazione...', 10);
+      showProgress(true, 'Caricamento backup...', 10);
 
       try {
         const res = await fetch('/import', {
           method: 'POST',
-          body: formData
+          headers: {
+            // KEY FIX: send the Supabase access token so the server
+            // can make authenticated RPC calls
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: formData,
         });
 
         const data = await res.json();
 
-        if (!res.ok) {
+        if (!res.ok || !data.success) {
           throw new Error(data.error || `Errore HTTP: ${res.status}`);
         }
 
-        if (data.success) {
-          showProgress(false);
-          showResult(data.message, 'success');
+        showProgress(false);
+        showResult(data.message, 'success');
 
-          document.getElementById('statLibrary').textContent = data.results.library || 0;
-          document.getElementById('statProgress').textContent = data.results.progress || 0;
-          document.getElementById('statWatched').textContent = data.results.watched || 0;
-          document.getElementById('stats').style.display = 'block';
-        } else {
-          throw new Error(data.error || 'Errore sconosciuto');
-        }
+        document.getElementById('statLibrary').textContent = data.results.library || 0;
+        document.getElementById('statProgress').textContent = data.results.progress || 0;
+        document.getElementById('statWatched').textContent = data.results.watched || 0;
+        document.getElementById('stats').style.display = 'block';
       } catch (err) {
         showProgress(false);
         showResult('❌ ' + err.message, 'error');
@@ -509,16 +392,13 @@
     // UTILS
     // ============================================
     function showProgress(show, step, percent) {
-      const progress = document.getElementById('progress');
-      const stepEl = document.getElementById('progressStep');
-      const fill = document.getElementById('progressFill');
-
+      const progressEl = document.getElementById('progress');
       if (show) {
-        progress.style.display = 'block';
-        stepEl.textContent = step || '';
-        fill.style.width = (percent || 0) + '%';
+        progressEl.style.display = 'block';
+        document.getElementById('progressStep').textContent = step || '';
+        document.getElementById('progressFill').style.width = (percent || 0) + '%';
       } else {
-        progress.style.display = 'none';
+        progressEl.style.display = 'none';
       }
     }
 
@@ -527,10 +407,7 @@
       result.textContent = message;
       result.className = `result ${type}`;
       result.style.display = 'block';
-
-      setTimeout(() => {
-        result.style.display = 'none';
-      }, 5000);
+      setTimeout(() => { result.style.display = 'none'; }, 6000);
     }
   </script>
 </body>
