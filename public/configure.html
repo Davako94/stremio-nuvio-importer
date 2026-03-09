@@ -50,7 +50,6 @@
     }
     .subtitle { color: var(--muted); font-size: 14px; }
 
-    /* WAKE UP BANNER */
     #wakeBanner {
       background: rgba(45,140,255,0.08);
       border: 1px solid rgba(45,140,255,0.2);
@@ -73,7 +72,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* STEPS */
     .steps { display: flex; align-items: center; justify-content: center; margin-bottom: 28px; }
     .step { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
     .step.active { color: var(--blue); }
@@ -88,7 +86,6 @@
     .step-line { width: 32px; height: 2px; background: var(--border); margin: 0 6px; }
     .step-line.done { background: var(--green); }
 
-    /* CARD */
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 16px; }
     .card-label {
       font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
@@ -172,7 +169,7 @@
     <div class="subtitle">Importa la tua libreria in pochi secondi</div>
   </div>
 
-  <!-- Banner sveglia Render (sparisce quando il server risponde) -->
+  <!-- Banner sveglia Render -->
   <div id="wakeBanner">
     <div class="spinner"></div>
     <span id="wakeMsg">Avvio del server in corso, attendi qualche secondo…</span>
@@ -252,8 +249,7 @@
 </div>
 
 <script>
-// URL base: se la pagina è servita dallo stesso server usa path relativi,
-// altrimenti imposta qui l'URL completo di Render.
+// URL base: se la pagina è servita dallo stesso server usa path relativi
 const BASE = '';   // lascia vuoto = stesso dominio
 
 let authToken    = null;
@@ -261,15 +257,11 @@ let selectedFile = null;
 let serverReady  = false;
 
 // ── Wake up Render ──────────────────────────────────────────────────────────
-// Render free tier mette in sleep il server dopo 15 min di inattività.
-// Il ping su /health lo sveglia PRIMA che l'utente clicchi "Accedi",
-// così non c'è attesa al momento del login vero.
 async function wakeServer() {
   const banner  = document.getElementById('wakeBanner');
   const wakeMsg = document.getElementById('wakeMsg');
   const loginBtn = document.getElementById('loginBtn');
 
-  // Riprova ogni 3 s finché il server risponde (max 60 s)
   const start = Date.now();
   while (Date.now() - start < 60000) {
     try {
@@ -284,7 +276,6 @@ async function wakeServer() {
     wakeMsg.textContent = 'Server in avvio… (' + Math.round((Date.now()-start)/1000) + 's)';
     await new Promise(r => setTimeout(r, 3000));
   }
-  // Timeout — abilita il bottone comunque e mostra avviso
   banner.innerHTML = '⚠️ Il server ci mette più del solito. Prova ad accedere comunque.';
   loginBtn.disabled = false;
 }

@@ -5,7 +5,6 @@ const fs      = require('fs');
 const cors    = require('cors');
 
 // node-fetch v2 (CommonJS) — funziona su Node 14+ a differenza del fetch nativo
-// Assicurati di avere nel package.json: "node-fetch": "^2.7.0"
 const fetch = require('node-fetch');
 
 const app    = express();
