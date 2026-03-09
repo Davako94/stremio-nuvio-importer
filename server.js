@@ -12,8 +12,37 @@ const upload = multer({ dest: 'uploads/' });
 const SUPABASE_URL = 'https://tupmspjgifldbheqzmbk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cG1zcGpnaWZsZGJoZXF6bWJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQyNjU4MTAsImV4cCI6MjAxOTg0MTgxMH0.F5k4q8d9GjLkQyP2VX3wF1zF6HjLkQyP2VX3wF1zF6H';
 
-// Middleware
-app.use(cors());
+// ============================================
+// CONFIGURAZIONE CORS MIGLIORATA (RISOLVE "FAILED TO FETCH")
+// ============================================
+const corsOptions = {
+  origin: true, // Permette qualsiasi origine (in produzione, puoi restringere)
+  credentials: true, // Fondamentale per permettere l'invio di cookie/autenticazione
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+
+// Middleware per gestire manualmente i CORS headers su tutte le risposte
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  
+  // Rispondi immediatamente alle richieste OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -69,6 +98,13 @@ app.get('/manifest.json', (req, res) => {
 // VERIFICA E LOGIN (EMAIL + ID + PASSWORD)
 // ============================================
 app.post('/verify-account', async (req, res) => {
+  // Aggiungi header CORS anche qui per sicurezza
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
   try {
     const { email, ownerId, password } = req.body;
 
@@ -110,18 +146,6 @@ app.post('/verify-account', async (req, res) => {
 
     console.log(`✅ Login effettuato: ${user.email} (${user.id})`);
 
-    // 2. Opzionale: verifica che l'ownerId corrisponda a qualcosa
-    // Potremmo chiamare get_sync_owner() per vedere cosa restituisce
-    try {
-      const { data: ownerData } = await supabase.rpc('get_sync_owner');
-      console.log(`👤 Owner ID restituito: ${ownerData}`);
-      
-      // Se vogliamo essere precisi, potremmo confrontare con l'ownerId fornito
-      // if (ownerData !== ownerId) { ... }
-    } catch (e) {
-      console.log('get_sync_owner non disponibile, proseguo');
-    }
-
     // Restituiamo il token al frontend
     res.json({ 
       valid: true, 
@@ -140,6 +164,13 @@ app.post('/verify-account', async (req, res) => {
 // IMPORTA BACKUP (USA IL TOKEN OTTENUTO)
 // ============================================
 app.post('/import', upload.single('backup'), async (req, res) => {
+  // Aggiungi header CORS
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
   try {
     // Il token arriva nell'header Authorization
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -242,6 +273,13 @@ app.post('/import', upload.single('backup'), async (req, res) => {
 // CATALOGO
 // ============================================
 app.get('/catalog/movie/stremio-import.json', (req, res) => {
+  // Aggiungi header CORS
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
   res.json({
     metas: [{
       id: 'stremio-importer',
@@ -321,5 +359,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
   console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
-  console.log(`✅ Metodo: email + ID + password (sicuro)`);
+  console.log(`✅ Metodo: email + ID + password con CORS migliorato`);
 });
