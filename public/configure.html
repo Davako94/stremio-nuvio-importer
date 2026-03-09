@@ -46,16 +46,77 @@
       font-size: 14px;
       line-height: 1.5;
     }
-    .info-card {
+    .sync-card {
       background: #2a2a2a;
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 30px;
       border-left: 4px solid #00a8ff;
     }
-    .info-icon { font-size: 24px; margin-bottom: 10px; }
-    .info-title { font-weight: bold; margin-bottom: 5px; }
-    .info-desc { color: #aaa; font-size: 13px; }
+    .sync-card .title {
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #00a8ff;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    .input-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #aaa;
+      font-size: 13px;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 12px 15px;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      font-family: monospace;
+      letter-spacing: 2px;
+    }
+    .input-group input:focus {
+      outline: none;
+      border-color: #00a8ff;
+    }
+    .input-row {
+      display: flex;
+      gap: 15px;
+    }
+    .input-row .input-group {
+      flex: 1;
+    }
+    .btn-secondary {
+      background: #2a2a2a;
+      color: white;
+      border: 1px solid #444;
+      padding: 12px;
+      width: 100%;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 5px;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: #3a3a3a;
+      border-color: #00a8ff;
+    }
+    .btn-secondary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .badge-success {
+      background: #00a869;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-left: 10px;
+    }
     .upload-area {
       border: 2px dashed #444;
       border-radius: 12px;
@@ -63,10 +124,15 @@
       text-align: center;
       cursor: pointer;
       transition: all 0.3s;
-      margin-bottom: 20px;
+      margin: 20px 0;
     }
     .upload-area:hover { border-color: #00a8ff; background: rgba(0,168,255,0.05); }
     .upload-area.dragover { border-color: #00a8ff; background: rgba(0,168,255,0.1); }
+    .upload-area.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
     .upload-icon { font-size: 48px; margin-bottom: 15px; }
     .upload-text { color: #ccc; font-size: 16px; }
     .upload-hint { color: #888; font-size: 13px; margin-top: 10px; }
@@ -175,7 +241,6 @@
 </head>
 <body>
   <div class="container">
-    <!-- LOGO AGGIUNTO -->
     <div class="logo-container">
       <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="Stremio NUVIO Importer Logo" class="logo">
     </div>
@@ -187,22 +252,34 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- CARD INFORMATIVA (SOSTITUISCE IL CONTROLLO SESSIONE) -->
-    <div class="info-card">
-      <div class="info-icon">ℹ️</div>
-      <div class="info-title">Come funziona</div>
-      <div class="info-desc" id="infoDesc">
-        Se hai aperto NUVIO in questa finestra, l'import userà la tua sessione.<br>
-        <small>Altrimenti, apri NUVIO, poi torna qui e ricarica la pagina.</small>
+    <!-- CARD SYNC CODE -->
+    <div class="sync-card">
+      <div class="title">🔐 Collega il tuo account NUVIO</div>
+      <p style="color: #ccc; font-size: 14px; margin-bottom: 20px;">
+        Apri NUVIO → Impostazioni → Dispositivi collegati → Genera codice
+      </p>
+
+      <div class="input-row">
+        <div class="input-group">
+          <label>📱 Sync Code</label>
+          <input type="text" id="syncCode" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX">
+        </div>
+        <div class="input-group">
+          <label>🔢 PIN</label>
+          <input type="password" id="pin" maxlength="4" placeholder="1234">
+        </div>
       </div>
+
+      <button class="btn-secondary" id="connectBtn">🔌 Connetti a NUVIO</button>
+      <div id="connectionStatus" style="margin-top: 15px; font-size: 13px; color: #aaa;"></div>
     </div>
 
-    <!-- Upload area -->
-    <div id="uploadArea" class="upload-area">
+    <!-- Upload area (disabilitata finché non è connesso) -->
+    <div id="uploadArea" class="upload-area disabled">
       <div class="upload-icon">📁</div>
-      <div class="upload-text">Clicca per selezionare il backup</div>
-      <div class="upload-hint">File JSON da Stremio Sidekick o Manager</div>
-      <input type="file" id="fileInput" accept=".json" style="display: none;">
+      <div class="upload-text">Connetti prima l'account NUVIO</div>
+      <div class="upload-hint">Inserisci sync code e PIN sopra</div>
+      <input type="file" id="fileInput" accept=".json" style="display: none;" disabled>
     </div>
 
     <!-- File info -->
@@ -212,7 +289,7 @@
       <span class="file-size" id="fileSize"></span>
     </div>
 
-    <!-- Bottone import -->
+    <!-- Bottone import (disabilitato finché non è connesso) -->
     <button id="importBtn" disabled>🚀 Importa Libreria</button>
 
     <!-- Progress bar -->
@@ -252,6 +329,76 @@
 
   <script>
     let selectedFile = null;
+    let isConnected = false;
+    let supabaseClient = null;
+    let ownerId = null;
+
+    // ============================================
+    // FORMATTA INPUT SYNC CODE
+    // ============================================
+    document.getElementById('syncCode').addEventListener('input', function(e) {
+      let value = e.target.value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      let parts = [];
+      for (let i = 0; i < value.length && i < 20; i += 4) {
+        parts.push(value.substr(i, 4));
+      }
+      e.target.value = parts.join('-');
+    });
+
+    // ============================================
+    // CONNESSIONE A NUVIO VIA SYNC CODE
+    // ============================================
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      const syncCode = document.getElementById('syncCode').value.trim();
+      const pin = document.getElementById('pin').value;
+      const statusEl = document.getElementById('connectionStatus');
+      const connectBtn = document.getElementById('connectBtn');
+
+      if (!syncCode || !pin) {
+        statusEl.innerHTML = '❌ Inserisci sync code e PIN';
+        statusEl.style.color = '#ff6b6b';
+        return;
+      }
+
+      connectBtn.disabled = true;
+      connectBtn.textContent = '⏳ Connessione...';
+      statusEl.innerHTML = '⏳ Collegamento in corso...';
+      statusEl.style.color = '#aaa';
+
+      try {
+        const res = await fetch('/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: syncCode, pin })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          isConnected = true;
+          ownerId = data.ownerId;
+          supabaseClient = true; // Lo useremo lato server, non serve qui
+
+          statusEl.innerHTML = `✅ Connesso! ID: ${ownerId.substring(0,8)}... <span class="badge-success">Pronto</span>`;
+          statusEl.style.color = '#00ff9f';
+
+          // Abilita upload area e bottone import
+          document.getElementById('uploadArea').classList.remove('disabled');
+          document.getElementById('uploadArea').querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
+          document.getElementById('fileInput').disabled = false;
+          document.getElementById('importBtn').disabled = false;
+
+          connectBtn.textContent = '✅ Connesso';
+        } else {
+          throw new Error(data.error || 'Errore connessione');
+        }
+      } catch (err) {
+        statusEl.innerHTML = `❌ ${err.message}`;
+        statusEl.style.color = '#ff6b6b';
+        connectBtn.disabled = false;
+        connectBtn.textContent = '🔌 Connetti a NUVIO';
+      }
+    });
 
     // ============================================
     // UPLOAD AREA
@@ -263,11 +410,13 @@
     const fileSize = document.getElementById('fileSize');
     const importBtn = document.getElementById('importBtn');
 
-    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('click', () => {
+      if (isConnected) fileInput.click();
+    });
 
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
-      uploadArea.classList.add('dragover');
+      if (isConnected) uploadArea.classList.add('dragover');
     });
 
     uploadArea.addEventListener('dragleave', () => {
@@ -277,6 +426,10 @@
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('dragover');
+      if (!isConnected) {
+        showResult('Prima connetti l\'account NUVIO', 'error');
+        return;
+      }
       const file = e.dataTransfer.files[0];
       if (file && file.type === 'application/json') {
         handleFileSelect(file);
@@ -295,7 +448,6 @@
       fileName.textContent = file.name;
       fileSize.textContent = formatFileSize(file.size);
       fileInfo.style.display = 'flex';
-      importBtn.disabled = false;
     }
 
     function formatFileSize(bytes) {
@@ -309,27 +461,27 @@
     // ============================================
     document.getElementById('importBtn').addEventListener('click', async () => {
       if (!selectedFile) return;
+      if (!isConnected) {
+        showResult('Prima connetti l\'account NUVIO', 'error');
+        return;
+      }
 
       const formData = new FormData();
       formData.append('backup', selectedFile);
 
-      // Disabilita UI
       importBtn.disabled = true;
       importBtn.textContent = '⏳ Importazione...';
       showProgress(true, 'Preparazione...', 10);
 
       try {
-        // Chiamata all'endpoint /import - i cookie di sessione vengono inviati automaticamente
         const res = await fetch('/import', {
           method: 'POST',
           body: formData
-          // NOTA: NON inviamo headers di autorizzazione, confidiamo nei cookie
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          // Gestione errori HTTP (es. 401 Non autorizzato)
           throw new Error(data.error || `Errore HTTP: ${res.status}`);
         }
 
@@ -337,7 +489,6 @@
           showProgress(false);
           showResult(data.message, 'success');
 
-          // Mostra stats
           document.getElementById('statLibrary').textContent = data.results.library || 0;
           document.getElementById('statProgress').textContent = data.results.progress || 0;
           document.getElementById('statWatched').textContent = data.results.watched || 0;
@@ -347,14 +498,8 @@
         }
       } catch (err) {
         showProgress(false);
-        // Messaggio più amichevole per errori di autenticazione
-        if (err.message.includes('401') || err.message.includes('Non autenticato')) {
-          showResult('❌ Sessione non valida. Apri NUVIO, ricarica questa pagina e riprova.', 'error');
-        } else {
-          showResult('❌ ' + err.message, 'error');
-        }
+        showResult('❌ ' + err.message, 'error');
       } finally {
-        // Riabilita UI
         importBtn.disabled = false;
         importBtn.textContent = '🚀 Importa Libreria';
       }
@@ -383,7 +528,6 @@
       result.className = `result ${type}`;
       result.style.display = 'block';
 
-      // Auto-hide dopo 5 secondi
       setTimeout(() => {
         result.style.display = 'none';
       }, 5000);

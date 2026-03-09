@@ -13,10 +13,7 @@ const SUPABASE_URL = 'https://tupmspjgifldbheqzmbk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cG1zcGpnaWZsZGJoZXF6bWJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQyNjU4MTAsImV4cCI6MjAxOTg0MTgxMH0.F5k4q8d9GjLkQyP2VX3wF1zF6HjLkQyP2VX3wF1zF6H';
 
 // Middleware
-app.use(cors({
-  origin: true, // Permette richieste da qualsiasi origine (incluso il WebView di NUVIO)
-  credentials: true // Fondamentale per permettere l'invio dei cookie di sessione
-}));
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -28,7 +25,7 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
-// HEALTH CHECK (per Render)
+// HEALTH CHECK
 // ============================================
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
@@ -42,7 +39,7 @@ app.get('/configure', (req, res) => {
 });
 
 // ============================================
-// MANIFEST DELL'ADDON (CON LOGO AGGIUNTO)
+// MANIFEST DELL'ADDON
 // ============================================
 app.get('/manifest.json', (req, res) => {
   const manifest = {
@@ -50,7 +47,7 @@ app.get('/manifest.json', (req, res) => {
     name: "Stremio Backup Importer",
     description: "Importa la tua libreria Stremio in NUVIO con un click",
     version: "1.0.0",
-    logo: "https://i.imgur.com/AIZFSRF.jpeg", // <-- LOGO AGGIUNTO
+    logo: "https://i.imgur.com/AIZFSRF.jpeg",
     resources: ["catalog"],
     types: ["movie", "series"],
     catalogs: [
@@ -69,57 +66,90 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// ENDPOINT SESSIONE (RIMOSSO - Non più necessario)
+// ENDPOINT CONNECT - Claim sync code
 // ============================================
-// L'endpoint /session è stato rimosso perché la verifica dell'autenticazione
-// avviene direttamente durante l'import, usando i cookie di sessione.
+app.post('/connect', async (req, res) => {
+  try {
+    const { code, pin } = req.body;
+
+    if (!code || !pin) {
+      return res.status(400).json({ error: 'Codice e PIN richiesti' });
+    }
+
+    // Inizializza client Supabase anonimo (non autenticato)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Chiama la RPC claim_sync_code
+    const { data, error } = await supabase.rpc('claim_sync_code', {
+      p_code: code,
+      p_pin: pin,
+      p_device_name: 'Stremio Importer Web'
+    });
+
+    if (error) {
+      console.error('Errore claim_sync_code:', error);
+      return res.status(401).json({ error: 'Codice o PIN non validi' });
+    }
+
+    // La risposta è un array con { result_owner_id, success, message }
+    const result = data && data[0];
+    if (!result || !result.success) {
+      return res.status(401).json({ error: result?.message || 'Errore durante la connessione' });
+    }
+
+    console.log(`✅ Dispositivo collegato con successo. Owner ID: ${result.result_owner_id}`);
+
+    res.json({
+      success: true,
+      ownerId: result.result_owner_id,
+      message: 'Dispositivo collegato con successo'
+    });
+
+  } catch (error) {
+    console.error('Errore in /connect:', error);
+    res.status(500).json({ error: error.message || 'Errore interno del server' });
+  }
+});
 
 // ============================================
-// IMPORTA BACKUP (MODIFICATO PER USARE I COOKIE)
+// IMPORTA BACKUP (usa l'ownerId dalla sessione?)
+// NOTA: Dobbiamo mantenere lo stato della connessione
 // ============================================
 app.post('/import', upload.single('backup'), async (req, res) => {
   try {
+
     if (!req.file) {
       return res.status(400).json({ error: 'Nessun file caricato' });
     }
 
-    // Legge il file di backup
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const backupData = JSON.parse(fileContent);
 
-    // Inizializza il client Supabase
-    // NOTA: Non passiamo token, ma confidiamo che i cookie di sessione
-    // vengano inviati automaticamente dal browser/WebView.
+    // Inizializza client Supabase - confidiamo nei cookie
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: {
-          // Aggiungiamo un header generico per identificare il client
           'X-Client-Info': 'stremio-importer'
         }
       }
     });
 
-    // Tenta di ottenere l'utente per verificare che la sessione sia valida
+    // Verifica che la sessione sia valida
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      // Se non riusciamo a ottenere l'utente, la sessione non è valida
-      console.warn('Tentativo di import senza sessione valida');
-      // Pulisce il file temporaneo prima di uscire
       fs.unlinkSync(req.file.path);
       return res.status(401).json({
-        error: 'Sessione NUVIO non valida. Assicurati di aver aperto NUVIO in questa finestra e riprova.'
+        error: 'Sessione non valida. Assicurati di aver completato la connessione con sync code.'
       });
     }
 
     console.log(`👤 Import per utente: ${user.email || user.id}`);
 
-    // Ottiene l'owner effettivo (per device linked)
+    // Ottiene l'owner effettivo
     const { data: ownerId, error: ownerError } = await supabase.rpc('get_sync_owner');
     if (ownerError) {
-      console.warn('Impossibile ottenere owner ID, procedo comunque:', ownerError.message);
-    } else {
-      console.log(`👑 Owner ID: ${ownerId}`);
+      console.warn('Impossibile ottenere owner ID:', ownerError.message);
     }
 
     // Converte il backup
@@ -128,7 +158,6 @@ app.post('/import', upload.single('backup'), async (req, res) => {
 
     // Push library
     if (library.length > 0) {
-      console.log(`📦 Importando ${library.length} film/serie...`);
       const { error } = await supabase.rpc('sync_push_library', { p_items: library });
       if (error) throw error;
       results.library = library.length;
@@ -136,7 +165,6 @@ app.post('/import', upload.single('backup'), async (req, res) => {
 
     // Push progress
     if (progress.length > 0) {
-      console.log(`⏱️ Importando ${progress.length} progressi...`);
       const { error } = await supabase.rpc('sync_push_watch_progress', { p_entries: progress });
       if (error) throw error;
       results.progress = progress.length;
@@ -144,13 +172,11 @@ app.post('/import', upload.single('backup'), async (req, res) => {
 
     // Push watched
     if (watched.length > 0) {
-      console.log(`👁️ Importando ${watched.length} elementi visti...`);
       const { error } = await supabase.rpc('sync_push_watched_items', { p_items: watched });
       if (error) throw error;
       results.watched = watched.length;
     }
 
-    // Pulisce file temporaneo
     fs.unlinkSync(req.file.path);
 
     res.json({
@@ -162,15 +188,13 @@ app.post('/import', upload.single('backup'), async (req, res) => {
   } catch (error) {
     console.error('❌ Errore importazione:', error);
 
-    // Pulisce file temporaneo in caso di errore
     if (req.file) {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
 
-    // Gestione errori specifici di Supabase/Auth
     if (error.message?.includes('JWT') || error.message?.includes('auth')) {
       return res.status(401).json({
-        error: 'Sessione scaduta. Apri NUVIO, ricarica la pagina e riprova.'
+        error: 'Sessione scaduta. Riconnetti l\'account con sync code.'
       });
     }
 
@@ -181,7 +205,7 @@ app.post('/import', upload.single('backup'), async (req, res) => {
 });
 
 // ============================================
-// CATALOGO (richiesto da NUVIO)
+// CATALOGO
 // ============================================
 app.get('/catalog/movie/stremio-import.json', (req, res) => {
   res.json({
@@ -196,7 +220,7 @@ app.get('/catalog/movie/stremio-import.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTER (invariato)
+// CONVERTER
 // ============================================
 function convertStremioBackup(items) {
   const library = [];
@@ -262,5 +286,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest (con logo): https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
 });
