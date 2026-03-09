@@ -20,6 +20,13 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
+// HEALTH CHECK
+// ============================================
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// ============================================
 // PAGINA DI CONVERSIONE
 // ============================================
 app.get('/convert', (req, res) => {
@@ -33,7 +40,7 @@ app.get('/manifest.json', (req, res) => {
   const manifest = {
     id: "community.stremio-nuvio-converter",
     name: "Stremio → NUVIO Converter",
-    description: "Converti il backup di Stremio nel formato di NUVIO",
+    description: "Converti il backup di Stremio nel formato nativo di NUVIO",
     version: "1.0.0",
     logo: "https://i.imgur.com/AIZFSRF.jpeg",
     resources: ["catalog"],
@@ -54,7 +61,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP
+// CONVERTI BACKUP (VERSIONE DEFINITIVA)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -64,12 +71,13 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
     console.log('📁 File ricevuto:', req.file.originalname);
 
-    // Legge il file
+    // Legge il backup di Stremio
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const stremioData = JSON.parse(fileContent);
 
     // Converte nel formato NUVIO
-    const nuvioLibrary = [];
+    const library = [];
+    const watchProgress = {};
     let movieCount = 0;
     let seriesCount = 0;
 
@@ -82,30 +90,76 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       // Accetta solo film e serie
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      // Mappa i campi da Stremio a NUVIO
-      nuvioLibrary.push({
+      // ============================================
+      // 1. LIBRARY ITEMS
+      // ============================================
+      library.push({
         id: item._id,
         type: item.type,
-        name: item.name || 'Sconosciuto',
+        name: item.name || '',
         poster: item.poster || '',
         posterShape: item.posterShape || 'poster',
         year: item.year || '',
-        addedToLibraryAt: new Date(item._ctime || item._mtime || Date.now()).getTime()
+        releaseInfo: item.year || '',
+        addedToLibraryAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
+        inLibrary: true,
+        // Campi opzionali (se presenti)
+        description: item.description || '',
+        imdbRating: item.imdbRating || '',
+        genres: item.genres || []
       });
 
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
+
+      // ============================================
+      // 2. WATCH PROGRESS (se presente)
+      // ============================================
+      if (item.state?.timeOffset > 0) {
+        const progressKey = `@user:local:@watch_progress:${item.type}:${item._id}`;
+        watchProgress[progressKey] = {
+          currentTime: item.state.timeOffset,
+          duration: item.state.duration || 0,
+          lastUpdated: new Date(item.state.lastWatched || Date.now()).getTime()
+        };
+      }
     });
 
-    // Crea l'oggetto backup NUVIO
+    // ============================================
+    // 3. CREA IL BACKUP NUVIO COMPLETO
+    // ============================================
     const nuvioBackup = {
-      library: nuvioLibrary
+      version: "1.0.0",
+      timestamp: Date.now(),
+      appVersion: "1.0.0",
+      platform: "android",
+      userScope: "local",
+      data: {
+        settings: {}, // Vuoto - l'utente mantiene le sue impostazioni
+        installedAddons: [], // Vuoto - non tocchiamo gli addon
+        library: library,
+        watchProgress: watchProgress,
+        watchedItems: [], // Opzionale
+        downloads: [],
+        localScrapers: {},
+        apiKeys: {},
+        addonOrder: [],
+        removedAddons: []
+      },
+      metadata: {
+        totalItems: library.length,
+        libraryCount: library.length,
+        watchProgressCount: Object.keys(watchProgress).length,
+        downloadsCount: 0,
+        addonsCount: 0
+      }
     };
 
     // Pulisce file temporaneo
     fs.unlinkSync(req.file.path);
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
+    console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
 
     // Restituisce il file convertito
     res.json({
@@ -113,8 +167,9 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       data: nuvioBackup,
       stats: { 
         movies: movieCount, 
-        series: seriesCount, 
-        total: movieCount + seriesCount 
+        series: seriesCount,
+        progress: Object.keys(watchProgress).length,
+        total: movieCount + seriesCount
       }
     });
 
