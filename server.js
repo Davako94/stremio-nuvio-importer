@@ -27,19 +27,19 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// PAGINA DI CONFIGURAZIONE (e conversione)
+// PAGINA DI CONFIGURAZIONE
 // ============================================
 app.get('/configure', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ============================================
-// MANIFEST DELL'ADDON
+// MANIFEST DELL'ADDON (CON URL CORRETTO)
 // ============================================
 app.get('/manifest.json', (req, res) => {
   const manifest = {
-    id: "community.stremio-nuvio-converter",
-    name: "Stremio → NUVIO Converter",
+    id: "community.stremio-nuvio-importer", // <- stesso nome dell'app
+    name: "Stremio → NUVIO Importer",
     description: "Converti il backup di Stremio nel formato nativo di NUVIO",
     version: "1.0.0",
     logo: "https://i.imgur.com/AIZFSRF.jpeg",
@@ -48,8 +48,8 @@ app.get('/manifest.json', (req, res) => {
     catalogs: [
       {
         type: "movie",
-        id: "stremio-converter",
-        name: "📦 Convertitore"
+        id: "stremio-importer",
+        name: "📦 Importer"
       }
     ],
     behaviorHints: {
@@ -184,10 +184,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Converter`);
+  console.log(`\n🚀 Stremio → NUVIO Importer`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL: https://stremio-nuvio-converter.onrender.com/`);
-  console.log(`🔧 Configurazione: https://stremio-nuvio-converter.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-converter.onrender.com/manifest.json\n`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
+  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
   console.log(`📤 Endpoint POST: /convert (per upload)`);
 });
