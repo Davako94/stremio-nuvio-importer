@@ -34,11 +34,11 @@ app.get('/configure', (req, res) => {
 });
 
 // ============================================
-// MANIFEST DELL'ADDON (CON URL CORRETTO)
+// MANIFEST DELL'ADDON
 // ============================================
 app.get('/manifest.json', (req, res) => {
   const manifest = {
-    id: "community.stremio-nuvio-importer", // <- stesso nome dell'app
+    id: "community.stremio-nuvio-importer",
     name: "Stremio → NUVIO Importer",
     description: "Converti il backup di Stremio nel formato nativo di NUVIO",
     version: "1.0.0",
@@ -61,7 +61,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP (POST)
+// CONVERTI BACKUP (VERSIONE DEFINITIVA)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -91,9 +91,9 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.type !== 'movie' && item.type !== 'series') return;
 
       // ============================================
-      // 1. LIBRARY ITEMS
+      // 1. LIBRARY ITEMS (con TUTTI i campi necessari)
       // ============================================
-      library.push({
+      const libraryItem = {
         id: item._id,
         type: item.type,
         name: item.name || '',
@@ -102,11 +102,28 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         year: item.year || '',
         releaseInfo: item.year || '',
         addedToLibraryAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
-        inLibrary: true,
+        inLibrary: true, // IMPORTANTE!
         description: item.description || '',
         imdbRating: item.imdbRating || '',
-        genres: item.genres || []
-      });
+        genres: item.genres || [],
+        // Campi che NUVIO si aspetta
+        behaviorHints: {
+          defaultVideoId: item._id,
+          hasScheduledVideos: false
+        }
+      };
+
+      // Aggiungi campo banner se presente
+      if (item.background) {
+        libraryItem.banner = item.background;
+      }
+
+      // Aggiungi campo logo se presente
+      if (item.logo) {
+        libraryItem.logo = item.logo;
+      }
+
+      library.push(libraryItem);
 
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
@@ -134,16 +151,41 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       platform: "android",
       userScope: "local",
       data: {
+        // Mantieni i dati esistenti (vuoti = invariati)
         settings: {},
         installedAddons: [],
-        library: library,
-        watchProgress: watchProgress,
-        watchedItems: [],
-        downloads: [],
         localScrapers: {},
         apiKeys: {},
         addonOrder: [],
-        removedAddons: []
+        removedAddons: [],
+        downloads: [],
+        
+        // I NOSTRI DATI
+        library: library,
+        watchProgress: watchProgress,
+        watchedItems: [],
+        
+        // Altri campi necessari
+        continueWatchingRemoved: {},
+        contentDuration: {},
+        syncQueue: [],
+        traktSettings: null,
+        simklSettings: null,
+        tombStones: {},
+        subtitles: {
+          subtitleSize: 28,
+          subtitleBackground: false,
+          subtitleTextColor: "#FFFFFF",
+          subtitleBgOpacity: 0.7,
+          subtitleTextShadow: true,
+          subtitleOutline: true,
+          subtitleOutlineColor: "#000000",
+          subtitleOutlineWidth: 3,
+          subtitleAlign: "center",
+          subtitleBottomOffset: 20,
+          subtitleLetterSpacing: 0,
+          subtitleLineHeightMultiplier: 1.2
+        }
       },
       metadata: {
         totalItems: library.length,
@@ -159,6 +201,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
     console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
+    console.log(`📁 Backup creato con ${library.length} elementi`);
 
     // Restituisce il file convertito
     res.json({
@@ -180,6 +223,60 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT PER DOWNLOAD DIRETTO (opzionale)
+// ============================================
+app.get('/download-sample', (req, res) => {
+  const sampleBackup = {
+    version: "1.0.0",
+    timestamp: Date.now(),
+    appVersion: "1.0.0",
+    platform: "android",
+    userScope: "local",
+    data: {
+      settings: {},
+      installedAddons: [],
+      library: [],
+      watchProgress: {},
+      watchedItems: [],
+      downloads: [],
+      localScrapers: {},
+      apiKeys: {},
+      addonOrder: [],
+      removedAddons: [],
+      continueWatchingRemoved: {},
+      contentDuration: {},
+      syncQueue: [],
+      traktSettings: null,
+      simklSettings: null,
+      tombStones: {},
+      subtitles: {
+        subtitleSize: 28,
+        subtitleBackground: false,
+        subtitleTextColor: "#FFFFFF",
+        subtitleBgOpacity: 0.7,
+        subtitleTextShadow: true,
+        subtitleOutline: true,
+        subtitleOutlineColor: "#000000",
+        subtitleOutlineWidth: 3,
+        subtitleAlign: "center",
+        subtitleBottomOffset: 20,
+        subtitleLetterSpacing: 0,
+        subtitleLineHeightMultiplier: 1.2
+      }
+    },
+    metadata: {
+      totalItems: 0,
+      libraryCount: 0,
+      watchProgressCount: 0,
+      downloadsCount: 0,
+      addonsCount: 0
+    }
+  };
+
+  res.json(sampleBackup);
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
@@ -188,6 +285,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
   console.log(`📤 Endpoint POST: /convert (per upload)`);
+  console.log(`📎 Endpoint GET: /download-sample (per test)\n`);
 });
