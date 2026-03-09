@@ -49,7 +49,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CON ID ORIGINALI
+// CONVERTI BACKUP - VERSIONE "NUVIOSYNC-READY"
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -69,7 +69,14 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     let movieCount = 0;
     let seriesCount = 0;
 
-    const oneMinuteAgo = Date.now() - 60 * 1000;
+    // Timestamp identico per tutti (sembrerà una sincronizzazione unica)
+    const syncTimestamp = Date.now() - 1000 * 60 * 5; // 5 minuti fa
+    
+    // Genera un ID dispositivo fittizio ma coerente
+    const deviceId = 'device_' + Math.random().toString(36).substring(2, 15);
+    
+    // Crea un "sync token" fittizio
+    const syncToken = 'sync_' + Math.random().toString(36).substring(2, 20);
 
     const itemsArray = Array.isArray(stremioData) ? stremioData : Object.values(stremioData);
     
@@ -77,17 +84,14 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.removed || item.temp) return;
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      // IMPORTANTE: NON MODIFICARE L'ID!
-      const originalId = item._id;  // Mantieni l'ID originale di Stremio (es. "tt1234567:en" o "tt9876543:1:5")
-      
-      // Estrai l'ID base IMDB per gli addon
-      const imdbId = originalId.split(':')[0]; // Prende "tt1234567" da "tt1234567:en"
+      const originalId = item._id;
+      const imdbId = originalId.split(':')[0];
       
       // ============================================
-      // LIBRARY ITEM CON ID ORIGINALE
+      // LIBRARY ITEM con dati di sync
       // ============================================
       const libraryItem = {
-        id: originalId,  // <-- USIAMO L'ID ORIGINALE!
+        id: originalId,
         _id: originalId,
         type: item.type,
         name: item.name || 'Senza titolo',
@@ -95,29 +99,34 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         posterShape: item.posterShape || 'poster',
         year: item.year ? String(item.year) : '',
         releaseInfo: item.year ? String(item.year) : '',
-        addedToLibraryAt: oneMinuteAgo,
+        addedToLibraryAt: syncTimestamp,
         inLibrary: true,
         isSaved: true,
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
         
-        // Campi extra per gli addon
-        imdb_id: imdbId,  // <-- AGGIUNTO: ID IMDB puro
-        tmdb_id: item.tmdb_id || '',
+        imdb_id: imdbId,
         
-        // Per serie TV
         totalEpisodes: item.totalEpisodes || 0,
         totalSeasons: item.totalSeasons || 0,
         
-        // Se è un episodio, aggiungi season/episode
-        season: item.season || (originalId.includes(':') ? originalId.split(':')[1] : null),
-        episode: item.episode || (originalId.includes(':') ? originalId.split(':')[2] : null)
+        // DATI PER IL SYNC (FONDAMENTALI!)
+        syncData: {
+          deviceId: deviceId,
+          syncToken: syncToken,
+          syncedAt: syncTimestamp,
+          version: 2,
+          lastModified: syncTimestamp
+        },
+        
+        // Flag per il sync
+        isSynced: true,
+        syncVersion: 2,
+        
+        // Per evitare conflitti
+        conflictResolution: 'local'
       };
-
-      // Aggiungi campi extra se presenti
-      if (item.background) libraryItem.banner = item.background;
-      if (item.logo) libraryItem.logo = item.logo;
 
       library.push(libraryItem);
 
@@ -125,7 +134,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       else seriesCount++;
 
       // ============================================
-      // PROGRESSI
+      // PROGRESSI con dati di sync
       // ============================================
       if (item.state?.timeOffset > 0) {
         const timeOffset = item.state.timeOffset;
@@ -135,65 +144,108 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         watchProgress[progressKey] = {
           currentTime: timeOffset,
           duration: duration,
-          lastUpdated: oneMinuteAgo,
-          videoId: originalId
+          lastUpdated: syncTimestamp,
+          videoId: originalId,
+          syncData: {
+            deviceId: deviceId,
+            syncToken: syncToken,
+            syncedAt: syncTimestamp
+          }
         };
 
-        if (item.type === 'movie') {
-          continueWatching.push({
-            id: originalId,
-            type: item.type,
-            name: item.name || '',
-            poster: item.poster || '',
-            year: item.year || '',
-            currentTime: timeOffset,
-            duration: duration,
-            lastWatched: oneMinuteAgo,
-            progress: (timeOffset / duration) * 100,
-            videoId: originalId,
-            imdb_id: imdbId  // <-- AGGIUNTO
-          });
-        } else if (item.type === 'series') {
-          // Per serie, usa l'ID completo dell'episodio
-          const episodeId = originalId; // Già contiene season:episode
-          continueWatching.push({
-            id: episodeId,
-            type: 'episode',
-            name: item.name || '',
-            poster: item.poster || '',
-            season: item.state.season || originalId.split(':')[1],
-            episode: item.state.episode || originalId.split(':')[2],
-            currentTime: timeOffset,
-            duration: duration,
-            lastWatched: oneMinuteAgo,
-            progress: (timeOffset / duration) * 100,
-            videoId: episodeId,
-            imdb_id: imdbId,  // <-- AGGIUNTO
-            seriesId: originalId.split(':')[0] // ID della serie
-          });
-        }
+        continueWatching.push({
+          id: originalId,
+          type: item.type,
+          name: item.name || '',
+          poster: item.poster || '',
+          currentTime: timeOffset,
+          duration: duration,
+          lastWatched: syncTimestamp,
+          progress: (timeOffset / duration) * 100,
+          videoId: originalId,
+          imdb_id: imdbId,
+          syncData: {
+            deviceId: deviceId,
+            syncToken: syncToken
+          }
+        });
       }
     });
+
+    // ============================================
+    // STATO DEL SYNC (FONDAMENTALE!)
+    // ============================================
+    const syncState = {
+      enabled: true,
+      lastSync: syncTimestamp,
+      lastFullSync: syncTimestamp,
+      deviceId: deviceId,
+      syncToken: syncToken,
+      syncVersion: 2,
+      
+      // Stato del sync per tipo
+      librarySync: {
+        lastSync: syncTimestamp,
+        syncedItems: library.map(item => item.id),
+        totalItems: library.length
+      },
+      
+      progressSync: {
+        lastSync: syncTimestamp,
+        syncedItems: Object.keys(watchProgress)
+      },
+      
+      // Evita che Nuvio faccia un full sync
+      incrementalSync: {
+        enabled: true,
+        lastIncremental: syncTimestamp,
+        changes: []
+      },
+      
+      // Dati cloud fittizi (già sincronizzati)
+      cloudData: {
+        library: library,
+        watchProgress: watchProgress,
+        continueWatching: continueWatching,
+        lastModified: syncTimestamp,
+        checksum: 'checksum_' + Math.random().toString(36).substring(2, 10)
+      }
+    };
 
     // ============================================
     // BACKUP COMPLETO
     // ============================================
     const nuvioBackup = {
-      version: "1.0.0",
-      timestamp: Date.now(),
+      version: "2.0.0", // Versione più alta per far sembrare più recente
+      timestamp: syncTimestamp,
       appVersion: "1.0.0",
       platform: "android",
       userScope: "local",
+      
+      // STATO DEL SYNC GLOBALE
+      sync: syncState,
+      
       data: {
         settings: {
           libraryView: "grid",
           theme: "dark",
-          language: "it"
+          language: "it",
+          
+          // Impostazioni sync
+          syncEnabled: true,
+          autoSync: false, // Importante: false per non far ripartire sync automatico
+          syncInterval: 0,
+          lastSyncAttempt: syncTimestamp
         },
         
         library: library,
         watchProgress: watchProgress,
         continueWatching: continueWatching,
+        
+        // Dati di sync ridondanti (Nuvio li cerca)
+        syncData: syncState,
+        cloudSync: syncState.cloudData,
+        syncState: syncState,
         
         installedAddons: [],
         localScrapers: {},
@@ -218,24 +270,29 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
           subtitleTextShadow: true,
           subtitleOutline: true,
           subtitleOutlineColor: "#000000",
-          subtitleOutlineWidth: 3,
-          subtitleAlign: "center",
-          subtitleBottomOffset: 20
+          subtitleOutlineWidth: 3
         }
       },
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
         watchProgressCount: Object.keys(watchProgress).length,
-        continueWatchingCount: continueWatching.length
+        continueWatchingCount: continueWatching.length,
+        
+        // Metadati di sync
+        syncVersion: 2,
+        lastSync: syncTimestamp,
+        deviceId: deviceId,
+        syncToken: syncToken
       }
     };
 
     fs.unlinkSync(req.file.path);
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
-    console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
-    console.log(`📁 Backup creato con ID ORIGINALI mantenuti`);
+    console.log(`🔄 Sync simulato: ${syncTimestamp}`);
+    console.log(`📱 Device ID: ${deviceId}`);
+    console.log(`🔑 Sync Token: ${syncToken}`);
 
     res.json({
       success: true,
@@ -263,7 +320,5 @@ const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Stremio → NUVIO Importer`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
-  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/\n`);
 });
