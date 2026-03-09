@@ -1,529 +1,462 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
-  <title>Stremio Importer - NUVIO</title>
+  <title>Stremio Importer — NUVIO</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Supabase JS direttamente dal CDN — niente server intermedio -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
-    /* STILI BASE */
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;700&display=swap');
+
+    :root {
+      --bg: #080b12;
+      --card: #0f1520;
+      --card2: #141d2e;
+      --border: rgba(255,255,255,0.07);
+      --blue: #2d8cff;
+      --purple: #7c3aed;
+      --green: #10d07a;
+      --red: #ff4d6a;
+      --text: #e8edf5;
+      --muted: #5a6a82;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0a0a;
-      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 24px;
+      background-image:
+        radial-gradient(ellipse 60% 40% at 20% 0%, rgba(45,140,255,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 80% 100%, rgba(124,58,237,0.06) 0%, transparent 60%);
     }
-    .container {
-      max-width: 600px;
-      width: 100%;
-      background: #1a1a1a;
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-    }
-    .logo-container { text-align: center; margin-bottom: 20px; }
+
+    .container { max-width: 560px; width: 100%; }
+
+    .header { text-align: center; margin-bottom: 36px; }
     .logo {
-      max-width: 120px;
-      max-height: 120px;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      width: 72px; height: 72px; border-radius: 18px; margin-bottom: 20px;
+      box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.4);
     }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #00a8ff, #9b59b6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      display: inline-block;
+    .title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+    .title span {
+      background: linear-gradient(90deg, var(--blue), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
-    .subtitle {
-      color: #aaa;
-      margin-bottom: 30px;
-      font-size: 14px;
-      line-height: 1.5;
+    .subtitle { color: var(--muted); font-size: 14px; }
+
+    /* STEPS */
+    .steps { display: flex; align-items: center; justify-content: center; margin-bottom: 28px; }
+    .step { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
+    .step.active { color: var(--blue); }
+    .step.done   { color: var(--green); }
+    .step-num {
+      width: 26px; height: 26px; border-radius: 50%; border: 2px solid currentColor;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-family: 'Space Mono', monospace; flex-shrink: 0; transition: all 0.3s;
     }
-    
-    /* STILI PER LA CARD ID */
-    .id-card {
-      background: #2a2a2a;
-      border-radius: 16px;
-      padding: 30px 25px;
-      margin-bottom: 30px;
-      border-left: 4px solid #00a8ff;
+    .step.done   .step-num { background: var(--green);  border-color: var(--green);  color:#fff; }
+    .step.active .step-num { background: var(--blue);   border-color: var(--blue);   color:#fff; }
+    .step-line { width: 32px; height: 2px; background: var(--border); margin: 0 6px; }
+    .step-line.done { background: var(--green); }
+
+    /* CARD */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 16px; }
+    .card-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 16px; font-family: 'Space Mono', monospace;
     }
-    .id-icon {
-      font-size: 48px;
-      margin-bottom: 15px;
-      text-align: center;
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+    .field input {
+      width: 100%; padding: 12px 14px; background: var(--card2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; transition: border-color 0.2s;
     }
-    .id-title {
-      font-size: 20px;
-      font-weight: bold;
-      color: #00a8ff;
-      margin-bottom: 10px;
-      text-align: center;
+    .field input:focus { outline: none; border-color: var(--blue); }
+    .field input::placeholder { color: var(--muted); }
+
+    .btn {
+      width: 100%; padding: 14px; border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600; font-family: 'DM Sans', sans-serif;
+      cursor: pointer; transition: all 0.2s;
+      background: linear-gradient(135deg, var(--blue), var(--purple)); color: white; margin-top: 4px;
     }
-    .id-desc {
-      color: #aaa;
-      font-size: 14px;
-      margin-bottom: 25px;
-      text-align: center;
-      line-height: 1.6;
+    .btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .status {
+      font-size: 13px; margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+      display: none; line-height: 1.4;
     }
-    .id-highlight {
-      background: #1a1a1a;
-      padding: 15px;
-      border-radius: 10px;
-      margin-bottom: 20px;
-      border: 1px dashed #00a8ff;
+    .status.error   { background: rgba(255,77,106,0.1); border: 1px solid rgba(255,77,106,0.3); color: var(--red); display:block; }
+    .status.success { background: rgba(16,208,122,0.08); border: 1px solid rgba(16,208,122,0.25); color: var(--green); display:block; }
+    .status.info    { background: rgba(45,140,255,0.08); border: 1px solid rgba(45,140,255,0.2); color: var(--blue); display:block; }
+
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: 12px; padding: 36px 20px;
+      text-align: center; cursor: pointer; transition: all 0.25s; background: var(--card2);
     }
-    .id-highlight ol {
-      padding-left: 25px;
-      color: #ccc;
-      font-size: 14px;
+    .upload-zone.active { border-color: var(--blue); background: rgba(45,140,255,0.04); }
+    .upload-zone.locked { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+    .upload-zone:hover:not(.locked) { border-color: var(--blue); background: rgba(45,140,255,0.04); }
+    .upload-icon { font-size: 36px; margin-bottom: 10px; }
+    .upload-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .upload-sub { color: var(--muted); font-size: 13px; }
+
+    .file-preview { display: none; align-items: center; gap: 12px; padding: 14px; background: var(--card2); border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; }
+    .file-preview.show { display: flex; }
+    .fp-icon { font-size: 24px; }
+    .fp-name { font-weight: 600; font-size: 14px; color: var(--blue); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fp-size { font-size: 12px; color: var(--muted); }
+
+    .progress-wrap { display: none; margin-top: 16px; }
+    .progress-wrap.show { display: block; }
+    .progress-bar { width:100%; height:4px; background: var(--border); border-radius:2px; overflow:hidden; margin-bottom:10px; }
+    .progress-fill { height:100%; background: linear-gradient(90deg,var(--blue),var(--purple)); border-radius:2px; transition: width 0.4s ease; width:0%; }
+    .progress-label { font-size:13px; color: var(--muted); text-align:center; }
+
+    .stats-grid { display:none; grid-template-columns: repeat(3,1fr); gap:10px; margin-top:16px; }
+    .stats-grid.show { display:grid; }
+    .stat { background: var(--card2); border: 1px solid var(--border); border-radius:10px; padding:14px; text-align:center; }
+    .stat-val {
+      font-size:28px; font-weight:700; font-family:'Space Mono',monospace;
+      background: linear-gradient(135deg,var(--blue),var(--purple));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     }
-    .id-highlight li {
-      margin: 8px 0;
+    .stat-lbl { font-size:11px; color: var(--muted); margin-top:4px; }
+
+    .info-box {
+      background: rgba(45,140,255,0.05); border: 1px solid rgba(45,140,255,0.15);
+      border-radius: 10px; padding: 14px 16px; font-size: 13px; color: var(--muted); line-height: 1.6;
     }
-    .id-input {
-      width: 100%;
-      padding: 16px 15px;
-      background: #1a1a1a;
-      border: 2px solid #444;
-      border-radius: 12px;
-      color: #fff;
-      font-size: 15px;
-      margin-bottom: 20px;
-      font-family: monospace;
-      text-align: center;
-    }
-    .id-input:focus {
-      outline: none;
-      border-color: #00a8ff;
-    }
-    .id-btn {
-      background: linear-gradient(135deg, #00a8ff, #9b59b6);
-      color: white;
-      border: none;
-      padding: 16px;
-      width: 100%;
-      border-radius: 12px;
-      font-size: 18px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: transform 0.2s;
-    }
-    .id-btn:hover:not(:disabled) {
-      transform: translateY(-2px);
-    }
-    .id-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .id-status {
-      margin-top: 15px;
-      font-size: 14px;
-      text-align: center;
-      min-height: 20px;
-    }
-    
-    /* UPLOAD AREA */
-    .upload-area {
-      border: 2px dashed #444;
-      border-radius: 12px;
-      padding: 40px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s;
-      margin: 20px 0;
-    }
-    .upload-area.enabled {
-      border-color: #00a8ff;
-      cursor: pointer;
-    }
-    .upload-area.enabled:hover {
-      background: rgba(0,168,255,0.05);
-    }
-    .upload-area.disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      pointer-events: none;
-    }
-    .upload-area.dragover {
-      border-color: #00a8ff;
-      background: rgba(0,168,255,0.1);
-    }
-    .upload-icon { font-size: 48px; margin-bottom: 15px; }
-    .upload-text { color: #ccc; font-size: 16px; }
-    .upload-hint { color: #888; font-size: 13px; margin-top: 10px; }
-    
-    .file-info {
-      background: #2a2a2a;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .file-icon { font-size: 24px; }
-    .file-name { flex: 1; font-weight: 500; color: #00a8ff; }
-    .file-size { color: #aaa; font-size: 12px; }
-    
-    button {
-      background: linear-gradient(135deg, #00a8ff, #9b59b6);
-      color: white;
-      border: none;
-      padding: 16px;
-      width: 100%;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: transform 0.2s, opacity 0.2s;
-    }
-    button:hover:not(:disabled) { transform: translateY(-2px); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    
-    .progress {
-      margin-top: 20px;
-      display: none;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: #2a2a2a;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-bottom: 10px;
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #00a8ff, #9b59b6);
-      transition: width 0.3s;
-      width: 0%;
-    }
-    .progress-step { color: #00a8ff; font-size: 14px; text-align: center; }
-    
-    .result {
-      margin-top: 20px;
-      padding: 16px;
-      border-radius: 10px;
-      display: none;
-    }
-    .result.success {
-      background: rgba(0,255,159,0.1);
-      border: 1px solid #00ff9f;
-      color: #00ff9f;
-    }
-    .result.error {
-      background: rgba(255,107,107,0.1);
-      border: 1px solid #ff6b6b;
-      color: #ff6b6b;
-    }
-    
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-top: 20px;
-    }
-    .stat-card {
-      background: #2a2a2a;
-      padding: 15px;
-      border-radius: 8px;
-      text-align: center;
-    }
-    .stat-value { font-size: 24px; font-weight: bold; color: #00a8ff; }
-    .stat-label { color: #aaa; font-size: 12px; margin-top: 5px; }
-    
-    .howto {
-      margin-top: 30px;
-      padding: 20px;
-      background: #2a2a2a;
-      border-radius: 10px;
-    }
-    .howto h3 { color: #00a8ff; margin-bottom: 15px; font-size: 16px; }
-    .howto ol { padding-left: 20px; color: #ccc; font-size: 14px; }
-    .howto li { margin: 10px 0; }
-    
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: bold;
-      margin-left: 8px;
-    }
-    .badge.stremio { background: #7e57c2; color: white; }
-    .badge.nuvio { background: #00a8ff; color: white; }
-    
-    .footer {
-      margin-top: 30px;
-      text-align: center;
-      color: #666;
-      font-size: 12px;
-    }
+    .info-box strong { color: var(--text); }
+
+    .footer { text-align:center; margin-top:24px; font-size:12px; color: var(--muted); line-height:1.8; }
+    input[type="file"] { display:none; }
+
+    code { background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:4px; font-family:'Space Mono',monospace; font-size:12px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo-container">
-      <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="Stremio NUVIO Importer Logo" class="logo">
-    </div>
+<div class="container">
 
-    <h1>Stremio Backup Importer</h1>
-    <div class="subtitle">
-      Importa la tua libreria Stremio in NUVIO in pochi secondi
-      <span class="badge stremio">Stremio</span>
-      <span class="badge nuvio">NUVIO</span>
-    </div>
-
-    <!-- CARD SOLO ID PROPRIETARIO -->
-    <div class="id-card">
-      <div class="id-icon">🔑</div>
-      <div class="id-title">Collega il tuo account NUVIO</div>
-      
-      <div class="id-highlight">
-        <ol>
-          <li><strong>Apri NUVIO</strong> sul telefono</li>
-          <li>Vai su <strong>Impostazioni → Nuvio Sync → Connessione</strong></li>
-          <li>Copia il <strong>"Proprietario effettivo"</strong> (un codice tipo <code style="background:#333; padding:2px 5px; border-radius:4px;">550e8400-e29b...</code>)</li>
-          <li>Incollalo qui sotto</li>
-        </ol>
-      </div>
-      
-      <input type="text" id="ownerId" class="id-input" 
-             placeholder="Incolla qui il tuo ID proprietario">
-      
-      <button class="id-btn" id="connectBtn">🔌 Connetti a NUVIO</button>
-      <div id="connectStatus" class="id-status"></div>
-    </div>
-
-    <!-- Upload area (inizialmente disabilitata) -->
-    <div id="uploadArea" class="upload-area disabled">
-      <div class="upload-icon">📁</div>
-      <div class="upload-text">Connetti prima il tuo account NUVIO</div>
-      <div class="upload-hint">Incolla il tuo ID qui sopra</div>
-      <input type="file" id="fileInput" accept=".json" style="display: none;" disabled>
-    </div>
-
-    <!-- File info -->
-    <div id="fileInfo" class="file-info" style="display: none;">
-      <span class="file-icon">📄</span>
-      <span class="file-name" id="fileName"></span>
-      <span class="file-size" id="fileSize"></span>
-    </div>
-
-    <!-- Bottone import -->
-    <button id="importBtn" disabled>🚀 Importa Libreria</button>
-
-    <!-- Progress bar -->
-    <div id="progress" class="progress">
-      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-      <div class="progress-step" id="progressStep"></div>
-    </div>
-
-    <!-- Result -->
-    <div id="result" class="result"></div>
-
-    <!-- Stats -->
-    <div id="stats" style="display: none;">
-      <div class="stats">
-        <div class="stat-card"><div class="stat-value" id="statLibrary">0</div><div class="stat-label">Film/Serie</div></div>
-        <div class="stat-card"><div class="stat-value" id="statProgress">0</div><div class="stat-label">Progressi</div></div>
-        <div class="stat-card"><div class="stat-value" id="statWatched">0</div><div class="stat-label">Visti</div></div>
-      </div>
-    </div>
-
-    <!-- How to -->
-    <div class="howto">
-      <h3>📖 Come ottenere il backup Stremio</h3>
-      <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Libreria → Esporta</li>
-        <li><strong>Stremio Manager (Bestia):</strong> Backup completo</li>
-        <li>Il file avrà estensione .json</li>
-      </ol>
-    </div>
-
-    <div class="footer">
-      <p>🔒 Il tuo ID serve solo per identificare il tuo account NUVIO</p>
-      <p>Made for NUVIO community</p>
-    </div>
+  <div class="header">
+    <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="NUVIO" class="logo">
+    <div class="title">Stremio → <span>NUVIO</span></div>
+    <div class="subtitle">Importa la tua libreria in pochi secondi</div>
   </div>
 
-  <script>
-    let selectedFile = null;
-    let verifiedOwnerId = null;
+  <div class="steps">
+    <div class="step active" id="step1"><div class="step-num">1</div><span>Accedi</span></div>
+    <div class="step-line" id="line1"></div>
+    <div class="step" id="step2"><div class="step-num">2</div><span>Backup</span></div>
+    <div class="step-line" id="line2"></div>
+    <div class="step" id="step3"><div class="step-num">3</div><span>Importa</span></div>
+  </div>
 
-    // ============================================
-    // CONNETTI CON ID PROPRIETARIO
-    // ============================================
-    document.getElementById('connectBtn').addEventListener('click', async () => {
-      const ownerId = document.getElementById('ownerId').value.trim();
-      const statusEl = document.getElementById('connectStatus');
-      const connectBtn = document.getElementById('connectBtn');
+  <!-- STEP 1: LOGIN -->
+  <div class="card" id="cardLogin">
+    <div class="card-label">Step 1 — Accesso NUVIO</div>
+    <div class="info-box" style="margin-bottom:16px;">
+      Inserisci email e password del tuo account NUVIO.<br>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="tua@email.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">Accedi</button>
+    <div class="status" id="loginStatus"></div>
+  </div>
 
-      if (!ownerId) {
-        statusEl.innerHTML = '❌ Inserisci il tuo ID proprietario';
-        statusEl.style.color = '#ff6b6b';
-        return;
-      }
+  <!-- STEP 2 + 3 (hidden until logged in) -->
+  <div id="importSection" style="display:none;">
 
-      connectBtn.disabled = true;
-      connectBtn.textContent = '⏳ Connessione...';
-      statusEl.innerHTML = '⏳ Verifica ID...';
-      statusEl.style.color = '#aaa';
+    <div class="card">
+      <div class="card-label">Step 2 — Seleziona il backup Stremio</div>
+      <div class="info-box" style="margin-bottom:16px;">
+        Esporta la libreria con <strong>Stremio Sidekick</strong> o <strong>Stremio Manager</strong>
+        e carica il file <code>.json</code> qui sotto.
+      </div>
+      <div class="upload-zone locked" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon">📂</div>
+        <div class="upload-title">Clicca o trascina il file</div>
+        <div class="upload-sub">Accetta file .json</div>
+      </div>
+      <input type="file" id="fileInput" accept=".json" onchange="onFileChosen(event)">
+      <div class="file-preview" id="filePreview">
+        <div class="fp-icon">📄</div>
+        <div class="fp-name" id="previewName"></div>
+        <div class="fp-size" id="previewSize"></div>
+      </div>
+    </div>
 
-      try {
-        // Simuliamo una verifica (in futuro sarà una chiamata reale)
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        verifiedOwnerId = ownerId;
-        localStorage.setItem('nuvio_owner', ownerId);
-        
-        statusEl.innerHTML = `✅ Connesso! ID: ${ownerId.substring(0,8)}...`;
-        statusEl.style.color = '#00ff9f';
-        
-        // Abilita upload area
-        const uploadArea = document.getElementById('uploadArea');
-        uploadArea.classList.remove('disabled');
-        uploadArea.classList.add('enabled');
-        uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
-        document.getElementById('fileInput').disabled = false;
-        
-        connectBtn.textContent = '✅ Connesso';
-      } catch (err) {
-        statusEl.innerHTML = '❌ ' + err.message;
-        statusEl.style.color = '#ff6b6b';
-        connectBtn.disabled = false;
-        connectBtn.textContent = '🔌 Connetti a NUVIO';
-      }
-    });
+    <div class="card">
+      <div class="card-label">Step 3 — Importa</div>
+      <button class="btn" id="importBtn" disabled onclick="doImport()">🚀 Importa Libreria</button>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel"></div>
+      </div>
+      <div class="status" id="importStatus"></div>
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat"><div class="stat-val" id="statLib">0</div><div class="stat-lbl">Film / Serie</div></div>
+        <div class="stat"><div class="stat-val" id="statProg">0</div><div class="stat-lbl">Progressi</div></div>
+        <div class="stat"><div class="stat-val" id="statWatch">0</div><div class="stat-lbl">Visti</div></div>
+      </div>
+    </div>
 
-    // ============================================
-    // UPLOAD AREA
-    // ============================================
-    const uploadArea = document.getElementById('uploadArea');
-    const fileInput = document.getElementById('fileInput');
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
-    const importBtn = document.getElementById('importBtn');
+  </div>
 
-    uploadArea.addEventListener('click', () => {
-      if (verifiedOwnerId) fileInput.click();
-    });
+  <div class="footer">
+    🔒 Comunica direttamente con NUVIO — nessun server intermedio<br>
+    Made for NUVIO community
+  </div>
 
-    uploadArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (verifiedOwnerId) uploadArea.classList.add('dragover');
-    });
+</div>
 
-    uploadArea.addEventListener('dragleave', () => {
-      uploadArea.classList.remove('dragover');
-    });
+<script>
+// ============================================================
+// SUPABASE — chiamato DIRETTAMENTE dal browser
+// Questo elimina completamente il "failed to fetch" perché
+// non passa più per il tuo server su Render
+// ============================================================
+const SUPABASE_URL  = 'https://tupmspjgifldbheqzmbk.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cG1zcGpnaWZsZGJoZXF6bWJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQyNjU4MTAsImV4cCI6MjAxOTg0MTgxMH0.F5k4q8d9GjLkQyP2VX3wF1zF6HjLkQyP2VX3wF1zF6H';
 
-    uploadArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadArea.classList.remove('dragover');
-      if (!verifiedOwnerId) {
-        showResult('Prima connetti il tuo account NUVIO', 'error');
-        return;
-      }
-      const file = e.dataTransfer.files[0];
-      if (file && file.type === 'application/json') {
-        handleFileSelect(file);
-      } else {
-        showResult('Per favore seleziona un file JSON valido', 'error');
-      }
-    });
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+let selectedFile = null;
 
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleFileSelect(file);
-    });
+// ============================================================
+// LOGIN
+// ============================================================
+async function doLogin() {
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const btn      = document.getElementById('loginBtn');
 
-    function handleFileSelect(file) {
-      selectedFile = file;
-      fileName.textContent = file.name;
-      fileSize.textContent = formatFileSize(file.size);
-      fileInfo.style.display = 'flex';
-      importBtn.disabled = false;
+  if (!email || !password) { showStatus('loginStatus','❌ Inserisci email e password','error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Accesso...';
+  showStatus('loginStatus','Connessione a NUVIO...','info');
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    const msg = error.message.includes('Invalid login') ? '❌ Email o password errati' : '❌ ' + error.message;
+    showStatus('loginStatus', msg, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Accedi';
+    return;
+  }
+
+  showStatus('loginStatus', `✅ Benvenuto, ${data.user.email}`, 'success');
+  btn.textContent = '✅ Connesso';
+
+  setStep(1);
+  const sec = document.getElementById('importSection');
+  sec.style.display = 'block';
+  document.getElementById('uploadZone').classList.remove('locked');
+  sec.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ============================================================
+// SELEZIONE FILE
+// ============================================================
+function onFileChosen(e) {
+  const f = e.target.files[0];
+  if (f) selectFile(f);
+}
+
+function selectFile(f) {
+  selectedFile = f;
+  document.getElementById('previewName').textContent = f.name;
+  document.getElementById('previewSize').textContent = fmtSize(f.size);
+  document.getElementById('filePreview').classList.add('show');
+  document.getElementById('uploadZone').classList.add('active');
+  document.getElementById('importBtn').disabled = false;
+  setStep(2);
+}
+
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('active'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('active'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('active');
+  const f = e.dataTransfer.files[0];
+  if (f && (f.type === 'application/json' || f.name.endsWith('.json'))) selectFile(f);
+  else showStatus('importStatus','❌ Seleziona un file .json valido','error');
+});
+
+// ============================================================
+// IMPORT — browser → Supabase diretto
+// ============================================================
+async function doImport() {
+  if (!selectedFile) return;
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Importazione...';
+  showProgress(true,'Lettura file...',5);
+  clearStatus('importStatus');
+
+  try {
+    const text = await selectedFile.text();
+    let raw;
+    try { raw = JSON.parse(text); } catch { throw new Error('Il file non è un JSON valido'); }
+
+    showProgress(true,'Conversione dati...',20);
+    const { library, progress, watched } = convertBackup(raw);
+    const r = { library:0, progress:0, watched:0 };
+
+    showProgress(true, `Caricamento ${library.length} titoli...`, 40);
+    if (library.length > 0) {
+      const { error } = await sb.rpc('sync_push_library', { p_items: library });
+      if (error) throw new Error('Libreria: ' + error.message);
+      r.library = library.length;
     }
 
-    function formatFileSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    showProgress(true,'Progressi di visione...',65);
+    if (progress.length > 0) {
+      const { error } = await sb.rpc('sync_push_watch_progress', { p_entries: progress });
+      if (!error) r.progress = progress.length;
+      else console.warn('Progressi:', error.message);
     }
 
-    // ============================================
-    // IMPORTAZIONE (SIMULATA PER ORA)
-    // ============================================
-    document.getElementById('importBtn').addEventListener('click', async () => {
-      if (!selectedFile) return;
-      if (!verifiedOwnerId) {
-        showResult('❌ Prima connetti il tuo account NUVIO', 'error');
-        return;
-      }
+    showProgress(true,'Elementi visti...',85);
+    if (watched.length > 0) {
+      const { error } = await sb.rpc('sync_push_watched_items', { p_items: watched });
+      if (!error) r.watched = watched.length;
+      else console.warn('Visti:', error.message);
+    }
 
-      importBtn.disabled = true;
-      importBtn.textContent = '⏳ Importazione...';
-      showProgress(true, 'Preparazione...', 10);
+    showProgress(true,'Completato!',100);
+    await new Promise(res => setTimeout(res, 400));
+    showProgress(false);
 
-      try {
-        // Simuliamo un'importazione
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        showProgress(false);
-        showResult('✅ Import completato con successo!', 'success');
+    showStatus('importStatus',
+      `✅ ${r.library} film/serie · ${r.progress} progressi · ${r.watched} visti importati`,
+      'success'
+    );
+    document.getElementById('statLib').textContent   = r.library;
+    document.getElementById('statProg').textContent  = r.progress;
+    document.getElementById('statWatch').textContent = r.watched;
+    document.getElementById('statsGrid').classList.add('show');
+    setStep(3);
 
-        document.getElementById('statLibrary').textContent = '42';
-        document.getElementById('statProgress').textContent = '15';
-        document.getElementById('statWatched').textContent = '27';
-        document.getElementById('stats').style.display = 'block';
+  } catch(err) {
+    showProgress(false);
+    showStatus('importStatus', '❌ ' + err.message, 'error');
+    console.error(err);
+  }
 
-      } catch (err) {
-        showProgress(false);
-        showResult('❌ ' + err.message, 'error');
-      } finally {
-        importBtn.disabled = false;
-        importBtn.textContent = '🚀 Importa Libreria';
-      }
+  btn.disabled = false;
+  btn.textContent = '🚀 Importa di nuovo';
+}
+
+// ============================================================
+// CONVERTER
+// ============================================================
+function convertBackup(raw) {
+  const library=[], progress=[], watched=[];
+  const items = Array.isArray(raw) ? raw : Object.values(raw);
+
+  for (const item of items) {
+    if (item.removed || item.temp) continue;
+    if (item.type !== 'movie' && item.type !== 'series') continue;
+
+    library.push({
+      content_id:   item._id,
+      content_type: item.type,
+      name:         item.name || '',
+      poster:       item.poster || '',
+      poster_shape: (item.posterShape || 'poster').toUpperCase(),
+      release_info: item.year ? String(item.year) : '',
+      added_at:     new Date(item._ctime || item._mtime || Date.now()).getTime(),
     });
 
-    // ============================================
-    // UTILS
-    // ============================================
-    function showProgress(show, step, percent) {
-      const progress = document.getElementById('progress');
-      const stepEl = document.getElementById('progressStep');
-      const fill = document.getElementById('progressFill');
-
-      if (show) {
-        progress.style.display = 'block';
-        stepEl.textContent = step || '';
-        fill.style.width = (percent || 0) + '%';
-      } else {
-        progress.style.display = 'none';
-      }
+    if (item.state?.timeOffset > 0) {
+      progress.push({
+        content_id:   item._id,
+        content_type: item.type,
+        video_id:     item.state.video_id || item._id,
+        season:       null,
+        episode:      null,
+        position:     Math.round((item.state.timeOffset || 0) * 1000),
+        duration:     Math.round((item.state.duration   || 0) * 1000),
+        last_watched: new Date(item.state.lastWatched || item._mtime || Date.now()).getTime(),
+        progress_key: item._id,
+      });
     }
 
-    function showResult(message, type) {
-      const result = document.getElementById('result');
-      result.textContent = message;
-      result.className = `result ${type}`;
-      result.style.display = 'block';
+    const isWatched =
+      item.state?.flaggedWatched === 1 ||
+      item.state?.timesWatched > 0 ||
+      (item.state?.watched && item.state.watched !== '');
 
-      setTimeout(() => {
-        result.style.display = 'none';
-      }, 5000);
+    if (isWatched) {
+      watched.push({
+        content_id:   item._id,
+        content_type: item.type,
+        title:        item.name || '',
+        season:       null,
+        episode:      null,
+        watched_at:   new Date(item.state?.lastWatched || item._mtime || Date.now()).getTime(),
+      });
     }
-  </script>
+  }
+  return { library, progress, watched };
+}
+
+// ============================================================
+// HELPERS UI
+// ============================================================
+function showStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+function clearStatus(id) { document.getElementById(id).className = 'status'; }
+
+function showProgress(v, label, pct) {
+  const w = document.getElementById('progressWrap');
+  if (!v) { w.classList.remove('show'); return; }
+  w.classList.add('show');
+  document.getElementById('progressLabel').textContent = label||'';
+  document.getElementById('progressFill').style.width  = (pct||0)+'%';
+}
+
+function fmtSize(b) {
+  if (b<1024) return b+' B';
+  if (b<1048576) return (b/1024).toFixed(1)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+
+function setStep(n) {
+  for (let i=1;i<=3;i++) {
+    document.getElementById('step'+i).className =
+      'step'+(i<n?' done':i===n?' active':'');
+  }
+  for (let i=1;i<=2;i++) {
+    document.getElementById('line'+i).className =
+      'step-line'+(i<n?' done':'');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Enter' && !document.getElementById('loginBtn').disabled) doLogin();
+});
+</script>
 </body>
 </html>
