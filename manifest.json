@@ -1,7 +1,7 @@
 {
-  "id": "community.stremio-nuvio-importer",
-  "name": "Stremio Backup Importer",
-  "description": "Importa la tua libreria Stremio in NUVIO con un click",
+  "id": "community.stremio-nuvio-converter",
+  "name": "Stremio → NUVIO Converter",
+  "description": "Converti il backup di Stremio nel formato di NUVIO",
   "version": "1.0.0",
   "logo": "https://i.imgur.com/AIZFSRF.jpeg",
   "resources": ["catalog"],
@@ -9,8 +9,8 @@
   "catalogs": [
     {
       "type": "movie",
-      "id": "stremio-import",
-      "name": "📦 Stremio Importer"
+      "id": "stremio-converter",
+      "name": "📦 Convertitore"
     }
   ],
   "behaviorHints": {
