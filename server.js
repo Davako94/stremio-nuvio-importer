@@ -29,7 +29,7 @@ app.get('/health', (req, res) => {
 // ============================================
 // PAGINA DI CONVERSIONE
 // ============================================
-app.get('/convert', (req, res) => {
+app.get('/configure', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
