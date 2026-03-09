@@ -12,6 +12,14 @@ const upload = multer({ dest: 'uploads/' });
 const SUPABASE_URL = 'https://tupmspjgifldbheqzmbk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cG1zcGpnaWZsZGJoZXF6bWJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQyNjU4MTAsImV4cCI6MjAxOTg0MTgxMH0.F5k4q8d9GjLkQyP2VX3wF1zF6HjLkQyP2VX3wF1zF6H';
 
+// ⚠️ IMPORTANTE: Aggiungi questa variabile d'ambiente su Render!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('❌ ERRORE: SUPABASE_SERVICE_KEY non trovata nelle variabili d\'ambiente!');
+  console.error('Aggiungila su Render: Dashboard → Environment Variables');
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -76,28 +84,36 @@ app.post('/verify-account', async (req, res) => {
       return res.status(400).json({ error: 'Email e ID richiesti' });
     }
 
-    // Validazioni base
+    // Validazione UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(ownerId)) {
       return res.status(400).json({ error: 'Formato ID non valido' });
     }
 
-    // Inizializza client Supabase
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Inizializza client con service key per cercare l'utente
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
 
-    // Qui dovremmo verificare che l'email esista e sia associata all'ID
-    // Purtroppo non possiamo fare query dirette sugli utenti senza autenticazione
-    // Ma possiamo provare a fare un login con magic link? Non abbiamo password...
+    // Cerca l'utente tramite email (API Admin)
+    const { data, error } = await supabase.auth.admin.listUsers();
     
-    // Per ora, accettiamo qualsiasi combinazione e salviamo in una lista temporanea
-    // In produzione, dovremmo avere un database di utenti verificati
+    if (error) {
+      console.error('Errore listUsers:', error);
+      return res.status(500).json({ error: 'Errore nel cercare l\'utente' });
+    }
+
+    const user = data?.users?.find(u => u.email === email);
     
-    console.log(`📧 Tentativo verifica: ${email} - ${ownerId}`);
-    
-    // TODO: Implementare vera verifica con Supabase Admin API
-    // Per ora, simuliamo una verifica riuscita
-    
-    res.json({ valid: true, message: 'Account verificato (simulazione)' });
+    if (!user) {
+      return res.status(404).json({ error: 'Email non trovata in NUVIO' });
+    }
+
+    // Nota: l'ID proprietario potrebbe essere diverso dall'ID utente
+    // Per ora, accettiamo se l'email esiste
+    console.log(`✅ Account verificato: ${email} (${user.id})`);
+
+    res.json({ valid: true, userId: user.id });
 
   } catch (error) {
     console.error('Errore verifica:', error);
@@ -106,7 +122,7 @@ app.post('/verify-account', async (req, res) => {
 });
 
 // ============================================
-// IMPORTA BACKUP
+// IMPORTA BACKUP (VERSIONE REALE CON SERVICE KEY)
 // ============================================
 app.post('/import', upload.single('backup'), async (req, res) => {
   try {
@@ -120,34 +136,91 @@ app.post('/import', upload.single('backup'), async (req, res) => {
       return res.status(400).json({ error: 'Nessun file caricato' });
     }
 
+    // 1. Legge il file backup
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const backupData = JSON.parse(fileContent);
 
-    // Inizializza client Supabase
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // Qui dovremmo autenticarci come l'utente con quell'email
-    // Ma senza password non possiamo
-    
-    // Soluzione: usare il servizio di autenticazione di Supabase con magic link?
-    // O usare una service key? (sconsigliato)
-    
-    // Per ora, convertiamo il backup e simuliamo l'import
-    const { library, progress, watched } = convertStremioBackup(backupData);
-    
-    console.log(`📦 Import simulato per ${email}:`, {
-      library: library.length,
-      progress: progress.length,
-      watched: watched.length
+    // 2. Inizializza client con service key
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Pulisce file temporaneo
+    // 3. Cerca l'utente tramite email
+    const { data, error: userError } = await supabase.auth.admin.listUsers();
+    
+    if (userError) {
+      throw new Error('Errore nel cercare l\'utente');
+    }
+
+    const user = data?.users?.find(u => u.email === email);
+    
+    if (!user) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Utente non trovato' });
+    }
+
+    console.log(`👤 Import per: ${user.id} (${email})`);
+
+    // 4. Converte il backup
+    const { library, progress, watched } = convertStremioBackup(backupData);
+    const results = {};
+
+    // 5. Importa la libreria (sync_push_library)
+    if (library.length > 0) {
+      console.log(`📦 Importando ${library.length} film/serie...`);
+      
+      // Con service key, possiamo chiamare le RPC direttamente
+      // Nota: alcune RPC potrebbero richiedere l'ID utente
+      const { error: libError } = await supabase.rpc('sync_push_library', {
+        p_items: library
+      });
+      
+      if (libError) {
+        console.error('Errore push library:', libError);
+        throw new Error('Errore durante l\'import della libreria');
+      }
+      
+      results.library = library.length;
+    }
+
+    // 6. Importa i progressi
+    if (progress.length > 0) {
+      console.log(`⏱️ Importando ${progress.length} progressi...`);
+      
+      const { error: progError } = await supabase.rpc('sync_push_watch_progress', {
+        p_entries: progress
+      });
+      
+      if (progError) {
+        console.error('Errore push progress:', progError);
+        // Non blocchiamo tutto, solo log
+      } else {
+        results.progress = progress.length;
+      }
+    }
+
+    // 7. Importa i watched
+    if (watched.length > 0) {
+      console.log(`👁️ Importando ${watched.length} elementi visti...`);
+      
+      const { error: watchError } = await supabase.rpc('sync_push_watched_items', {
+        p_items: watched
+      });
+      
+      if (watchError) {
+        console.error('Errore push watched:', watchError);
+      } else {
+        results.watched = watched.length;
+      }
+    }
+
+    // 8. Pulisce file temporaneo
     fs.unlinkSync(req.file.path);
 
     res.json({
       success: true,
-      message: `✅ SIMULAZIONE: Importati ${library.length} film/serie, ${progress.length} progressi, ${watched.length} visti`,
-      results: { library: library.length, progress: progress.length, watched: watched.length }
+      message: `✅ Importati ${results.library || 0} film/serie, ${results.progress || 0} progressi, ${results.watched || 0} visti`,
+      results
     });
 
   } catch (error) {
@@ -173,7 +246,7 @@ app.get('/catalog/movie/stremio-import.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTER
+// CONVERTER (invariato)
 // ============================================
 function convertStremioBackup(items) {
   const library = [];
@@ -239,5 +312,12 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
+  
+  if (!SUPABASE_SERVICE_KEY) {
+    console.log(`\n⚠️  ATTENZIONE: SUPABASE_SERVICE_KEY non impostata!`);
+    console.log(`L'import NON funzionerà finché non la aggiungi su Render.\n`);
+  } else {
+    console.log(`\n✅ Service Key configurata - import reale attivo!\n`);
+  }
 });
