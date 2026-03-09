@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
+    /* STILI BASE - uguali a prima, aggiungo solo stili per la nuova card */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -25,7 +26,12 @@
       box-shadow: 0 20px 40px rgba(0,0,0,0.5);
     }
     .logo-container { text-align: center; margin-bottom: 20px; }
-    .logo { max-width: 120px; max-height: 120px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .logo {
+      max-width: 120px;
+      max-height: 120px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
     h1 {
       font-size: 28px;
       margin-bottom: 10px;
@@ -34,53 +40,97 @@
       -webkit-text-fill-color: transparent;
       display: inline-block;
     }
-    .subtitle { color: #aaa; margin-bottom: 30px; font-size: 14px; line-height: 1.5; }
-    .sync-card {
+    .subtitle {
+      color: #aaa;
+      margin-bottom: 30px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    /* STILI PER LA CARD EMAIL + ID */
+    .auth-card {
       background: #2a2a2a;
-      border-radius: 12px;
-      padding: 20px;
+      border-radius: 16px;
+      padding: 30px 25px;
       margin-bottom: 30px;
       border-left: 4px solid #00a8ff;
     }
-    .sync-card .title { font-weight: bold; margin-bottom: 15px; color: #00a8ff; }
-    .input-group { margin-bottom: 15px; }
-    .input-group label { display: block; margin-bottom: 5px; color: #aaa; font-size: 13px; }
-    .input-group input {
-      width: 100%;
-      padding: 12px 15px;
-      background: #1a1a1a;
-      border: 1px solid #444;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 16px;
-      font-family: monospace;
-      letter-spacing: 2px;
+    .auth-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+      text-align: center;
     }
-    .input-group input:focus { outline: none; border-color: #00a8ff; }
-    .input-row { display: flex; gap: 15px; }
-    .input-row .input-group { flex: 1; }
-    .btn-secondary {
-      background: #2a2a2a;
-      color: white;
-      border: 1px solid #444;
-      padding: 12px;
-      width: 100%;
-      border-radius: 8px;
+    .auth-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #00a8ff;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .auth-desc {
+      color: #aaa;
       font-size: 14px;
-      cursor: pointer;
-      margin-top: 5px;
-      transition: all 0.2s;
+      margin-bottom: 25px;
+      text-align: center;
+      line-height: 1.6;
     }
-    .btn-secondary:hover { background: #3a3a3a; border-color: #00a8ff; }
-    .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
-    .badge-success {
-      background: #00a869;
+    .auth-highlight {
+      background: #1a1a1a;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      border: 1px dashed #00a8ff;
+    }
+    .auth-highlight ol {
+      padding-left: 25px;
+      color: #ccc;
+      font-size: 14px;
+    }
+    .auth-highlight li {
+      margin: 8px 0;
+    }
+    .auth-input {
+      width: 100%;
+      padding: 14px 15px;
+      background: #1a1a1a;
+      border: 2px solid #444;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      margin-bottom: 15px;
+    }
+    .auth-input:focus {
+      outline: none;
+      border-color: #00a8ff;
+    }
+    .auth-btn {
+      background: linear-gradient(135deg, #00a8ff, #9b59b6);
       color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      margin-left: 10px;
+      border: none;
+      padding: 16px;
+      width: 100%;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s;
+      margin-top: 10px;
     }
+    .auth-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+    }
+    .auth-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .auth-status {
+      margin-top: 15px;
+      font-size: 14px;
+      text-align: center;
+      min-height: 20px;
+    }
+    
+    /* UPLOAD AREA (inizialmente disabilitata) */
     .upload-area {
       border: 2px dashed #444;
       border-radius: 12px;
@@ -90,12 +140,26 @@
       transition: all 0.3s;
       margin: 20px 0;
     }
-    .upload-area:hover { border-color: #00a8ff; background: rgba(0,168,255,0.05); }
-    .upload-area.dragover { border-color: #00a8ff; background: rgba(0,168,255,0.1); }
-    .upload-area.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+    .upload-area.enabled {
+      border-color: #00a8ff;
+      cursor: pointer;
+    }
+    .upload-area.enabled:hover {
+      background: rgba(0,168,255,0.05);
+    }
+    .upload-area.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .upload-area.dragover {
+      border-color: #00a8ff;
+      background: rgba(0,168,255,0.1);
+    }
     .upload-icon { font-size: 48px; margin-bottom: 15px; }
     .upload-text { color: #ccc; font-size: 16px; }
     .upload-hint { color: #888; font-size: 13px; margin-top: 10px; }
+    
     .file-info {
       background: #2a2a2a;
       border-radius: 8px;
@@ -108,6 +172,7 @@
     .file-icon { font-size: 24px; }
     .file-name { flex: 1; font-weight: 500; color: #00a8ff; }
     .file-size { color: #aaa; font-size: 12px; }
+    
     button {
       background: linear-gradient(135deg, #00a8ff, #9b59b6);
       color: white;
@@ -122,26 +187,86 @@
     }
     button:hover:not(:disabled) { transform: translateY(-2px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .progress { margin-top: 20px; display: none; }
-    .progress-bar { width: 100%; height: 6px; background: #2a2a2a; border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
-    .progress-fill { height: 100%; background: linear-gradient(90deg, #00a8ff, #9b59b6); transition: width 0.3s; width: 0%; }
+    
+    .progress {
+      margin-top: 20px;
+      display: none;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #2a2a2a;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00a8ff, #9b59b6);
+      transition: width 0.3s;
+      width: 0%;
+    }
     .progress-step { color: #00a8ff; font-size: 14px; text-align: center; }
-    .result { margin-top: 20px; padding: 16px; border-radius: 10px; display: none; }
-    .result.success { background: rgba(0,255,159,0.1); border: 1px solid #00ff9f; color: #00ff9f; }
-    .result.error { background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; color: #ff6b6b; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
-    .stat-card { background: #2a2a2a; padding: 15px; border-radius: 8px; text-align: center; }
+    
+    .result {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 10px;
+      display: none;
+    }
+    .result.success {
+      background: rgba(0,255,159,0.1);
+      border: 1px solid #00ff9f;
+      color: #00ff9f;
+    }
+    .result.error {
+      background: rgba(255,107,107,0.1);
+      border: 1px solid #ff6b6b;
+      color: #ff6b6b;
+    }
+    
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
     .stat-value { font-size: 24px; font-weight: bold; color: #00a8ff; }
     .stat-label { color: #aaa; font-size: 12px; margin-top: 5px; }
-    .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-    .footer a { color: #00a8ff; text-decoration: none; }
-    .howto { margin-top: 30px; padding: 20px; background: #2a2a2a; border-radius: 10px; }
+    
+    .howto {
+      margin-top: 30px;
+      padding: 20px;
+      background: #2a2a2a;
+      border-radius: 10px;
+    }
     .howto h3 { color: #00a8ff; margin-bottom: 15px; font-size: 16px; }
     .howto ol { padding-left: 20px; color: #ccc; font-size: 14px; }
     .howto li { margin: 10px 0; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 8px; }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-left: 8px;
+    }
     .badge.stremio { background: #7e57c2; color: white; }
     .badge.nuvio { background: #00a8ff; color: white; }
+    
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -157,49 +282,59 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- SYNC CODE CARD -->
-    <div class="sync-card">
-      <div class="title">🔐 Collega il tuo account NUVIO</div>
-      <p style="color: #ccc; font-size: 14px; margin-bottom: 20px;">
-        Apri NUVIO → Impostazioni → Dispositivi collegati → Genera codice
-      </p>
-      <div class="input-row">
-        <div class="input-group">
-          <label>📱 Sync Code</label>
-          <input type="text" id="syncCode" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX">
-        </div>
-        <div class="input-group">
-          <label>🔢 PIN</label>
-          <input type="password" id="pin" maxlength="4" placeholder="1234">
-        </div>
+    <!-- CARD EMAIL + ID (METODO 3) -->
+    <div class="auth-card">
+      <div class="auth-icon">📧🔑</div>
+      <div class="auth-title">Collega il tuo account NUVIO</div>
+      
+      <div class="auth-highlight">
+        <ol>
+          <li><strong>Apri NUVIO</strong> sul telefono</li>
+          <li>Vai su <strong>Impostazioni → Account</strong></li>
+          <li>Copia la tua <strong>email</strong> (quella che usi per accedere)</li>
+          <li>Copia il <strong>"Proprietario effettivo"</strong> (codice tipo <code style="background:#333; padding:2px 5px; border-radius:4px;">550e8400-e29b...</code>)</li>
+          <li>Inseriscili qui sotto</li>
+        </ol>
       </div>
-      <button class="btn-secondary" id="connectBtn">🔌 Connetti a NUVIO</button>
-      <div id="connectionStatus" style="margin-top: 15px; font-size: 13px; color: #aaa;"></div>
+      
+      <input type="email" id="email" class="auth-input" 
+             placeholder="La tua email NUVIO">
+      
+      <input type="text" id="ownerId" class="auth-input" 
+             placeholder="Il tuo ID proprietario">
+      
+      <button class="auth-btn" id="verifyBtn">🔍 Verifica account</button>
+      <div id="verifyStatus" class="auth-status"></div>
     </div>
 
-    <!-- UPLOAD AREA -->
+    <!-- Upload area (inizialmente disabilitata) -->
     <div id="uploadArea" class="upload-area disabled">
       <div class="upload-icon">📁</div>
-      <div class="upload-text">Connetti prima l'account NUVIO</div>
-      <div class="upload-hint">Inserisci sync code e PIN sopra</div>
+      <div class="upload-text">Verifica prima il tuo account</div>
+      <div class="upload-hint">Inserisci email e ID qui sopra</div>
       <input type="file" id="fileInput" accept=".json" style="display: none;" disabled>
     </div>
 
+    <!-- File info -->
     <div id="fileInfo" class="file-info" style="display: none;">
       <span class="file-icon">📄</span>
       <span class="file-name" id="fileName"></span>
       <span class="file-size" id="fileSize"></span>
     </div>
 
+    <!-- Bottone import -->
     <button id="importBtn" disabled>🚀 Importa Libreria</button>
 
+    <!-- Progress bar -->
     <div id="progress" class="progress">
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-step" id="progressStep"></div>
     </div>
 
+    <!-- Result -->
     <div id="result" class="result"></div>
 
+    <!-- Stats -->
     <div id="stats" style="display: none;">
       <div class="stats">
         <div class="stat-card"><div class="stat-value" id="statLibrary">0</div><div class="stat-label">Film/Serie</div></div>
@@ -208,90 +343,96 @@
       </div>
     </div>
 
+    <!-- How to -->
     <div class="howto">
       <h3>📖 Come ottenere il backup Stremio</h3>
       <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Library → Backup</li>
-        <li><strong>Stremio Manager (Bestia):</strong> Vai su Dashboard → Backup Libreria</li>
+        <li><strong>Stremio Sidekick:</strong> Vai su Libreria → Esporta</li>
+        <li><strong>Stremio Manager (Bestia):</strong> Backup completo</li>
         <li>Il file avrà estensione .json</li>
-        <li>Caricalo qui sopra e clicca Importa</li>
       </ol>
     </div>
 
     <div class="footer">
-      <p>🔒 I tuoi dati vengono inviati direttamente a NUVIO • Nessun server intermedio</p>
+      <p>🔒 I tuoi dati servono solo per identificare il tuo account NUVIO</p>
       <p>Made for NUVIO community</p>
     </div>
   </div>
 
   <script>
     let selectedFile = null;
-    let isConnected = false;
-    let accessToken = null;   // <-- stores the Supabase token from /connect
-
-    // Format sync code as XXXX-XXXX-...
-    document.getElementById('syncCode').addEventListener('input', function(e) {
-      let value = e.target.value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      let parts = [];
-      for (let i = 0; i < value.length && i < 20; i += 4) {
-        parts.push(value.substr(i, 4));
-      }
-      e.target.value = parts.join('-');
-    });
+    let verifiedEmail = null;
+    let verifiedOwnerId = null;
 
     // ============================================
-    // CONNECT
+    // VERIFICA EMAIL + ID
     // ============================================
-    document.getElementById('connectBtn').addEventListener('click', async () => {
-      const syncCode = document.getElementById('syncCode').value.trim();
-      const pin = document.getElementById('pin').value;
-      const statusEl = document.getElementById('connectionStatus');
-      const connectBtn = document.getElementById('connectBtn');
+    document.getElementById('verifyBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const ownerId = document.getElementById('ownerId').value.trim();
+      const statusEl = document.getElementById('verifyStatus');
+      const verifyBtn = document.getElementById('verifyBtn');
 
-      if (!syncCode || !pin) {
-        statusEl.innerHTML = '❌ Inserisci sync code e PIN';
+      if (!email || !ownerId) {
+        statusEl.innerHTML = '❌ Inserisci email e ID proprietario';
         statusEl.style.color = '#ff6b6b';
         return;
       }
 
-      connectBtn.disabled = true;
-      connectBtn.textContent = '⏳ Connessione...';
-      statusEl.innerHTML = '⏳ Collegamento in corso...';
+      // Validazione email base
+      if (!email.includes('@')) {
+        statusEl.innerHTML = '❌ Email non valida';
+        statusEl.style.color = '#ff6b6b';
+        return;
+      }
+
+      // Validazione UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(ownerId)) {
+        statusEl.innerHTML = '❌ Formato ID non valido (deve essere un UUID)';
+        statusEl.style.color = '#ff6b6b';
+        return;
+      }
+
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = '⏳ Verifica in corso...';
+      statusEl.innerHTML = '⏳ Controllo account...';
       statusEl.style.color = '#aaa';
 
       try {
-        const res = await fetch('/connect', {
+        const res = await fetch('/verify-account', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: syncCode, pin }),
+          body: JSON.stringify({ email, ownerId })
         });
 
         const data = await res.json();
 
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Errore connessione');
+        if (data.valid) {
+          verifiedEmail = email;
+          verifiedOwnerId = ownerId;
+          localStorage.setItem('nuvio_email', email);
+          localStorage.setItem('nuvio_owner', ownerId);
+          
+          statusEl.innerHTML = `✅ Account verificato! Ora puoi importare`;
+          statusEl.style.color = '#00ff9f';
+          
+          // Abilita upload area
+          const uploadArea = document.getElementById('uploadArea');
+          uploadArea.classList.remove('disabled');
+          uploadArea.classList.add('enabled');
+          uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
+          document.getElementById('fileInput').disabled = false;
+          
+          verifyBtn.textContent = '✅ Verificato';
+        } else {
+          throw new Error(data.error || 'Account non trovato');
         }
-
-        // KEY FIX: store the access token for use in /import
-        accessToken = data.accessToken;
-        isConnected = true;
-
-        statusEl.innerHTML = `✅ Connesso! ID: ${data.ownerId.substring(0, 8)}... <span class="badge-success">Pronto</span>`;
-        statusEl.style.color = '#00ff9f';
-
-        // Enable upload
-        const uploadArea = document.getElementById('uploadArea');
-        uploadArea.classList.remove('disabled');
-        uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
-        document.getElementById('fileInput').disabled = false;
-        document.getElementById('importBtn').disabled = false;
-
-        connectBtn.textContent = '✅ Connesso';
       } catch (err) {
-        statusEl.innerHTML = `❌ ${err.message}`;
+        statusEl.innerHTML = '❌ ' + err.message;
         statusEl.style.color = '#ff6b6b';
-        connectBtn.disabled = false;
-        connectBtn.textContent = '🔌 Connetti a NUVIO';
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = '🔍 Verifica account';
       }
     });
 
@@ -301,19 +442,30 @@
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
     const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
     const importBtn = document.getElementById('importBtn');
 
-    uploadArea.addEventListener('click', () => { if (isConnected) fileInput.click(); });
+    uploadArea.addEventListener('click', () => {
+      if (verifiedEmail && verifiedOwnerId) fileInput.click();
+    });
 
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
-      if (isConnected) uploadArea.classList.add('dragover');
+      if (verifiedEmail && verifiedOwnerId) uploadArea.classList.add('dragover');
     });
-    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('dragover');
-      if (!isConnected) { showResult('Prima connetti l\'account NUVIO', 'error'); return; }
+      if (!verifiedEmail || !verifiedOwnerId) {
+        showResult('Prima verifica il tuo account', 'error');
+        return;
+      }
       const file = e.dataTransfer.files[0];
       if (file && file.type === 'application/json') {
         handleFileSelect(file);
@@ -321,15 +473,18 @@
         showResult('Per favore seleziona un file JSON valido', 'error');
       }
     });
+
     fileInput.addEventListener('change', (e) => {
-      if (e.target.files[0]) handleFileSelect(e.target.files[0]);
+      const file = e.target.files[0];
+      if (file) handleFileSelect(file);
     });
 
     function handleFileSelect(file) {
       selectedFile = file;
-      document.getElementById('fileName').textContent = file.name;
-      document.getElementById('fileSize').textContent = formatFileSize(file.size);
+      fileName.textContent = file.name;
+      fileSize.textContent = formatFileSize(file.size);
       fileInfo.style.display = 'flex';
+      importBtn.disabled = false;
     }
 
     function formatFileSize(bytes) {
@@ -339,46 +494,47 @@
     }
 
     // ============================================
-    // IMPORT — sends Authorization header with token
+    // IMPORTAZIONE
     // ============================================
-    importBtn.addEventListener('click', async () => {
+    document.getElementById('importBtn').addEventListener('click', async () => {
       if (!selectedFile) return;
-      if (!isConnected || !accessToken) {
-        showResult('Prima connetti l\'account NUVIO', 'error');
+      if (!verifiedEmail || !verifiedOwnerId) {
+        showResult('❌ Prima verifica il tuo account', 'error');
         return;
       }
 
       const formData = new FormData();
       formData.append('backup', selectedFile);
+      formData.append('email', verifiedEmail);
+      formData.append('ownerId', verifiedOwnerId);
 
       importBtn.disabled = true;
       importBtn.textContent = '⏳ Importazione...';
-      showProgress(true, 'Caricamento backup...', 10);
+      showProgress(true, 'Preparazione...', 10);
 
       try {
         const res = await fetch('/import', {
           method: 'POST',
-          headers: {
-            // KEY FIX: send the Supabase access token so the server
-            // can make authenticated RPC calls
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: formData,
+          body: formData
         });
 
         const data = await res.json();
 
-        if (!res.ok || !data.success) {
+        if (!res.ok) {
           throw new Error(data.error || `Errore HTTP: ${res.status}`);
         }
 
-        showProgress(false);
-        showResult(data.message, 'success');
+        if (data.success) {
+          showProgress(false);
+          showResult(data.message, 'success');
 
-        document.getElementById('statLibrary').textContent = data.results.library || 0;
-        document.getElementById('statProgress').textContent = data.results.progress || 0;
-        document.getElementById('statWatched').textContent = data.results.watched || 0;
-        document.getElementById('stats').style.display = 'block';
+          document.getElementById('statLibrary').textContent = data.results.library || 0;
+          document.getElementById('statProgress').textContent = data.results.progress || 0;
+          document.getElementById('statWatched').textContent = data.results.watched || 0;
+          document.getElementById('stats').style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Errore sconosciuto');
+        }
       } catch (err) {
         showProgress(false);
         showResult('❌ ' + err.message, 'error');
@@ -392,13 +548,16 @@
     // UTILS
     // ============================================
     function showProgress(show, step, percent) {
-      const progressEl = document.getElementById('progress');
+      const progress = document.getElementById('progress');
+      const stepEl = document.getElementById('progressStep');
+      const fill = document.getElementById('progressFill');
+
       if (show) {
-        progressEl.style.display = 'block';
-        document.getElementById('progressStep').textContent = step || '';
-        document.getElementById('progressFill').style.width = (percent || 0) + '%';
+        progress.style.display = 'block';
+        stepEl.textContent = step || '';
+        fill.style.width = (percent || 0) + '%';
       } else {
-        progressEl.style.display = 'none';
+        progress.style.display = 'none';
       }
     }
 
@@ -407,7 +566,10 @@
       result.textContent = message;
       result.className = `result ${type}`;
       result.style.display = 'block';
-      setTimeout(() => { result.style.display = 'none'; }, 6000);
+
+      setTimeout(() => {
+        result.style.display = 'none';
+      }, 5000);
     }
   </script>
 </body>
