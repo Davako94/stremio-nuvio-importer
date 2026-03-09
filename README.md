@@ -1,7 +1,3 @@
-Ecco il README riscritto in un linguaggio semplice, senza termini tecnici come "Supabase" o "API key", perfetto per gli utenti finali.
-
----
-
 # 📦 Stremio NUVIO Importer
 
 <div align="center">
