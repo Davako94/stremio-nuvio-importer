@@ -61,7 +61,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP (VERSIONE DEFINITIVA)
+// CONVERTI BACKUP (VERSIONE CORRETTA PER NUVIO)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -78,6 +78,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     // Converte nel formato NUVIO
     const library = [];
     const watchProgress = {};
+    const continueWatching = []; // IMPORTANTE!
     let movieCount = 0;
     let seriesCount = 0;
 
@@ -91,21 +92,34 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.type !== 'movie' && item.type !== 'series') return;
 
       // ============================================
-      // 1. LIBRARY ITEMS (con TUTTI i campi necessari)
+      // 1. LIBRARY ITEMS (STRUTTURA CORRETTA)
       // ============================================
       const libraryItem = {
         id: item._id,
         type: item.type,
-        name: item.name || '',
+        name: item.name || 'Senza titolo',
         poster: item.poster || '',
         posterShape: item.posterShape || 'poster',
-        year: item.year || '',
-        releaseInfo: item.year || '',
+        year: item.year ? String(item.year) : '',
+        releaseInfo: item.year ? String(item.year) : '',
         addedToLibraryAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
-        inLibrary: true, // IMPORTANTE!
+        inLibrary: true,
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
+        
+        // Campi per serie TV (FONDAMENTALI!)
+        totalEpisodes: item.totalEpisodes || 0,
+        totalSeasons: item.totalSeasons || 0,
+        episodesWatched: item.episodesWatched || 0,
+        
+        // Campi essenziali per NUVIO
+        links: [],
+        streams: [],
+        isWatched: false,
+        isInWatchlist: false,
+        userData: null,
+        
         // Campi che NUVIO si aspetta
         behaviorHints: {
           defaultVideoId: item._id,
@@ -129,15 +143,48 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       else seriesCount++;
 
       // ============================================
-      // 2. WATCH PROGRESS (se presente)
+      // 2. WATCH PROGRESS E CONTINUE WATCHING
       // ============================================
       if (item.state?.timeOffset > 0) {
+        const timeOffset = item.state.timeOffset;
+        const duration = item.state.duration || 3600; // default 1 ora se manca
+        
+        // Progresso per singolo video
         const progressKey = `@user:local:@watch_progress:${item.type}:${item._id}`;
         watchProgress[progressKey] = {
-          currentTime: item.state.timeOffset,
-          duration: item.state.duration || 0,
+          currentTime: timeOffset,
+          duration: duration,
           lastUpdated: new Date(item.state.lastWatched || Date.now()).getTime()
         };
+
+        // Aggiungi a continueWatching (FONDAMENTALE!)
+        if (item.type === 'movie') {
+          continueWatching.push({
+            id: item._id,
+            type: item.type,
+            name: item.name || '',
+            poster: item.poster || '',
+            year: item.year || '',
+            currentTime: timeOffset,
+            duration: duration,
+            lastWatched: item.state.lastWatched || Date.now(),
+            progress: (timeOffset / duration) * 100
+          });
+        } else if (item.type === 'series' && item.state.season && item.state.episode) {
+          // Per serie, aggiungi l'episodio specifico
+          continueWatching.push({
+            id: item._id,
+            type: 'episode', // IMPORTANTE: tipo 'episode' per serie
+            name: item.name || '',
+            poster: item.poster || '',
+            season: item.state.season,
+            episode: item.state.episode,
+            currentTime: timeOffset,
+            duration: duration,
+            lastWatched: item.state.lastWatched || Date.now(),
+            progress: (timeOffset / duration) * 100
+          });
+        }
       }
     });
 
@@ -151,7 +198,6 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       platform: "android",
       userScope: "local",
       data: {
-        // Mantieni i dati esistenti (vuoti = invariati)
         settings: {},
         installedAddons: [],
         localScrapers: {},
@@ -160,9 +206,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         removedAddons: [],
         downloads: [],
         
-        // I NOSTRI DATI
+        // DATI PRINCIPALI
         library: library,
         watchProgress: watchProgress,
+        continueWatching: continueWatching, // AGGIUNTO!
         watchedItems: [],
         
         // Altri campi necessari
@@ -191,6 +238,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         totalItems: library.length,
         libraryCount: library.length,
         watchProgressCount: Object.keys(watchProgress).length,
+        continueWatchingCount: continueWatching.length, // AGGIUNTO!
         downloadsCount: 0,
         addonsCount: 0
       }
@@ -201,6 +249,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
     console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
+    console.log(`▶️ Continue Watching: ${continueWatching.length}`);
     console.log(`📁 Backup creato con ${library.length} elementi`);
 
     // Restituisce il file convertito
@@ -211,6 +260,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         movies: movieCount, 
         series: seriesCount,
         progress: Object.keys(watchProgress).length,
+        continueWatching: continueWatching.length,
         total: movieCount + seriesCount
       }
     });
@@ -237,6 +287,7 @@ app.get('/download-sample', (req, res) => {
       installedAddons: [],
       library: [],
       watchProgress: {},
+      continueWatching: [], // AGGIUNTO ANCHE QUI
       watchedItems: [],
       downloads: [],
       localScrapers: {},
@@ -268,6 +319,7 @@ app.get('/download-sample', (req, res) => {
       totalItems: 0,
       libraryCount: 0,
       watchProgressCount: 0,
+      continueWatchingCount: 0, // AGGIUNTO ANCHE QUI
       downloadsCount: 0,
       addonsCount: 0
     }
