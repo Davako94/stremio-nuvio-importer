@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// HOME PAGE - Reindirizza a configure
+// HOME PAGE
 // ============================================
 app.get('/', (req, res) => {
   res.redirect('/configure');
@@ -61,7 +61,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP (VERSIONE FINALE - ANTI SCOMPARSA)
+// CONVERTI BACKUP (VERSIONE CON FLAG SALVATO)
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -77,9 +77,12 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
     // Converte nel formato NUVIO
     const library = [];
+    const savedItems = {}; // <-- NOVITÀ: oggetto per i "salvati"
     const watchProgress = {};
     const continueWatching = [];
-    const contentDuration = {}; // NUOVO!
+    const contentDuration = {};
+    const metaCache = {};
+    
     let movieCount = 0;
     let seriesCount = 0;
 
@@ -92,41 +95,53 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       // Accetta solo film e serie
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      // ID pulito (senza caratteri speciali)
+      // ID pulito
       const cleanId = item._id.replace(/[^a-zA-Z0-9]/g, '_');
       
       // ============================================
-      // 1. LIBRARY ITEMS (STRUTTURA COMPLETA)
+      // FLAG SALVATO (FONDAMENTALE!)
       // ============================================
-      const libraryItem = {
+      // Simula che l'utente abbia cliccato "salva" per ogni item
+      savedItems[cleanId] = {
         id: cleanId,
-        _id: cleanId, // Doppio ID per sicurezza
+        type: item.type,
+        savedAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
+        source: "stremio-import"
+      };
+
+      // ============================================
+      // 1. METADATI COMPLETI
+      // ============================================
+      const metaItem = {
+        id: cleanId,
         type: item.type,
         name: item.name || 'Senza titolo',
         poster: item.poster || '',
         posterShape: item.posterShape || 'poster',
-        year: item.year ? String(item.year) : '',
-        releaseInfo: item.year ? String(item.year) : '',
-        addedToLibraryAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
-        inLibrary: true,
+        background: item.background || item.poster || '',
+        logo: item.logo || '',
         description: item.description || '',
-        imdbRating: item.imdbRating || '',
+        releaseInfo: item.year ? String(item.year) : '',
+        imdbRating: item.imdbRating || '0',
         genres: item.genres || [],
+        cast: item.cast || [],
+        directors: item.directors || [],
+        writers: item.writers || [],
+        runtime: item.runtime || '',
+        country: item.country || '',
+        language: item.language || '',
+        awards: item.awards || '',
+        trailer: item.trailer || '',
+        links: item.links || [],
         
-        // Campi per serie TV
-        totalEpisodes: item.totalEpisodes || 0,
         totalSeasons: item.totalSeasons || 0,
-        episodesWatched: item.episodesWatched || 0,
+        totalEpisodes: item.totalEpisodes || 0,
+        seasons: item.seasons || [],
+        videos: item.videos || [],
         
-        // Campi essenziali
-        links: [],
-        streams: [],
-        isWatched: false,
-        isInWatchlist: true, // CAMBIATO: mettiamo in watchlist
-        userData: {
-          lastWatched: item.state?.lastWatched || null,
-          watchTime: item.state?.timeOffset || 0
-        },
+        // Flag salvato anche nei metadati
+        isSaved: true,
+        savedAt: savedItems[cleanId].savedAt,
         
         behaviorHints: {
           defaultVideoId: cleanId,
@@ -134,35 +149,83 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         }
       };
 
-      // Campi extra
-      if (item.background) libraryItem.banner = item.background;
-      if (item.logo) libraryItem.logo = item.logo;
+      // ============================================
+      // 2. LIBRARY ITEM (CON FLAG DI SALVATAGGIO)
+      // ============================================
+      const libraryItem = {
+        id: cleanId,
+        _id: cleanId,
+        type: item.type,
+        name: item.name || 'Senza titolo',
+        poster: item.poster || '',
+        posterShape: item.posterShape || 'poster',
+        year: item.year ? String(item.year) : '',
+        releaseInfo: item.year ? String(item.year) : '',
+        addedToLibraryAt: savedItems[cleanId].savedAt,
+        inLibrary: true,
+        
+        // FLAG FONDAMENTALI!
+        isSaved: true,           // <-- DICE CHE È SALVATO
+        isInWatchlist: true,     // <-- DICE CHE È IN WATCHLIST
+        isFavorite: true,        // <-- DICE CHE È PREFERITO
+        
+        description: item.description || '',
+        imdbRating: item.imdbRating || '',
+        genres: item.genres || [],
+        
+        totalEpisodes: item.totalEpisodes || 0,
+        totalSeasons: item.totalSeasons || 0,
+        episodesWatched: item.episodesWatched || 0,
+        
+        links: [],
+        streams: [],
+        isWatched: false,
+        
+        userData: {
+          lastWatched: item.state?.lastWatched || null,
+          watchTime: item.state?.timeOffset || 0,
+          isSaved: true,          // <-- ANCHE QUI
+          savedAt: savedItems[cleanId].savedAt
+        },
+        
+        behaviorHints: {
+          defaultVideoId: cleanId,
+          hasScheduledVideos: false
+        },
+        
+        meta: metaItem
+      };
 
       library.push(libraryItem);
+
+      // ============================================
+      // 3. CACHE METADATI
+      // ============================================
+      metaCache[`meta:${item.type}:${cleanId}`] = metaItem;
+      metaCache[`catalog:${item.type}:${cleanId}`] = metaItem;
+      metaCache[`detail:${item.type}:${cleanId}`] = metaItem;
 
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
 
       // ============================================
-      // 2. WATCH PROGRESS E CONTINUE WATCHING
+      // 4. PROGRESSI (se presenti)
       // ============================================
       if (item.state?.timeOffset > 0) {
         const timeOffset = item.state.timeOffset;
         const duration = item.state.duration || 3600;
         
-        // Progresso
         const progressKey = `@user:local:@watch_progress:${item.type}:${cleanId}`;
         watchProgress[progressKey] = {
           currentTime: timeOffset,
           duration: duration,
           lastUpdated: new Date(item.state.lastWatched || Date.now()).getTime(),
-          videoId: cleanId // AGGIUNTO!
+          videoId: cleanId,
+          isSaved: true
         };
 
-        // Content duration
         contentDuration[`${item.type}:${cleanId}`] = duration;
 
-        // Continue watching
         if (item.type === 'movie') {
           continueWatching.push({
             id: cleanId,
@@ -174,7 +237,9 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             duration: duration,
             lastWatched: item.state.lastWatched || Date.now(),
             progress: (timeOffset / duration) * 100,
-            videoId: cleanId // AGGIUNTO!
+            videoId: cleanId,
+            isSaved: true,
+            meta: metaItem
           });
         } else if (item.type === 'series' && item.state.season && item.state.episode) {
           continueWatching.push({
@@ -188,25 +253,16 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             duration: duration,
             lastWatched: item.state.lastWatched || Date.now(),
             progress: (timeOffset / duration) * 100,
-            videoId: `${cleanId}:${item.state.season}:${item.state.episode}` // ID specifico episodio
+            videoId: `${cleanId}:${item.state.season}:${item.state.episode}`,
+            isSaved: true,
+            meta: metaItem
           });
         }
       }
     });
 
     // ============================================
-    // 3. DATI CLOUD SIMULATI (ANTI SOVRASCRITTURA)
-    // ============================================
-    const cloudData = {
-      library: library,
-      watchProgress: watchProgress,
-      continueWatching: continueWatching,
-      contentDuration: contentDuration,
-      lastSync: Date.now()
-    };
-
-    // ============================================
-    // 4. BACKUP COMPLETO
+    // 5. BACKUP COMPLETO CON FLAG SALVATI
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -214,11 +270,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       appVersion: "1.0.0",
       platform: "android",
       userScope: "local",
-      user: { // AGGIUNTO: dati utente finti
+      user: {
         id: "local-user-123",
         name: "Utente Locale",
-        email: "locale@nuvio.local",
-        authToken: "local-token-456"
+        email: "locale@nuvio.local"
       },
       data: {
         settings: {
@@ -227,32 +282,57 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
           language: "it",
           autoPlay: true
         },
-        installedAddons: [],
-        localScrapers: {},
-        apiKeys: {
-          trakt: null,
-          simkl: null
-        },
-        addonOrder: [],
-        removedAddons: [],
-        downloads: [],
+        installedAddons: [
+          {
+            id: "community.stremio-nuvio-importer",
+            name: "📦 Importer",
+            version: "1.0.0",
+            enabled: true
+          }
+        ],
         
         // DATI PRINCIPALI
         library: library,
+        
+        // OGGETTO SALVATI (FONDAMENTALE!)
+        saved: savedItems,
+        savedItems: savedItems,
+        watchlist: savedItems,
+        favorites: savedItems,
+        
         watchProgress: watchProgress,
         continueWatching: continueWatching,
         watchedItems: [],
-        contentDuration: contentDuration, // AGGIUNTO!
+        contentDuration: contentDuration,
         
-        // Dati cloud simulati (FONDAMENTALE!)
-        cloud: cloudData,
+        metaCache: metaCache,
+        metaStorage: metaCache,
+        
+        // Dati cloud con flag salvati
+        cloud: {
+          library: library,
+          saved: savedItems,
+          watchProgress: watchProgress,
+          continueWatching: continueWatching,
+          contentDuration: contentDuration,
+          metaCache: metaCache,
+          lastSync: Date.now()
+        },
+        
         cloudSync: {
           enabled: true,
           lastSync: Date.now(),
           syncedLibrary: library,
-          syncedProgress: watchProgress
+          syncedSaved: savedItems,
+          syncedProgress: watchProgress,
+          syncedMeta: metaCache
         },
         
+        localScrapers: {},
+        apiKeys: {},
+        addonOrder: ["community.stremio-nuvio-importer"],
+        removedAddons: [],
+        downloads: [],
         continueWatchingRemoved: {},
         syncQueue: [],
         traktSettings: null,
@@ -276,11 +356,13 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
+        savedCount: Object.keys(savedItems).length,
         watchProgressCount: Object.keys(watchProgress).length,
         continueWatchingCount: continueWatching.length,
         contentDurationCount: Object.keys(contentDuration).length,
+        metaCacheCount: Object.keys(metaCache).length,
         downloadsCount: 0,
-        addonsCount: 0
+        addonsCount: 1
       }
     };
 
@@ -288,10 +370,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     fs.unlinkSync(req.file.path);
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
+    console.log(`💾 Salvati: ${Object.keys(savedItems).length}`);
     console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
     console.log(`▶️ Continue Watching: ${continueWatching.length}`);
+    console.log(`💾 Metadati in cache: ${Object.keys(metaCache).length}`);
     console.log(`📁 Backup creato con ${library.length} elementi`);
-    console.log(`☁️ Dati cloud simulati aggiunti`);
 
     res.json({
       success: true,
@@ -299,8 +382,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       stats: { 
         movies: movieCount, 
         series: seriesCount,
+        saved: Object.keys(savedItems).length,
         progress: Object.keys(watchProgress).length,
         continueWatching: continueWatching.length,
+        metaCache: Object.keys(metaCache).length,
         total: movieCount + seriesCount
       }
     });
@@ -313,88 +398,6 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT PER DOWNLOAD DIRETTO
-// ============================================
-app.get('/download-sample', (req, res) => {
-  const sampleBackup = {
-    version: "1.0.0",
-    timestamp: Date.now(),
-    appVersion: "1.0.0",
-    platform: "android",
-    userScope: "local",
-    user: {
-      id: "local-user-123",
-      name: "Utente Locale",
-      email: "locale@nuvio.local",
-      authToken: "local-token-456"
-    },
-    data: {
-      settings: {
-        libraryView: "grid",
-        theme: "dark",
-        language: "it",
-        autoPlay: true
-      },
-      installedAddons: [],
-      library: [],
-      watchProgress: {},
-      continueWatching: [],
-      watchedItems: [],
-      contentDuration: {},
-      downloads: [],
-      localScrapers: {},
-      apiKeys: {},
-      addonOrder: [],
-      removedAddons: [],
-      cloud: {
-        library: [],
-        watchProgress: {},
-        continueWatching: [],
-        contentDuration: {},
-        lastSync: Date.now()
-      },
-      cloudSync: {
-        enabled: true,
-        lastSync: Date.now(),
-        syncedLibrary: [],
-        syncedProgress: {}
-      },
-      continueWatchingRemoved: {},
-      contentDuration: {},
-      syncQueue: [],
-      traktSettings: null,
-      simklSettings: null,
-      tombStones: {},
-      subtitles: {
-        subtitleSize: 28,
-        subtitleBackground: false,
-        subtitleTextColor: "#FFFFFF",
-        subtitleBgOpacity: 0.7,
-        subtitleTextShadow: true,
-        subtitleOutline: true,
-        subtitleOutlineColor: "#000000",
-        subtitleOutlineWidth: 3,
-        subtitleAlign: "center",
-        subtitleBottomOffset: 20,
-        subtitleLetterSpacing: 0,
-        subtitleLineHeightMultiplier: 1.2
-      }
-    },
-    metadata: {
-      totalItems: 0,
-      libraryCount: 0,
-      watchProgressCount: 0,
-      continueWatchingCount: 0,
-      contentDurationCount: 0,
-      downloadsCount: 0,
-      addonsCount: 0
-    }
-  };
-
-  res.json(sampleBackup);
-});
-
-// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
@@ -403,7 +406,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
-  console.log(`📤 Endpoint POST: /convert (per upload)`);
-  console.log(`📎 Endpoint GET: /download-sample (per test)\n`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
 });
