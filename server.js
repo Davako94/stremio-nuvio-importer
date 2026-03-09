@@ -71,6 +71,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     const library = [];
     const watchProgress = {};
     const now = Date.now();
+    
+    // TRUCCO SYNC: Impostiamo la data di modifica 10 secondi nel futuro
+    // Questo costringe Nuvio a considerare la versione locale "più nuova" del cloud
+    const futureUpdate = now + 10000; 
+    
     let movieCount = 0;
     let seriesCount = 0;
 
@@ -87,18 +92,19 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         type: item.type,
         name: item.name || '',
         poster: item.poster || '',
-        posterShape: item.posterShape || 'poster',
+        posterShape: (item.posterShape || 'poster').toLowerCase(), // Nuvio spesso lo vuole minuscolo
         year: item.year || '',
         releaseInfo: item.year || '',
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
         
-        // FLAG DI SINCRONIZZAZIONE (Impediscono la sparizione)
+        // FLAG DI OVERRIDE (Forzano Nuvio a tenere l'item e inviarlo al server)
         inLibrary: true,
-        _isDirty: true,           // Forza l'app a caricare l'item sul cloud
-        _isNew: true,             // Indica un nuovo record
-        lastUpdatedAt: now,       // Timestamp attuale per vincere i conflitti
+        _isDirty: true,           
+        _isNew: true,             
+        _needsSync: true,         // Indica esplicitamente che necessita upload
+        lastUpdatedAt: futureUpdate, // Il timestamp futuro garantisce la vittoria sui conflitti
         addedToLibraryAt: new Date(item._ctime || item._mtime || now).getTime(),
 
         behaviorHints: {
@@ -115,14 +121,15 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
 
-      // Gestione Watch Progress con chiavi locali per evitare sovrascritture cloud immediate
+      // Gestione Watch Progress con flag di dirty e timestamp futuro
       if (item.state?.timeOffset > 0) {
         const progressKey = `local:watch_progress:${item.type}:${item._id}`;
         watchProgress[progressKey] = {
           currentTime: item.state.timeOffset,
           duration: item.state.duration || 0,
-          lastUpdated: now,
-          _isDirty: true
+          lastUpdated: futureUpdate,
+          _isDirty: true,
+          _isNew: true
         };
       }
     });
@@ -134,6 +141,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       appVersion: "1.0.0",
       platform: "android",
       userScope: "local",
+      forceSync: true, // FLAG GLOBALE: Forza l'engine di Nuvio a eseguire il sync in upload
       data: {
         settings: {},
         installedAddons: [],
@@ -147,7 +155,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         watchedItems: [],
         continueWatchingRemoved: {},
         contentDuration: {},
-        syncQueue: [],
+        syncQueue: library.map(i => i.id), // Inseriamo esplicitamente tutti gli ID nella coda di sincronizzazione
         traktSettings: null,
         simklSettings: null,
         tombStones: {},
