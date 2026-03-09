@@ -49,7 +49,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CON SINCRONIZZAZIONE FITTIZIA
+// CONVERTI BACKUP - VERSIONE "NON SINCRONIZZATA"
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -65,15 +65,12 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     const library = [];
     const watchProgress = {};
     const continueWatching = [];
-    const contentDuration = {};
-    const metaCache = {};
-    const syncData = {}; // <-- NOVITÀ: dati di sincronizzazione
     
     let movieCount = 0;
     let seriesCount = 0;
 
-    // Data fittizia di 1 mese fa (per far sembrare tutto già sincronizzato)
-    const oneMonthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    // Timestamp recente (1 minuto fa - sembra appena aggiunto)
+    const oneMinuteAgo = Date.now() - 60 * 1000;
 
     const itemsArray = Array.isArray(stremioData) ? stremioData : Object.values(stremioData);
     
@@ -84,124 +81,58 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       const cleanId = item._id.replace(/[^a-zA-Z0-9]/g, '_');
       
       // ============================================
-      // DATI DI SINCRONIZZAZIONE (FONDAMENTALI!)
-      // ============================================
-      syncData[cleanId] = {
-        id: cleanId,
-        type: item.type,
-        syncedAt: oneMonthAgo,
-        syncSource: "trakt",
-        syncId: `trakt-${Math.random().toString(36).substring(7)}`,
-        lastModified: oneMonthAgo,
-        version: 1
-      };
-
-      // ============================================
-      // METADATI
-      // ============================================
-      const metaItem = {
-        id: cleanId,
-        type: item.type,
-        name: item.name || 'Senza titolo',
-        poster: item.poster || '',
-        posterShape: item.posterShape || 'poster',
-        background: item.background || item.poster || '',
-        logo: item.logo || '',
-        description: item.description || '',
-        releaseInfo: item.year ? String(item.year) : '',
-        imdbRating: item.imdbRating || '0',
-        genres: item.genres || [],
-        cast: item.cast || [],
-        directors: item.directors || [],
-        writers: item.writers || [],
-        runtime: item.runtime || '',
-        
-        totalSeasons: item.totalSeasons || 0,
-        totalEpisodes: item.totalEpisodes || 0,
-        
-        // Flag importanti
-        isSaved: true,
-        isInLibrary: true,
-        isSynced: true,
-        syncData: syncData[cleanId],
-        
-        behaviorHints: {
-          defaultVideoId: cleanId,
-          hasScheduledVideos: false
-        }
-      };
-
-      // ============================================
-      // LIBRARY ITEM
+      // LIBRARY ITEM - SOLO DATI LOCALI, NESSUN SYNC
       // ============================================
       const libraryItem = {
         id: cleanId,
-        _id: cleanId,
         type: item.type,
         name: item.name || 'Senza titolo',
         poster: item.poster || '',
         posterShape: item.posterShape || 'poster',
         year: item.year ? String(item.year) : '',
         releaseInfo: item.year ? String(item.year) : '',
-        addedToLibraryAt: oneMonthAgo, // <-- 1 mese fa!
-        inLibrary: true,
-        
-        // TUTTI I FLAG POSSIBILI
-        isSaved: true,
-        isInWatchlist: true,
-        isFavorite: true,
-        isSynced: true,
-        syncVersion: 1,
-        
+        addedToLibraryAt: oneMinuteAgo,  // Sembra appena aggiunto
+        inLibrary: true,                  // In libreria
+        isSaved: true,                     // Salvato
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
         
+        // Flag per serie TV
         totalEpisodes: item.totalEpisodes || 0,
         totalSeasons: item.totalSeasons || 0,
-        episodesWatched: item.episodesWatched || 0,
         
-        links: [],
-        streams: [],
-        isWatched: false,
-        
-        userData: {
-          lastWatched: item.state?.lastWatched || oneMonthAgo,
-          watchTime: item.state?.timeOffset || 0,
-          isSaved: true,
-          savedAt: oneMonthAgo,
-          syncedAt: oneMonthAgo
-        },
-        
-        syncData: syncData[cleanId],
-        meta: metaItem
+        // NIENTE FLAG DI SYNC - isSynced NON C'È
+        // NIENTE syncData
+        // NIENTE timestamp vecchi
       };
 
+      // Aggiungi campi extra se presenti
+      if (item.background) libraryItem.banner = item.background;
+      if (item.logo) libraryItem.logo = item.logo;
+
       library.push(libraryItem);
-      metaCache[`meta:${item.type}:${cleanId}`] = metaItem;
 
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
 
       // ============================================
-      // PROGRESSI
+      // PROGRESSI (se presenti)
       // ============================================
       if (item.state?.timeOffset > 0) {
         const timeOffset = item.state.timeOffset;
         const duration = item.state.duration || 3600;
         
+        // Progresso
         const progressKey = `@user:local:@watch_progress:${item.type}:${cleanId}`;
         watchProgress[progressKey] = {
           currentTime: timeOffset,
           duration: duration,
-          lastUpdated: oneMonthAgo, // <-- 1 mese fa!
-          videoId: cleanId,
-          isSynced: true,
-          syncVersion: 1
+          lastUpdated: oneMinuteAgo,  // Recente
+          videoId: cleanId
         };
 
-        contentDuration[`${item.type}:${cleanId}`] = duration;
-
+        // Continue watching
         if (item.type === 'movie') {
           continueWatching.push({
             id: cleanId,
@@ -211,19 +142,30 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             year: item.year || '',
             currentTime: timeOffset,
             duration: duration,
-            lastWatched: oneMonthAgo, // <-- 1 mese fa!
+            lastWatched: oneMinuteAgo,
             progress: (timeOffset / duration) * 100,
-            videoId: cleanId,
-            isSynced: true,
-            syncData: syncData[cleanId],
-            meta: metaItem
+            videoId: cleanId
+          });
+        } else if (item.type === 'series' && item.state.season && item.state.episode) {
+          continueWatching.push({
+            id: cleanId,
+            type: 'episode',
+            name: item.name || '',
+            poster: item.poster || '',
+            season: item.state.season,
+            episode: item.state.episode,
+            currentTime: timeOffset,
+            duration: duration,
+            lastWatched: oneMinuteAgo,
+            progress: (timeOffset / duration) * 100,
+            videoId: `${cleanId}:${item.state.season}:${item.state.episode}`
           });
         }
       }
     });
 
     // ============================================
-    // BACKUP COMPLETO
+    // BACKUP COMPLETO - SENZA ALCUN DATO DI SYNC
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -231,83 +173,43 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       appVersion: "1.0.0",
       platform: "android",
       userScope: "local",
-      user: {
-        id: "local-user-123",
-        name: "Utente Locale",
-        email: "locale@nuvio.local",
-        trakt: {  // <-- Dati Trakt fittizi
-          username: "imported_user",
-          lastSync: oneMonthAgo,
-          syncEnabled: true
-        }
-      },
       data: {
+        // SOLO SETTINGS BASE - NESSUN SYNC
         settings: {
           libraryView: "grid",
           theme: "dark",
-          language: "it",
-          autoPlay: true,
-          syncEnabled: true,
-          lastSync: oneMonthAgo
+          language: "it"
+          // NESSUN syncEnabled, lastSync, ecc.
         },
-        installedAddons: [],
         
-        // DATI CON TIMESTAMP VECCHI
+        // SOLO DATI LOCALI
         library: library,
-        saved: syncData,
-        savedItems: syncData,
-        watchlist: syncData,
-        favorites: syncData,
-        
         watchProgress: watchProgress,
         continueWatching: continueWatching,
-        contentDuration: contentDuration,
-        metaCache: metaCache,
         
-        // DATI DI SINCRONIZZAZIONE (FONDAMENTALI!)
-        sync: {
-          lastSync: oneMonthAgo,
-          lastFullSync: oneMonthAgo,
-          syncQueue: [],
-          conflicts: [],
-          version: 1,
-          data: syncData
-        },
+        // TUTTE LE SEZIONI DI SYNC RIMOSSE:
+        // - NESSUN traktSettings
+        // - NESSUN cloud
+        // - NESSUN cloudSync
+        // - NESSUN sync
+        // - NESSUN saved/savedItems/watchlist/favorites (ridondanti)
         
-        traktSettings: {
-          username: "imported_user",
-          lastSync: oneMonthAgo,
-          syncWatched: true,
-          syncCollection: true,
-          syncWatchlist: true,
-          syncRatings: true
-        },
-        
-        cloud: {
-          library: library,
-          saved: syncData,
-          lastSync: oneMonthAgo,
-          version: 1
-        },
-        
-        cloudSync: {
-          enabled: true,
-          lastSync: oneMonthAgo,
-          syncedLibrary: library,
-          syncedSaved: syncData,
-          version: 1
-        },
-        
-        // Altri campi
+        // SOLO campi necessari e vuoti
+        installedAddons: [],
         localScrapers: {},
         apiKeys: {},
         addonOrder: [],
         removedAddons: [],
         downloads: [],
         continueWatchingRemoved: {},
+        contentDuration: {},
         syncQueue: [],
         simklSettings: null,
-        tombStones: {},
+        tombStones: {},           // Vuoto - nessuna rimozione
+        deleted: {},               // Vuoto - nessuna rimozione
+        removedFromLibrary: {},    // Vuoto - nessuna rimozione
+        
+        // Sottotitoli (default)
         subtitles: {
           subtitleSize: 28,
           subtitleBackground: false,
@@ -316,25 +218,26 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
           subtitleTextShadow: true,
           subtitleOutline: true,
           subtitleOutlineColor: "#000000",
-          subtitleOutlineWidth: 3
+          subtitleOutlineWidth: 3,
+          subtitleAlign: "center",
+          subtitleBottomOffset: 20
         }
       },
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
-        savedCount: Object.keys(syncData).length,
-        syncCount: Object.keys(syncData).length,
         watchProgressCount: Object.keys(watchProgress).length,
-        continueWatchingCount: continueWatching.length,
-        lastSync: oneMonthAgo
+        continueWatchingCount: continueWatching.length
+        // NESSUN syncCount, lastSync, ecc.
       }
     };
 
+    // Pulisce file temporaneo
     fs.unlinkSync(req.file.path);
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
-    console.log(`🔄 Dati sincronizzati (fittizi): ${Object.keys(syncData).length}`);
-    console.log(`📁 Backup creato con timestamp: ${new Date(oneMonthAgo).toLocaleDateString()}`);
+    console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
+    console.log(`📁 Backup creato - NESSUN dato di sync incluso`);
 
     res.json({
       success: true,
@@ -342,7 +245,8 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       stats: { 
         movies: movieCount, 
         series: seriesCount,
-        saved: Object.keys(syncData).length,
+        progress: Object.keys(watchProgress).length,
+        continueWatching: continueWatching.length,
         total: movieCount + seriesCount
       }
     });
@@ -361,5 +265,7 @@ const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Stremio → NUVIO Importer`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/\n`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
+  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
 });
