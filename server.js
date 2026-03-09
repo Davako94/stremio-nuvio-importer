@@ -245,7 +245,7 @@ const PORT = process.env.PORT || 7000;  // Render assegna la porta automaticamen
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Stremio NUVIO Importer`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL pubblico: https://tuo-app.onrender.com`);
-  console.log(`🔧 Configurazione: https://tuo-app.onrender.com/configure`);
-  console.log(`📋 Manifest: https://tuo-app.onrender.com/manifest.json\n`);
+  console.log(`🌐 URL pubblico: https://stremio-nuvio-importer.onrender.com/`);
+  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
 });
