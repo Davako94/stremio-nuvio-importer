@@ -12,30 +12,18 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ============================================
-// HOME PAGE
-// ============================================
 app.get('/', (req, res) => {
   res.redirect('/configure');
 });
 
-// ============================================
-// HEALTH CHECK
-// ============================================
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// ============================================
-// PAGINA DI CONFIGURAZIONE
-// ============================================
 app.get('/configure', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ============================================
-// MANIFEST DELL'ADDON
-// ============================================
 app.get('/manifest.json', (req, res) => {
   const manifest = {
     id: "community.stremio-nuvio-importer",
@@ -61,7 +49,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP (VERSIONE CON FLAG SALVATO)
+// CONVERTI BACKUP - VERSIONE CON SINCRONIZZAZIONE FITTIZIA
 // ============================================
 app.post('/convert', upload.single('backup'), async (req, res) => {
   try {
@@ -71,46 +59,45 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 
     console.log('📁 File ricevuto:', req.file.originalname);
 
-    // Legge il backup di Stremio
     const fileContent = fs.readFileSync(req.file.path, 'utf8');
     const stremioData = JSON.parse(fileContent);
 
-    // Converte nel formato NUVIO
     const library = [];
-    const savedItems = {}; // <-- NOVITÀ: oggetto per i "salvati"
     const watchProgress = {};
     const continueWatching = [];
     const contentDuration = {};
     const metaCache = {};
+    const syncData = {}; // <-- NOVITÀ: dati di sincronizzazione
     
     let movieCount = 0;
     let seriesCount = 0;
 
+    // Data fittizia di 1 mese fa (per far sembrare tutto già sincronizzato)
+    const oneMonthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
     const itemsArray = Array.isArray(stremioData) ? stremioData : Object.values(stremioData);
     
     itemsArray.forEach(item => {
-      // Salta elementi rimossi o temporanei
       if (item.removed || item.temp) return;
-      
-      // Accetta solo film e serie
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      // ID pulito
       const cleanId = item._id.replace(/[^a-zA-Z0-9]/g, '_');
       
       // ============================================
-      // FLAG SALVATO (FONDAMENTALE!)
+      // DATI DI SINCRONIZZAZIONE (FONDAMENTALI!)
       // ============================================
-      // Simula che l'utente abbia cliccato "salva" per ogni item
-      savedItems[cleanId] = {
+      syncData[cleanId] = {
         id: cleanId,
         type: item.type,
-        savedAt: new Date(item._ctime || item._mtime || Date.now()).getTime(),
-        source: "stremio-import"
+        syncedAt: oneMonthAgo,
+        syncSource: "trakt",
+        syncId: `trakt-${Math.random().toString(36).substring(7)}`,
+        lastModified: oneMonthAgo,
+        version: 1
       };
 
       // ============================================
-      // 1. METADATI COMPLETI
+      // METADATI
       // ============================================
       const metaItem = {
         id: cleanId,
@@ -128,20 +115,15 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         directors: item.directors || [],
         writers: item.writers || [],
         runtime: item.runtime || '',
-        country: item.country || '',
-        language: item.language || '',
-        awards: item.awards || '',
-        trailer: item.trailer || '',
-        links: item.links || [],
         
         totalSeasons: item.totalSeasons || 0,
         totalEpisodes: item.totalEpisodes || 0,
-        seasons: item.seasons || [],
-        videos: item.videos || [],
         
-        // Flag salvato anche nei metadati
+        // Flag importanti
         isSaved: true,
-        savedAt: savedItems[cleanId].savedAt,
+        isInLibrary: true,
+        isSynced: true,
+        syncData: syncData[cleanId],
         
         behaviorHints: {
           defaultVideoId: cleanId,
@@ -150,7 +132,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       };
 
       // ============================================
-      // 2. LIBRARY ITEM (CON FLAG DI SALVATAGGIO)
+      // LIBRARY ITEM
       // ============================================
       const libraryItem = {
         id: cleanId,
@@ -161,13 +143,15 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         posterShape: item.posterShape || 'poster',
         year: item.year ? String(item.year) : '',
         releaseInfo: item.year ? String(item.year) : '',
-        addedToLibraryAt: savedItems[cleanId].savedAt,
+        addedToLibraryAt: oneMonthAgo, // <-- 1 mese fa!
         inLibrary: true,
         
-        // FLAG FONDAMENTALI!
-        isSaved: true,           // <-- DICE CHE È SALVATO
-        isInWatchlist: true,     // <-- DICE CHE È IN WATCHLIST
-        isFavorite: true,        // <-- DICE CHE È PREFERITO
+        // TUTTI I FLAG POSSIBILI
+        isSaved: true,
+        isInWatchlist: true,
+        isFavorite: true,
+        isSynced: true,
+        syncVersion: 1,
         
         description: item.description || '',
         imdbRating: item.imdbRating || '',
@@ -182,34 +166,25 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         isWatched: false,
         
         userData: {
-          lastWatched: item.state?.lastWatched || null,
+          lastWatched: item.state?.lastWatched || oneMonthAgo,
           watchTime: item.state?.timeOffset || 0,
-          isSaved: true,          // <-- ANCHE QUI
-          savedAt: savedItems[cleanId].savedAt
+          isSaved: true,
+          savedAt: oneMonthAgo,
+          syncedAt: oneMonthAgo
         },
         
-        behaviorHints: {
-          defaultVideoId: cleanId,
-          hasScheduledVideos: false
-        },
-        
+        syncData: syncData[cleanId],
         meta: metaItem
       };
 
       library.push(libraryItem);
-
-      // ============================================
-      // 3. CACHE METADATI
-      // ============================================
       metaCache[`meta:${item.type}:${cleanId}`] = metaItem;
-      metaCache[`catalog:${item.type}:${cleanId}`] = metaItem;
-      metaCache[`detail:${item.type}:${cleanId}`] = metaItem;
 
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
 
       // ============================================
-      // 4. PROGRESSI (se presenti)
+      // PROGRESSI
       // ============================================
       if (item.state?.timeOffset > 0) {
         const timeOffset = item.state.timeOffset;
@@ -219,9 +194,10 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         watchProgress[progressKey] = {
           currentTime: timeOffset,
           duration: duration,
-          lastUpdated: new Date(item.state.lastWatched || Date.now()).getTime(),
+          lastUpdated: oneMonthAgo, // <-- 1 mese fa!
           videoId: cleanId,
-          isSaved: true
+          isSynced: true,
+          syncVersion: 1
         };
 
         contentDuration[`${item.type}:${cleanId}`] = duration;
@@ -235,26 +211,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             year: item.year || '',
             currentTime: timeOffset,
             duration: duration,
-            lastWatched: item.state.lastWatched || Date.now(),
+            lastWatched: oneMonthAgo, // <-- 1 mese fa!
             progress: (timeOffset / duration) * 100,
             videoId: cleanId,
-            isSaved: true,
-            meta: metaItem
-          });
-        } else if (item.type === 'series' && item.state.season && item.state.episode) {
-          continueWatching.push({
-            id: cleanId,
-            type: 'episode',
-            name: item.name || '',
-            poster: item.poster || '',
-            season: item.state.season,
-            episode: item.state.episode,
-            currentTime: timeOffset,
-            duration: duration,
-            lastWatched: item.state.lastWatched || Date.now(),
-            progress: (timeOffset / duration) * 100,
-            videoId: `${cleanId}:${item.state.season}:${item.state.episode}`,
-            isSaved: true,
+            isSynced: true,
+            syncData: syncData[cleanId],
             meta: metaItem
           });
         }
@@ -262,7 +223,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
     });
 
     // ============================================
-    // 5. BACKUP COMPLETO CON FLAG SALVATI
+    // BACKUP COMPLETO
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -273,69 +234,78 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       user: {
         id: "local-user-123",
         name: "Utente Locale",
-        email: "locale@nuvio.local"
+        email: "locale@nuvio.local",
+        trakt: {  // <-- Dati Trakt fittizi
+          username: "imported_user",
+          lastSync: oneMonthAgo,
+          syncEnabled: true
+        }
       },
       data: {
         settings: {
           libraryView: "grid",
           theme: "dark",
           language: "it",
-          autoPlay: true
+          autoPlay: true,
+          syncEnabled: true,
+          lastSync: oneMonthAgo
         },
-        installedAddons: [
-          {
-            id: "community.stremio-nuvio-importer",
-            name: "📦 Importer",
-            version: "1.0.0",
-            enabled: true
-          }
-        ],
+        installedAddons: [],
         
-        // DATI PRINCIPALI
+        // DATI CON TIMESTAMP VECCHI
         library: library,
-        
-        // OGGETTO SALVATI (FONDAMENTALE!)
-        saved: savedItems,
-        savedItems: savedItems,
-        watchlist: savedItems,
-        favorites: savedItems,
+        saved: syncData,
+        savedItems: syncData,
+        watchlist: syncData,
+        favorites: syncData,
         
         watchProgress: watchProgress,
         continueWatching: continueWatching,
-        watchedItems: [],
         contentDuration: contentDuration,
-        
         metaCache: metaCache,
-        metaStorage: metaCache,
         
-        // Dati cloud con flag salvati
+        // DATI DI SINCRONIZZAZIONE (FONDAMENTALI!)
+        sync: {
+          lastSync: oneMonthAgo,
+          lastFullSync: oneMonthAgo,
+          syncQueue: [],
+          conflicts: [],
+          version: 1,
+          data: syncData
+        },
+        
+        traktSettings: {
+          username: "imported_user",
+          lastSync: oneMonthAgo,
+          syncWatched: true,
+          syncCollection: true,
+          syncWatchlist: true,
+          syncRatings: true
+        },
+        
         cloud: {
           library: library,
-          saved: savedItems,
-          watchProgress: watchProgress,
-          continueWatching: continueWatching,
-          contentDuration: contentDuration,
-          metaCache: metaCache,
-          lastSync: Date.now()
+          saved: syncData,
+          lastSync: oneMonthAgo,
+          version: 1
         },
         
         cloudSync: {
           enabled: true,
-          lastSync: Date.now(),
+          lastSync: oneMonthAgo,
           syncedLibrary: library,
-          syncedSaved: savedItems,
-          syncedProgress: watchProgress,
-          syncedMeta: metaCache
+          syncedSaved: syncData,
+          version: 1
         },
         
+        // Altri campi
         localScrapers: {},
         apiKeys: {},
-        addonOrder: ["community.stremio-nuvio-importer"],
+        addonOrder: [],
         removedAddons: [],
         downloads: [],
         continueWatchingRemoved: {},
         syncQueue: [],
-        traktSettings: null,
         simklSettings: null,
         tombStones: {},
         subtitles: {
@@ -346,35 +316,25 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
           subtitleTextShadow: true,
           subtitleOutline: true,
           subtitleOutlineColor: "#000000",
-          subtitleOutlineWidth: 3,
-          subtitleAlign: "center",
-          subtitleBottomOffset: 20,
-          subtitleLetterSpacing: 0,
-          subtitleLineHeightMultiplier: 1.2
+          subtitleOutlineWidth: 3
         }
       },
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
-        savedCount: Object.keys(savedItems).length,
+        savedCount: Object.keys(syncData).length,
+        syncCount: Object.keys(syncData).length,
         watchProgressCount: Object.keys(watchProgress).length,
         continueWatchingCount: continueWatching.length,
-        contentDurationCount: Object.keys(contentDuration).length,
-        metaCacheCount: Object.keys(metaCache).length,
-        downloadsCount: 0,
-        addonsCount: 1
+        lastSync: oneMonthAgo
       }
     };
 
-    // Pulisce file temporaneo
     fs.unlinkSync(req.file.path);
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
-    console.log(`💾 Salvati: ${Object.keys(savedItems).length}`);
-    console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
-    console.log(`▶️ Continue Watching: ${continueWatching.length}`);
-    console.log(`💾 Metadati in cache: ${Object.keys(metaCache).length}`);
-    console.log(`📁 Backup creato con ${library.length} elementi`);
+    console.log(`🔄 Dati sincronizzati (fittizi): ${Object.keys(syncData).length}`);
+    console.log(`📁 Backup creato con timestamp: ${new Date(oneMonthAgo).toLocaleDateString()}`);
 
     res.json({
       success: true,
@@ -382,10 +342,7 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       stats: { 
         movies: movieCount, 
         series: seriesCount,
-        saved: Object.keys(savedItems).length,
-        progress: Object.keys(watchProgress).length,
-        continueWatching: continueWatching.length,
-        metaCache: Object.keys(metaCache).length,
+        saved: Object.keys(syncData).length,
         total: movieCount + seriesCount
       }
     });
@@ -404,7 +361,5 @@ const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Stremio → NUVIO Importer`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
-  console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/\n`);
 });
