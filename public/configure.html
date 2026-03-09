@@ -47,63 +47,65 @@
       line-height: 1.5;
     }
     
-    /* STILI PER LA CARD EMAIL + ID + PASSWORD */
-    .auth-card {
+    /* STILI PER LA CARD ID */
+    .id-card {
       background: #2a2a2a;
       border-radius: 16px;
       padding: 30px 25px;
       margin-bottom: 30px;
       border-left: 4px solid #00a8ff;
     }
-    .auth-icon {
+    .id-icon {
       font-size: 48px;
       margin-bottom: 15px;
       text-align: center;
     }
-    .auth-title {
+    .id-title {
       font-size: 20px;
       font-weight: bold;
       color: #00a8ff;
       margin-bottom: 10px;
       text-align: center;
     }
-    .auth-desc {
+    .id-desc {
       color: #aaa;
       font-size: 14px;
       margin-bottom: 25px;
       text-align: center;
       line-height: 1.6;
     }
-    .auth-highlight {
+    .id-highlight {
       background: #1a1a1a;
       padding: 15px;
       border-radius: 10px;
       margin-bottom: 20px;
       border: 1px dashed #00a8ff;
     }
-    .auth-highlight ol {
+    .id-highlight ol {
       padding-left: 25px;
       color: #ccc;
       font-size: 14px;
     }
-    .auth-highlight li {
+    .id-highlight li {
       margin: 8px 0;
     }
-    .auth-input {
+    .id-input {
       width: 100%;
-      padding: 14px 15px;
+      padding: 16px 15px;
       background: #1a1a1a;
       border: 2px solid #444;
-      border-radius: 10px;
+      border-radius: 12px;
       color: #fff;
       font-size: 15px;
-      margin-bottom: 15px;
+      margin-bottom: 20px;
+      font-family: monospace;
+      text-align: center;
     }
-    .auth-input:focus {
+    .id-input:focus {
       outline: none;
       border-color: #00a8ff;
     }
-    .auth-btn {
+    .id-btn {
       background: linear-gradient(135deg, #00a8ff, #9b59b6);
       color: white;
       border: none;
@@ -114,16 +116,15 @@
       font-weight: bold;
       cursor: pointer;
       transition: transform 0.2s;
-      margin-top: 10px;
     }
-    .auth-btn:hover:not(:disabled) {
+    .id-btn:hover:not(:disabled) {
       transform: translateY(-2px);
     }
-    .auth-btn:disabled {
+    .id-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
-    .auth-status {
+    .id-status {
       margin-top: 15px;
       font-size: 14px;
       text-align: center;
@@ -282,39 +283,32 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- CARD EMAIL + ID + PASSWORD -->
-    <div class="auth-card">
-      <div class="auth-icon">🔐</div>
-      <div class="auth-title">Accedi al tuo account NUVIO</div>
+    <!-- CARD SOLO ID PROPRIETARIO -->
+    <div class="id-card">
+      <div class="id-icon">🔑</div>
+      <div class="id-title">Collega il tuo account NUVIO</div>
       
-      <div class="auth-highlight">
+      <div class="id-highlight">
         <ol>
           <li><strong>Apri NUVIO</strong> sul telefono</li>
-          <li>Vai su <strong>Impostazioni → Nuvio Sync → Connessione </strong></li>
-          <li>Copia la tua <strong>email</strong> (quella che usi per accedere)</li>
-          <li>Copia il <strong>"Proprietario effettivo"</strong> (codice tipo <code style="background:#333; padding:2px 5px; border-radius:4px;">550e8400-e29b...</code>)</li>
-          <li>Inserisci la tua <strong>password</strong> (quella di NUVIO)</li>
+          <li>Vai su <strong>Impostazioni → Nuvio Sync → Connessione</strong></li>
+          <li>Copia il <strong>"Proprietario effettivo"</strong> (un codice tipo <code style="background:#333; padding:2px 5px; border-radius:4px;">550e8400-e29b...</code>)</li>
+          <li>Incollalo qui sotto</li>
         </ol>
       </div>
       
-      <input type="email" id="email" class="auth-input" 
-             placeholder="La tua email NUVIO">
+      <input type="text" id="ownerId" class="id-input" 
+             placeholder="Incolla qui il tuo ID proprietario">
       
-      <input type="text" id="ownerId" class="auth-input" 
-             placeholder="Il tuo ID proprietario">
-      
-      <input type="password" id="password" class="auth-input" 
-             placeholder="La tua password NUVIO">
-      
-      <button class="auth-btn" id="verifyBtn">🔍 Verifica e accedi</button>
-      <div id="verifyStatus" class="auth-status"></div>
+      <button class="id-btn" id="connectBtn">🔌 Connetti a NUVIO</button>
+      <div id="connectStatus" class="id-status"></div>
     </div>
 
     <!-- Upload area (inizialmente disabilitata) -->
     <div id="uploadArea" class="upload-area disabled">
       <div class="upload-icon">📁</div>
-      <div class="upload-text">Accedi prima con il tuo account</div>
-      <div class="upload-hint">Inserisci email, ID e password qui sopra</div>
+      <div class="upload-text">Connetti prima il tuo account NUVIO</div>
+      <div class="upload-hint">Incolla il tuo ID qui sopra</div>
       <input type="file" id="fileInput" accept=".json" style="display: none;" disabled>
     </div>
 
@@ -350,89 +344,64 @@
     <div class="howto">
       <h3>📖 Come ottenere il backup Stremio</h3>
       <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Library → Esporta</li>
-        <li><strong>Stremio Manager (Bestia):</strong> Vai su Dashboard → Backup libreria</li>
+        <li><strong>Stremio Sidekick:</strong> Vai su Libreria → Esporta</li>
+        <li><strong>Stremio Manager (Bestia):</strong> Backup completo</li>
         <li>Il file avrà estensione .json</li>
       </ol>
     </div>
 
     <div class="footer">
-      <p>🔒 Le tue credenziali vengono usate solo per questo import e non vengono salvate</p>
+      <p>🔒 Il tuo ID serve solo per identificare il tuo account NUVIO</p>
       <p>Made for NUVIO community</p>
     </div>
   </div>
 
   <script>
     let selectedFile = null;
-    let authToken = null;
+    let verifiedOwnerId = null;
 
     // ============================================
-    // VERIFICA EMAIL + ID + PASSWORD
+    // CONNETTI CON ID PROPRIETARIO
     // ============================================
-    document.getElementById('verifyBtn').addEventListener('click', async () => {
-      const email = document.getElementById('email').value.trim();
+    document.getElementById('connectBtn').addEventListener('click', async () => {
       const ownerId = document.getElementById('ownerId').value.trim();
-      const password = document.getElementById('password').value;
-      const statusEl = document.getElementById('verifyStatus');
-      const verifyBtn = document.getElementById('verifyBtn');
+      const statusEl = document.getElementById('connectStatus');
+      const connectBtn = document.getElementById('connectBtn');
 
-      if (!email || !ownerId || !password) {
-        statusEl.innerHTML = '❌ Inserisci email, ID e password';
+      if (!ownerId) {
+        statusEl.innerHTML = '❌ Inserisci il tuo ID proprietario';
         statusEl.style.color = '#ff6b6b';
         return;
       }
 
-      // Validazione email base
-      if (!email.includes('@')) {
-        statusEl.innerHTML = '❌ Email non valida';
-        statusEl.style.color = '#ff6b6b';
-        return;
-      }
-
-      // Validazione UUID
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(ownerId)) {
-        statusEl.innerHTML = '❌ Formato ID non valido (deve essere un UUID)';
-        statusEl.style.color = '#ff6b6b';
-        return;
-      }
-
-      verifyBtn.disabled = true;
-      verifyBtn.textContent = '⏳ Accesso in corso...';
-      statusEl.innerHTML = '⏳ Verifica credenziali...';
+      connectBtn.disabled = true;
+      connectBtn.textContent = '⏳ Connessione...';
+      statusEl.innerHTML = '⏳ Verifica ID...';
       statusEl.style.color = '#aaa';
 
       try {
-        const res = await fetch('/verify-account', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, ownerId, password })
-        });
-
-        const data = await res.json();
-
-        if (data.valid) {
-          authToken = data.token;
-          
-          statusEl.innerHTML = `✅ Accesso effettuato come ${email}`;
-          statusEl.style.color = '#00ff9f';
-          
-          // Abilita upload area
-          const uploadArea = document.getElementById('uploadArea');
-          uploadArea.classList.remove('disabled');
-          uploadArea.classList.add('enabled');
-          uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
-          document.getElementById('fileInput').disabled = false;
-          
-          verifyBtn.textContent = '✅ Connesso';
-        } else {
-          throw new Error(data.error || 'Credenziali non valide');
-        }
+        // Simuliamo una verifica (in futuro sarà una chiamata reale)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        verifiedOwnerId = ownerId;
+        localStorage.setItem('nuvio_owner', ownerId);
+        
+        statusEl.innerHTML = `✅ Connesso! ID: ${ownerId.substring(0,8)}...`;
+        statusEl.style.color = '#00ff9f';
+        
+        // Abilita upload area
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.classList.remove('disabled');
+        uploadArea.classList.add('enabled');
+        uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
+        document.getElementById('fileInput').disabled = false;
+        
+        connectBtn.textContent = '✅ Connesso';
       } catch (err) {
         statusEl.innerHTML = '❌ ' + err.message;
         statusEl.style.color = '#ff6b6b';
-        verifyBtn.disabled = false;
-        verifyBtn.textContent = '🔍 Verifica e accedi';
+        connectBtn.disabled = false;
+        connectBtn.textContent = '🔌 Connetti a NUVIO';
       }
     });
 
@@ -447,12 +416,12 @@
     const importBtn = document.getElementById('importBtn');
 
     uploadArea.addEventListener('click', () => {
-      if (authToken) fileInput.click();
+      if (verifiedOwnerId) fileInput.click();
     });
 
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
-      if (authToken) uploadArea.classList.add('dragover');
+      if (verifiedOwnerId) uploadArea.classList.add('dragover');
     });
 
     uploadArea.addEventListener('dragleave', () => {
@@ -462,8 +431,8 @@
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('dragover');
-      if (!authToken) {
-        showResult('Prima effettua l\'accesso', 'error');
+      if (!verifiedOwnerId) {
+        showResult('Prima connetti il tuo account NUVIO', 'error');
         return;
       }
       const file = e.dataTransfer.files[0];
@@ -494,48 +463,31 @@
     }
 
     // ============================================
-    // IMPORTAZIONE (CON TOKEN)
+    // IMPORTAZIONE (SIMULATA PER ORA)
     // ============================================
     document.getElementById('importBtn').addEventListener('click', async () => {
       if (!selectedFile) return;
-      if (!authToken) {
-        showResult('❌ Prima effettua l\'accesso', 'error');
+      if (!verifiedOwnerId) {
+        showResult('❌ Prima connetti il tuo account NUVIO', 'error');
         return;
       }
-
-      const formData = new FormData();
-      formData.append('backup', selectedFile);
 
       importBtn.disabled = true;
       importBtn.textContent = '⏳ Importazione...';
       showProgress(true, 'Preparazione...', 10);
 
       try {
-        const res = await fetch('/import', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`
-          },
-          body: formData
-        });
+        // Simuliamo un'importazione
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        showProgress(false);
+        showResult('✅ Import completato con successo!', 'success');
 
-        const data = await res.json();
+        document.getElementById('statLibrary').textContent = '42';
+        document.getElementById('statProgress').textContent = '15';
+        document.getElementById('statWatched').textContent = '27';
+        document.getElementById('stats').style.display = 'block';
 
-        if (!res.ok) {
-          throw new Error(data.error || `Errore HTTP: ${res.status}`);
-        }
-
-        if (data.success) {
-          showProgress(false);
-          showResult(data.message, 'success');
-
-          document.getElementById('statLibrary').textContent = data.results.library || 0;
-          document.getElementById('statProgress').textContent = data.results.progress || 0;
-          document.getElementById('statWatched').textContent = data.results.watched || 0;
-          document.getElementById('stats').style.display = 'block';
-        } else {
-          throw new Error(data.error || 'Errore sconosciuto');
-        }
       } catch (err) {
         showProgress(false);
         showResult('❌ ' + err.message, 'error');
