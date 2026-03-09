@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    /* STILI BASE - uguali a prima, aggiungo solo stili per la nuova card */
+    /* STILI BASE */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -47,7 +47,7 @@
       line-height: 1.5;
     }
     
-    /* STILI PER LA CARD EMAIL + ID */
+    /* STILI PER LA CARD EMAIL + ID + PASSWORD */
     .auth-card {
       background: #2a2a2a;
       border-radius: 16px;
@@ -130,7 +130,7 @@
       min-height: 20px;
     }
     
-    /* UPLOAD AREA (inizialmente disabilitata) */
+    /* UPLOAD AREA */
     .upload-area {
       border: 2px dashed #444;
       border-radius: 12px;
@@ -282,18 +282,18 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- CARD EMAIL + ID (METODO 3) -->
+    <!-- CARD EMAIL + ID + PASSWORD -->
     <div class="auth-card">
-      <div class="auth-icon">📧🔑</div>
-      <div class="auth-title">Collega il tuo account NUVIO</div>
+      <div class="auth-icon">🔐</div>
+      <div class="auth-title">Accedi al tuo account NUVIO</div>
       
       <div class="auth-highlight">
         <ol>
           <li><strong>Apri NUVIO</strong> sul telefono</li>
-          <li>Vai su <strong>Impostazioni → Account</strong></li>
+          <li>Vai su <strong>Impostazioni → Nuvio Sync → Connessione </strong></li>
           <li>Copia la tua <strong>email</strong> (quella che usi per accedere)</li>
           <li>Copia il <strong>"Proprietario effettivo"</strong> (codice tipo <code style="background:#333; padding:2px 5px; border-radius:4px;">550e8400-e29b...</code>)</li>
-          <li>Inseriscili qui sotto</li>
+          <li>Inserisci la tua <strong>password</strong> (quella di NUVIO)</li>
         </ol>
       </div>
       
@@ -303,15 +303,18 @@
       <input type="text" id="ownerId" class="auth-input" 
              placeholder="Il tuo ID proprietario">
       
-      <button class="auth-btn" id="verifyBtn">🔍 Verifica account</button>
+      <input type="password" id="password" class="auth-input" 
+             placeholder="La tua password NUVIO">
+      
+      <button class="auth-btn" id="verifyBtn">🔍 Verifica e accedi</button>
       <div id="verifyStatus" class="auth-status"></div>
     </div>
 
     <!-- Upload area (inizialmente disabilitata) -->
     <div id="uploadArea" class="upload-area disabled">
       <div class="upload-icon">📁</div>
-      <div class="upload-text">Verifica prima il tuo account</div>
-      <div class="upload-hint">Inserisci email e ID qui sopra</div>
+      <div class="upload-text">Accedi prima con il tuo account</div>
+      <div class="upload-hint">Inserisci email, ID e password qui sopra</div>
       <input type="file" id="fileInput" accept=".json" style="display: none;" disabled>
     </div>
 
@@ -347,34 +350,34 @@
     <div class="howto">
       <h3>📖 Come ottenere il backup Stremio</h3>
       <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Libreria → Esporta</li>
-        <li><strong>Stremio Manager (Bestia):</strong> Backup completo</li>
+        <li><strong>Stremio Sidekick:</strong> Vai su Library → Esporta</li>
+        <li><strong>Stremio Manager (Bestia):</strong> Vai su Dashboard → Backup libreria</li>
         <li>Il file avrà estensione .json</li>
       </ol>
     </div>
 
     <div class="footer">
-      <p>🔒 I tuoi dati servono solo per identificare il tuo account NUVIO</p>
+      <p>🔒 Le tue credenziali vengono usate solo per questo import e non vengono salvate</p>
       <p>Made for NUVIO community</p>
     </div>
   </div>
 
   <script>
     let selectedFile = null;
-    let verifiedEmail = null;
-    let verifiedOwnerId = null;
+    let authToken = null;
 
     // ============================================
-    // VERIFICA EMAIL + ID
+    // VERIFICA EMAIL + ID + PASSWORD
     // ============================================
     document.getElementById('verifyBtn').addEventListener('click', async () => {
       const email = document.getElementById('email').value.trim();
       const ownerId = document.getElementById('ownerId').value.trim();
+      const password = document.getElementById('password').value;
       const statusEl = document.getElementById('verifyStatus');
       const verifyBtn = document.getElementById('verifyBtn');
 
-      if (!email || !ownerId) {
-        statusEl.innerHTML = '❌ Inserisci email e ID proprietario';
+      if (!email || !ownerId || !password) {
+        statusEl.innerHTML = '❌ Inserisci email, ID e password';
         statusEl.style.color = '#ff6b6b';
         return;
       }
@@ -395,26 +398,23 @@
       }
 
       verifyBtn.disabled = true;
-      verifyBtn.textContent = '⏳ Verifica in corso...';
-      statusEl.innerHTML = '⏳ Controllo account...';
+      verifyBtn.textContent = '⏳ Accesso in corso...';
+      statusEl.innerHTML = '⏳ Verifica credenziali...';
       statusEl.style.color = '#aaa';
 
       try {
         const res = await fetch('/verify-account', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, ownerId })
+          body: JSON.stringify({ email, ownerId, password })
         });
 
         const data = await res.json();
 
         if (data.valid) {
-          verifiedEmail = email;
-          verifiedOwnerId = ownerId;
-          localStorage.setItem('nuvio_email', email);
-          localStorage.setItem('nuvio_owner', ownerId);
+          authToken = data.token;
           
-          statusEl.innerHTML = `✅ Account verificato! Ora puoi importare`;
+          statusEl.innerHTML = `✅ Accesso effettuato come ${email}`;
           statusEl.style.color = '#00ff9f';
           
           // Abilita upload area
@@ -424,15 +424,15 @@
           uploadArea.querySelector('.upload-text').textContent = 'Clicca per selezionare il backup';
           document.getElementById('fileInput').disabled = false;
           
-          verifyBtn.textContent = '✅ Verificato';
+          verifyBtn.textContent = '✅ Connesso';
         } else {
-          throw new Error(data.error || 'Account non trovato');
+          throw new Error(data.error || 'Credenziali non valide');
         }
       } catch (err) {
         statusEl.innerHTML = '❌ ' + err.message;
         statusEl.style.color = '#ff6b6b';
         verifyBtn.disabled = false;
-        verifyBtn.textContent = '🔍 Verifica account';
+        verifyBtn.textContent = '🔍 Verifica e accedi';
       }
     });
 
@@ -447,12 +447,12 @@
     const importBtn = document.getElementById('importBtn');
 
     uploadArea.addEventListener('click', () => {
-      if (verifiedEmail && verifiedOwnerId) fileInput.click();
+      if (authToken) fileInput.click();
     });
 
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
-      if (verifiedEmail && verifiedOwnerId) uploadArea.classList.add('dragover');
+      if (authToken) uploadArea.classList.add('dragover');
     });
 
     uploadArea.addEventListener('dragleave', () => {
@@ -462,8 +462,8 @@
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('dragover');
-      if (!verifiedEmail || !verifiedOwnerId) {
-        showResult('Prima verifica il tuo account', 'error');
+      if (!authToken) {
+        showResult('Prima effettua l\'accesso', 'error');
         return;
       }
       const file = e.dataTransfer.files[0];
@@ -494,19 +494,17 @@
     }
 
     // ============================================
-    // IMPORTAZIONE
+    // IMPORTAZIONE (CON TOKEN)
     // ============================================
     document.getElementById('importBtn').addEventListener('click', async () => {
       if (!selectedFile) return;
-      if (!verifiedEmail || !verifiedOwnerId) {
-        showResult('❌ Prima verifica il tuo account', 'error');
+      if (!authToken) {
+        showResult('❌ Prima effettua l\'accesso', 'error');
         return;
       }
 
       const formData = new FormData();
       formData.append('backup', selectedFile);
-      formData.append('email', verifiedEmail);
-      formData.append('ownerId', verifiedOwnerId);
 
       importBtn.disabled = true;
       importBtn.textContent = '⏳ Importazione...';
@@ -515,6 +513,9 @@
       try {
         const res = await fetch('/import', {
           method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          },
           body: formData
         });
 
