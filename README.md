@@ -37,15 +37,16 @@ Niente più aggiunte manuali: carichi il file di backup, lo ripristini dentro l'
 
 ## ✨ Come funziona
 
-1. **Esporti** la tua libreria da Stremio usando uno dei tool amici della community
-2. **Carichi** il file in questo addon
-3. **Scarichi** il file .json generato
-4. **Log OUT** da SYNC e TRAKT (o simkl) 
+1. **Esegui** il backup da NUVIO per non perdere i tuoi addons e le tue impostazioni
+2. **Esporta** la tua libreria da Stremio usando uno dei tool amici della community
+3. **Carichi** i files -json in questo addon (**il primo** è per la libreria STREMIO, **il secondo** è   per il backup di NUVIO contenente gli addons e le impostazioni)
+4. **CONTROLLA** se compare "Cloud push riuscito!"
+5. **Scarichi** il file .json generato
 5. **Importa** il backup nella sezione "backup & ripristino"
 6. **Controlla** se ha funzionato bene
-7. **Riattiva** il SYNC e TRAKT
+7. **Godit** la tua libreria piena!
 
-IMPORTANTE! RICORDATI DI DISATTIVARE IL SYNC E TRAKT **PRIMA** DI IMPORTARE IL FILE!!
+**IMPORTANTE** Se avevi delle "Collezioni", non verranno lette su NUVIO, ricordati di eliminarle!
 
 ---
 
@@ -75,6 +76,9 @@ IMPORTANTE! RICORDATI DI DISATTIVARE IL SYNC E TRAKT **PRIMA** DI IMPORTARE IL F
 
 ## 📖 Guida all'uso
 
+### IMPORTANTE: Ottieni il backup da Nuvio
+Esegui il backup per salvare i tuoi addons e le tue impostazioni, ricordati DOVE salverai il file generato perchè ti servira su stremio-nuvio-importer
+
 ### 1️⃣ Ottieni il backup da Stremio
 
 Puoi usare uno di questi due strumenti gratuiti creati dalla community. Entrambi fanno la stessa cosa: generano un file `.json` con la tua libreria.
@@ -96,19 +100,8 @@ Puoi usare uno di questi due strumenti gratuiti creati dalla community. Entrambi
 ### 2️⃣ Importa in NUVIO
 
 #### **Come fare? segui BENE**
-1. Apri NUVIO e vai nella sezione **impostazioni → Nuvio Sync → Disconnetti**
-2. Poi vai nella sezione **impostazioni Trakt → Esci**
-3. Trova l'addon **Stremio Backup Importer** nella sezione "Addons"
-4. Clicca su **"Configura"** (si aprirà una pagina web)
-5. Nella pagina:
-   - Clicca sull'area di caricamento
-   - Seleziona il file `.json` che hai scaricato da Stremio
-   - Clicca su **"Importa Libreria"**
-   - Clicca su **"Converti per NUVIO"**
-   - Clicca su **"Scarica Backup NUVIO"** e salva il file
-6. Ritorna nell'app NUVIO e vai in: **Data → Backup e Ripristino → Esegui Backup** per sicurezza
-7. Dopodichè **Data → Backup e Ripristino → Ripristina backup** e carica il file .json che hai scaricato dall'addon di **Stremio NUVIO importer**
-8. Alla fine, se ha funzionato e hai tutta la libreria in modo corretto, puoi riattivare il Sync e loggarti con Trakt
+1. Apri NUVIO e vai nella sezione **impostazioni → Backup e Ripristino**
+2. Esegui il ripristino del file generato da stremio-nuvio-importer
 
 ---
 
@@ -154,6 +147,8 @@ L'addon è ospitato su un servizio gratuito. Se non viene usato per un po', può
 - **Vuoi contribuire allo sviluppo?** Benvenuto! Il progetto è aperto a tutti
 
 ---
+
+Un ringraziamento a [Tap](https://github.com/tapframe) per il sostegno. [NUVIO](https://nuvioapp.space/) è di sua proprietà.
 
 <div align="center">
   <p>Made with ❤️ per la community di NUVIO</p>
