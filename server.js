@@ -49,7 +49,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// FUNZIONE PER LEGGERE IL BACKUP ESISTENTE (se fornito)
+// FUNZIONE PER LEGGERE IL BACKUP ESISTENTE
 // ============================================
 async function readExistingBackup(existingBackupPath) {
   if (!existingBackupPath || !fs.existsSync(existingBackupPath)) {
@@ -66,7 +66,33 @@ async function readExistingBackup(existingBackupPath) {
 }
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CHE PRESERVA ADDONS
+// FUNZIONE PER ESTRARRE ADDONS (CORRETTA!)
+// ============================================
+function extractAddonsFromNuvioBackup(backup) {
+  let addons = [];
+  
+  // Nel tuo backup, gli addons sono in data.addons
+  if (backup.data && backup.data.addons && Array.isArray(backup.data.addons)) {
+    addons = backup.data.addons;
+    console.log(`🔌 Trovati ${addons.length} addons in data.addons`);
+  }
+  
+  // Fallback: cerca anche in altre posizioni comuni
+  if (addons.length === 0 && backup.addons && Array.isArray(backup.addons)) {
+    addons = backup.addons;
+    console.log(`🔌 Trovati ${addons.length} addons in root.addons`);
+  }
+  
+  if (addons.length === 0 && backup.data && backup.data.installedAddons && Array.isArray(backup.data.installedAddons)) {
+    addons = backup.data.installedAddons;
+    console.log(`🔌 Trovati ${addons.length} addons in data.installedAddons (fallback)`);
+  }
+  
+  return addons;
+}
+
+// ============================================
+// CONVERTI BACKUP - VERSIONE CORRETTA
 // ============================================
 app.post('/convert', upload.fields([
   { name: 'backup', maxCount: 1 },           // Backup Stremio
@@ -94,7 +120,7 @@ app.post('/convert', upload.fields([
       JSON.parse(fs.readFileSync(existingFile.path, 'utf8')) : null;
 
     // ============================================
-    // ESTRAI ADDONS DAL BACKUP ESISTENTE
+    // ESTRAI ADDONS DAL BACKUP ESISTENTE (CORRETTO!)
     // ============================================
     let existingAddons = [];
     let existingAddonOrder = [];
@@ -118,10 +144,11 @@ app.post('/convert', upload.fields([
     };
 
     if (existingNuvioBackup && existingNuvioBackup.data) {
-      // Preserva gli addons installati
-      if (existingNuvioBackup.data.installedAddons) {
-        existingAddons = existingNuvioBackup.data.installedAddons;
-        console.log(`🔌 Preservati ${existingAddons.length} addons installati`);
+      // ADDONS - ora usa la funzione specifica!
+      const extractedAddons = extractAddonsFromNuvioBackup(existingNuvioBackup);
+      if (extractedAddons.length > 0) {
+        existingAddons = extractedAddons;
+        console.log(`🔌 Preservati ${existingAddons.length} addons`);
       }
       
       // Preserva l'ordine degli addons
@@ -272,7 +299,7 @@ app.post('/convert', upload.fields([
     }
 
     // ============================================
-    // BACKUP COMPLETO CON TUTTI I DATI PRESERVATI
+    // BACKUP COMPLETO
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -284,8 +311,8 @@ app.post('/convert', upload.fields([
         // IMPOSTAZIONI (preservate)
         settings: existingSettings,
         
-        // ADDONS (preservati!)
-        installedAddons: existingAddons,
+        // ADDONS (preservati!) - NOTA: li mettiamo in data.addons come nel formato originale
+        addons: existingAddons,
         addonOrder: existingAddonOrder,
         localScrapers: existingLocalScrapers,
         
@@ -374,7 +401,8 @@ app.post('/extract-addons', upload.single('backup'), async (req, res) => {
     const content = fs.readFileSync(req.file.path, 'utf8');
     const backup = JSON.parse(content);
 
-    const addons = backup.data?.installedAddons || [];
+    // Usa la stessa funzione di estrazione
+    const addons = extractAddonsFromNuvioBackup(backup);
     const addonOrder = backup.data?.addonOrder || [];
     const settings = backup.data?.settings || {};
     const subtitles = backup.data?.subtitles || {};
@@ -398,6 +426,63 @@ app.post('/extract-addons', upload.single('backup'), async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT DEBUG PER ANALIZZARE STRUTTURA
+// ============================================
+app.post('/debug-backup', upload.single('backup'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nessun file caricato' });
+    }
+
+    const content = fs.readFileSync(req.file.path, 'utf8');
+    const backup = JSON.parse(content);
+
+    const structure = {
+      rootKeys: Object.keys(backup),
+      hasData: !!backup.data,
+      dataKeys: backup.data ? Object.keys(backup.data) : [],
+      addonsLocations: []
+    };
+
+    // Cerca specificamente gli addons
+    if (backup.data && backup.data.addons) {
+      structure.addonsLocations.push({
+        path: 'data.addons',
+        count: backup.data.addons.length,
+        sample: backup.data.addons[0] ? {
+          id: backup.data.addons[0].id,
+          name: backup.data.addons[0].name
+        } : null
+      });
+    }
+
+    if (backup.data && backup.data.installedAddons) {
+      structure.addonsLocations.push({
+        path: 'data.installedAddons',
+        count: backup.data.installedAddons.length,
+        sample: backup.data.installedAddons[0] ? {
+          id: backup.data.installedAddons[0].id,
+          name: backup.data.installedAddons[0].name
+        } : null
+      });
+    }
+
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      structure: structure,
+      message: `Trovati ${structure.addonsLocations[0]?.count || 0} addons`
+    });
+
+  } catch (error) {
+    console.error('❌ Errore debug:', error);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
@@ -407,6 +492,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
   console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
-  console.log(`\n✨ NOVITÀ: Ora puoi caricare anche il tuo backup Nuvio esistente`);
-  console.log(`   per preservare addons, impostazioni e sottotitoli!\n`);
+  console.log(`\n✨ NOVITÀ: Ora preserva gli addons da data.addons (formato corretto!)`);
+  console.log(`   e mantiene impostazioni, sottotitoli e progressi!\n`);
 });
