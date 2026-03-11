@@ -49,19 +49,111 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CON ID ORIGINALI
+// FUNZIONE PER LEGGERE IL BACKUP ESISTENTE (se fornito)
 // ============================================
-app.post('/convert', upload.single('backup'), async (req, res) => {
+async function readExistingBackup(existingBackupPath) {
+  if (!existingBackupPath || !fs.existsSync(existingBackupPath)) {
+    return null;
+  }
+  
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nessun file caricato' });
+    const content = fs.readFileSync(existingBackupPath, 'utf8');
+    return JSON.parse(content);
+  } catch (e) {
+    console.log('⚠️ Errore lettura backup esistente:', e.message);
+    return null;
+  }
+}
+
+// ============================================
+// CONVERTI BACKUP - VERSIONE CHE PRESERVA ADDONS
+// ============================================
+app.post('/convert', upload.fields([
+  { name: 'backup', maxCount: 1 },           // Backup Stremio
+  { name: 'existing', maxCount: 1 }           // Backup Nuvio esistente (opzionale)
+]), async (req, res) => {
+  try {
+    if (!req.files || !req.files['backup']) {
+      return res.status(400).json({ error: 'Nessun file backup Stremio caricato' });
     }
 
-    console.log('📁 File ricevuto:', req.file.originalname);
+    const stremioFile = req.files['backup'][0];
+    const existingFile = req.files['existing'] ? req.files['existing'][0] : null;
 
-    const fileContent = fs.readFileSync(req.file.path, 'utf8');
-    const stremioData = JSON.parse(fileContent);
+    console.log('📁 File Stremio ricevuto:', stremioFile.originalname);
+    if (existingFile) {
+      console.log('📁 File backup Nuvio esistente ricevuto:', existingFile.originalname);
+    }
 
+    // Leggi backup Stremio
+    const stremioContent = fs.readFileSync(stremioFile.path, 'utf8');
+    const stremioData = JSON.parse(stremioContent);
+
+    // Leggi backup Nuvio esistente (se fornito)
+    const existingNuvioBackup = existingFile ? 
+      JSON.parse(fs.readFileSync(existingFile.path, 'utf8')) : null;
+
+    // ============================================
+    // ESTRAI ADDONS DAL BACKUP ESISTENTE
+    // ============================================
+    let existingAddons = [];
+    let existingAddonOrder = [];
+    let existingLocalScrapers = {};
+    let existingSettings = {
+      libraryView: "grid",
+      theme: "dark",
+      language: "it"
+    };
+    let existingSubtitles = {
+      subtitleSize: 28,
+      subtitleBackground: false,
+      subtitleTextColor: "#FFFFFF",
+      subtitleBgOpacity: 0.7,
+      subtitleTextShadow: true,
+      subtitleOutline: true,
+      subtitleOutlineColor: "#000000",
+      subtitleOutlineWidth: 3,
+      subtitleAlign: "center",
+      subtitleBottomOffset: 20
+    };
+
+    if (existingNuvioBackup && existingNuvioBackup.data) {
+      // Preserva gli addons installati
+      if (existingNuvioBackup.data.installedAddons) {
+        existingAddons = existingNuvioBackup.data.installedAddons;
+        console.log(`🔌 Preservati ${existingAddons.length} addons installati`);
+      }
+      
+      // Preserva l'ordine degli addons
+      if (existingNuvioBackup.data.addonOrder) {
+        existingAddonOrder = existingNuvioBackup.data.addonOrder;
+      }
+      
+      // Preserva gli scrapers locali
+      if (existingNuvioBackup.data.localScrapers) {
+        existingLocalScrapers = existingNuvioBackup.data.localScrapers;
+      }
+      
+      // Preserva le impostazioni
+      if (existingNuvioBackup.data.settings) {
+        existingSettings = {
+          ...existingSettings,
+          ...existingNuvioBackup.data.settings
+        };
+      }
+      
+      // Preserva i sottotitoli
+      if (existingNuvioBackup.data.subtitles) {
+        existingSubtitles = {
+          ...existingSubtitles,
+          ...existingNuvioBackup.data.subtitles
+        };
+      }
+    }
+
+    // ============================================
+    // CONVERTI I FILM DA STREMIO
+    // ============================================
     const library = [];
     const watchProgress = {};
     const continueWatching = [];
@@ -77,17 +169,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.removed || item.temp) return;
       if (item.type !== 'movie' && item.type !== 'series') return;
 
-      // IMPORTANTE: NON MODIFICARE L'ID!
-      const originalId = item._id;  // Mantieni l'ID originale di Stremio (es. "tt1234567:en" o "tt9876543:1:5")
+      const originalId = item._id;
+      const imdbId = originalId.split(':')[0];
       
-      // Estrai l'ID base IMDB per gli addon
-      const imdbId = originalId.split(':')[0]; // Prende "tt1234567" da "tt1234567:en"
-      
-      // ============================================
-      // LIBRARY ITEM CON ID ORIGINALE
-      // ============================================
       const libraryItem = {
-        id: originalId,  // <-- USIAMO L'ID ORIGINALE!
+        id: originalId,
         _id: originalId,
         type: item.type,
         name: item.name || 'Senza titolo',
@@ -102,20 +188,16 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
         
-        // Campi extra per gli addon
-        imdb_id: imdbId,  // <-- AGGIUNTO: ID IMDB puro
+        imdb_id: imdbId,
         tmdb_id: item.tmdb_id || '',
         
-        // Per serie TV
         totalEpisodes: item.totalEpisodes || 0,
         totalSeasons: item.totalSeasons || 0,
         
-        // Se è un episodio, aggiungi season/episode
         season: item.season || (originalId.includes(':') ? originalId.split(':')[1] : null),
         episode: item.episode || (originalId.includes(':') ? originalId.split(':')[2] : null)
       };
 
-      // Aggiungi campi extra se presenti
       if (item.background) libraryItem.banner = item.background;
       if (item.logo) libraryItem.logo = item.logo;
 
@@ -124,9 +206,6 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       if (item.type === 'movie') movieCount++;
       else seriesCount++;
 
-      // ============================================
-      // PROGRESSI
-      // ============================================
       if (item.state?.timeOffset > 0) {
         const timeOffset = item.state.timeOffset;
         const duration = item.state.duration || 3600;
@@ -151,13 +230,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             lastWatched: oneMinuteAgo,
             progress: (timeOffset / duration) * 100,
             videoId: originalId,
-            imdb_id: imdbId  // <-- AGGIUNTO
+            imdb_id: imdbId
           });
         } else if (item.type === 'series') {
-          // Per serie, usa l'ID completo dell'episodio
-          const episodeId = originalId; // Già contiene season:episode
           continueWatching.push({
-            id: episodeId,
+            id: originalId,
             type: 'episode',
             name: item.name || '',
             poster: item.poster || '',
@@ -167,16 +244,35 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
             duration: duration,
             lastWatched: oneMinuteAgo,
             progress: (timeOffset / duration) * 100,
-            videoId: episodeId,
-            imdb_id: imdbId,  // <-- AGGIUNTO
-            seriesId: originalId.split(':')[0] // ID della serie
+            videoId: originalId,
+            imdb_id: imdbId,
+            seriesId: originalId.split(':')[0]
           });
         }
       }
     });
 
     // ============================================
-    // BACKUP COMPLETO
+    // SE C'ERA UN BACKUP VECCHIO, PRESERVA ALTRI DATI
+    // ============================================
+    let existingDownloads = [];
+    let existingApiKeys = {};
+    let existingTraktSettings = null;
+    let existingSimklSettings = null;
+    let existingSyncQueue = [];
+    let existingContentDuration = {};
+    
+    if (existingNuvioBackup && existingNuvioBackup.data) {
+      existingDownloads = existingNuvioBackup.data.downloads || [];
+      existingApiKeys = existingNuvioBackup.data.apiKeys || {};
+      existingTraktSettings = existingNuvioBackup.data.traktSettings || null;
+      existingSimklSettings = existingNuvioBackup.data.simklSettings || null;
+      existingSyncQueue = existingNuvioBackup.data.syncQueue || [];
+      existingContentDuration = existingNuvioBackup.data.contentDuration || {};
+    }
+
+    // ============================================
+    // BACKUP COMPLETO CON TUTTI I DATI PRESERVATI
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -185,57 +281,56 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
       platform: "android",
       userScope: "local",
       data: {
-        settings: {
-          libraryView: "grid",
-          theme: "dark",
-          language: "it"
-        },
+        // IMPOSTAZIONI (preservate)
+        settings: existingSettings,
         
+        // ADDONS (preservati!)
+        installedAddons: existingAddons,
+        addonOrder: existingAddonOrder,
+        localScrapers: existingLocalScrapers,
+        
+        // LIBRARY (nuova)
         library: library,
         watchProgress: watchProgress,
         continueWatching: continueWatching,
         
-        installedAddons: [],
-        localScrapers: {},
-        apiKeys: {},
-        addonOrder: [],
+        // ALTRI DATI (preservati)
+        downloads: existingDownloads,
+        apiKeys: existingApiKeys,
+        traktSettings: existingTraktSettings,
+        simklSettings: existingSimklSettings,
+        syncQueue: existingSyncQueue,
+        contentDuration: existingContentDuration,
+        
+        // CAMPI VUOTI MA NECESSARI
         removedAddons: [],
-        downloads: [],
         continueWatchingRemoved: {},
-        contentDuration: {},
-        syncQueue: [],
-        traktSettings: null,
-        simklSettings: null,
         tombStones: {},
         deleted: {},
         removedFromLibrary: {},
         
-        subtitles: {
-          subtitleSize: 28,
-          subtitleBackground: false,
-          subtitleTextColor: "#FFFFFF",
-          subtitleBgOpacity: 0.7,
-          subtitleTextShadow: true,
-          subtitleOutline: true,
-          subtitleOutlineColor: "#000000",
-          subtitleOutlineWidth: 3,
-          subtitleAlign: "center",
-          subtitleBottomOffset: 20
-        }
+        // SOTTOTITOLI (preservati)
+        subtitles: existingSubtitles
       },
       metadata: {
         totalItems: library.length,
         libraryCount: library.length,
         watchProgressCount: Object.keys(watchProgress).length,
-        continueWatchingCount: continueWatching.length
+        continueWatchingCount: continueWatching.length,
+        addonsCount: existingAddons.length
       }
     };
 
-    fs.unlinkSync(req.file.path);
+    // Pulisci file temporanei
+    fs.unlinkSync(stremioFile.path);
+    if (existingFile) {
+      fs.unlinkSync(existingFile.path);
+    }
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
+    console.log(`🔌 Preservati ${existingAddons.length} addons`);
     console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
-    console.log(`📁 Backup creato con ID ORIGINALI mantenuti`);
+    console.log(`📁 Backup creato con TUTTI i dati originali preservati`);
 
     res.json({
       success: true,
@@ -245,12 +340,58 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
         series: seriesCount,
         progress: Object.keys(watchProgress).length,
         continueWatching: continueWatching.length,
-        total: movieCount + seriesCount
-      }
+        addonsPreserved: existingAddons.length,
+        total: library.length
+      },
+      message: existingAddons.length > 0 ? 
+        `✅ Preservati ${existingAddons.length} addons!` : 
+        'Nessun addon da preservare (carica un backup Nuvio esistente per mantenerli)'
     });
 
   } catch (error) {
     console.error('❌ Errore conversione:', error);
+    // Pulisci tutti i file
+    if (req.files) {
+      Object.values(req.files).forEach(fileArray => {
+        fileArray.forEach(file => {
+          if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        });
+      });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT PER ESTRARRE ADDONS DA UN BACKUP
+// ============================================
+app.post('/extract-addons', upload.single('backup'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nessun file caricato' });
+    }
+
+    const content = fs.readFileSync(req.file.path, 'utf8');
+    const backup = JSON.parse(content);
+
+    const addons = backup.data?.installedAddons || [];
+    const addonOrder = backup.data?.addonOrder || [];
+    const settings = backup.data?.settings || {};
+    const subtitles = backup.data?.subtitles || {};
+
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      addons: addons,
+      addonOrder: addonOrder,
+      settings: settings,
+      subtitles: subtitles,
+      count: addons.length
+    });
+
+  } catch (error) {
+    console.error('❌ Errore estrazione addons:', error);
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
@@ -261,9 +402,11 @@ app.post('/convert', upload.single('backup'), async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (con preservazione addons)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
-  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json\n`);
+  console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
+  console.log(`\n✨ NOVITÀ: Ora puoi caricare anche il tuo backup Nuvio esistente`);
+  console.log(`   per preservare addons, impostazioni e sottotitoli!\n`);
 });
