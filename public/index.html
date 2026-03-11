@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Stremio → NUVIO Converter</title>
+  <title>Stremio → NUVIO Converter - Con preservazione addons</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
@@ -61,14 +61,21 @@
       line-height: 1.5;
     }
     
+    .section-title {
+      color: #fff;
+      font-size: 18px;
+      margin: 20px 0 10px 0;
+      font-weight: 600;
+    }
+    
     .upload-area {
       border: 2px dashed #444;
       border-radius: 12px;
-      padding: 40px 20px;
+      padding: 30px 20px;
       text-align: center;
       cursor: pointer;
       transition: all 0.3s;
-      margin: 20px 0;
+      margin: 10px 0;
     }
     .upload-area:hover {
       border-color: #00a8ff;
@@ -78,22 +85,40 @@
       border-color: #00a8ff;
       background: rgba(0,168,255,0.1);
     }
-    .upload-icon { font-size: 48px; margin-bottom: 15px; }
-    .upload-text { color: #ccc; font-size: 16px; }
-    .upload-hint { color: #888; font-size: 13px; margin-top: 10px; }
+    .upload-area.small {
+      padding: 20px;
+    }
+    .upload-icon { font-size: 32px; margin-bottom: 10px; }
+    .upload-text { color: #ccc; font-size: 14px; }
+    .upload-hint { color: #888; font-size: 12px; margin-top: 5px; }
     
     .file-info {
       background: #2a2a2a;
       border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 20px;
+      padding: 12px;
+      margin-bottom: 15px;
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .file-icon { font-size: 24px; }
-    .file-name { flex: 1; font-weight: 500; color: #00a8ff; }
-    .file-size { color: #aaa; font-size: 12px; }
+    .file-info.success {
+      border-left: 4px solid #00ff9f;
+    }
+    .file-icon { font-size: 20px; }
+    .file-name { flex: 1; font-weight: 500; color: #00a8ff; font-size: 14px; }
+    .file-size { color: #aaa; font-size: 11px; }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-left: 8px;
+    }
+    .badge.stremio { background: #7e57c2; color: white; }
+    .badge.nuvio { background: #00a8ff; color: white; }
+    .badge.success { background: #00ff9f; color: #000; }
     
     button {
       background: linear-gradient(135deg, #00a8ff, #9b59b6);
@@ -110,6 +135,11 @@
     }
     button:hover:not(:disabled) { transform: translateY(-2px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .button-secondary {
+      background: #2a2a2a;
+      border: 1px solid #444;
+    }
     
     .progress {
       margin-top: 20px;
@@ -147,21 +177,40 @@
       border: 1px solid #ff6b6b;
       color: #ff6b6b;
     }
+    .result.warning {
+      background: rgba(255,180,84,0.1);
+      border: 1px solid #ffb454;
+      color: #ffb454;
+    }
     
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       margin: 20px 0;
     }
     .stat-card {
       background: #2a2a2a;
-      padding: 15px;
+      padding: 12px;
       border-radius: 8px;
       text-align: center;
     }
-    .stat-value { font-size: 20px; font-weight: bold; color: #00a8ff; }
-    .stat-label { color: #aaa; font-size: 11px; margin-top: 5px; }
+    .stat-value { font-size: 18px; font-weight: bold; color: #00a8ff; }
+    .stat-label { color: #aaa; font-size: 10px; margin-top: 5px; }
+    
+    .addons-preview {
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    .addon-item {
+      font-size: 11px;
+      color: #00ff9f;
+      padding: 2px 0;
+    }
     
     .instructions {
       background: #2a2a2a;
@@ -193,17 +242,6 @@
     .howto ol { padding-left: 20px; color: #ccc; }
     .howto li { margin: 10px 0; }
     
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: bold;
-      margin-left: 8px;
-    }
-    .badge.stremio { background: #7e57c2; color: white; }
-    .badge.nuvio { background: #00a8ff; color: white; }
-    
     .footer {
       margin-top: 30px;
       text-align: center;
@@ -225,31 +263,62 @@
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- INFO BOX -->
+    <!-- INFO BOX CON NOVITÀ -->
     <div class="info-box">
-      <h3>🎯 Come funziona</h3>
-      <p>1. Carica il file backup.json di Stremio (da Sidekick o Manager)</p>
-      <p>2. Noi lo convertiamo nel formato esatto di NUVIO</p>
-      <p>3. Scarichi il file e lo ripristini in NUVIO</p>
+      <h3>🎯 NOVITÀ: Preserva i tuoi addons!</h3>
+      <p>1. Carica il backup <strong>Stremio</strong> (da convertire)</p>
+      <p>2. Carica il backup <strong>NUVIO esistente</strong> (per preservare addons)</p>
+      <p>3. Noi uniamo i film di Stremio con i tuoi addons NUVIO</p>
+      <p>4. Scarichi il file e lo ripristini in NUVIO</p>
     </div>
 
-    <!-- Upload area -->
-    <div id="uploadArea" class="upload-area">
-      <div class="upload-icon">📁</div>
-      <div class="upload-text">Clicca per selezionare il backup</div>
+    <!-- SEZIONE BACKUP STREMIO -->
+    <div class="section-title">
+      📁 1. Backup Stremio <span class="badge stremio">obbligatorio</span>
+    </div>
+    
+    <div id="stremioUploadArea" class="upload-area">
+      <div class="upload-icon">🎬</div>
+      <div class="upload-text">Clicca per selezionare il backup Stremio</div>
       <div class="upload-hint">File JSON da Stremio Sidekick o Manager</div>
-      <input type="file" id="fileInput" accept=".json" style="display: none;">
+      <input type="file" id="stremioFileInput" accept=".json" style="display: none;">
     </div>
 
-    <!-- File info -->
-    <div id="fileInfo" class="file-info" style="display: none;">
-      <span class="file-icon">📄</span>
-      <span class="file-name" id="fileName"></span>
-      <span class="file-size" id="fileSize"></span>
+    <div id="stremioFileInfo" class="file-info" style="display: none;">
+      <span class="file-icon">🎬</span>
+      <span class="file-name" id="stremioFileName"></span>
+      <span class="file-size" id="stremioFileSize"></span>
+    </div>
+
+    <!-- SEZIONE BACKUP NUVIO ESISTENTE -->
+    <div class="section-title" style="margin-top: 30px;">
+      ☁️ 2. Backup NUVIO esistente <span class="badge nuvio">opzionale</span>
+    </div>
+    
+    <div id="nuvioUploadArea" class="upload-area small">
+      <div class="upload-icon">📦</div>
+      <div class="upload-text">Clicca per selezionare il tuo backup NUVIO</div>
+      <div class="upload-hint">Serve per preservare addons e impostazioni</div>
+      <input type="file" id="nuvioFileInput" accept=".json" style="display: none;">
+    </div>
+
+    <div id="nuvioFileInfo" class="file-info" style="display: none;">
+      <span class="file-icon">📦</span>
+      <span class="file-name" id="nuvioFileName"></span>
+      <span class="file-size" id="nuvioFileSize"></span>
+    </div>
+
+    <!-- ANTEPRIMA ADDONS (se presenti) -->
+    <div id="addonsPreview" style="display: none; margin-top: 15px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+        <span style="color: #00ff9f; font-size: 13px;">🔌 Addons preservati:</span>
+        <span id="addonsCount" style="color: #fff; font-size: 12px;">0</span>
+      </div>
+      <div id="addonsList" class="addons-preview"></div>
     </div>
 
     <!-- Bottone converti -->
-    <button id="convertBtn" disabled>🔄 Converti per NUVIO</button>
+    <button id="convertBtn" disabled style="margin-top: 20px;">🔄 Converti e Unisci</button>
 
     <!-- Progress bar -->
     <div id="progress" class="progress">
@@ -263,10 +332,9 @@
     <!-- Stats -->
     <div id="stats" style="display: none;">
       <div class="stats">
-        <div class="stat-card"><div class="stat-value" id="statMovies">0</div><div class="stat-label">Film</div></div>
-        <div class="stat-card"><div class="stat-value" id="statSeries">0</div><div class="stat-label">Serie</div></div>
-        <div class="stat-card"><div class="stat-value" id="statProgress">0</div><div class="stat-label">Progressi</div></div>
-        <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Totale</div></div>
+        <div class="stat-card"><div class="stat-value" id="statMovies">0</div><div class="stat-label">Film Stremio</div></div>
+        <div class="stat-card"><div class="stat-value" id="statSeries">0</div><div class="stat-label">Serie Stremio</div></div>
+        <div class="stat-card"><div class="stat-value" id="statAddons">0</div><div class="stat-label">Addons preservati</div></div>
       </div>
     </div>
 
@@ -279,94 +347,209 @@
         <li>Vai su <strong>Impostazioni → Backup e ripristino</strong></li>
         <li>Scegli <strong>"Ripristina da backup"</strong></li>
         <li>Seleziona il file appena scaricato</li>
-        <li><strong>Fatto!</strong> I tuoi film e serie appariranno in NUVIO</li>
+        <li><strong>Fatto!</strong> I tuoi film + i tuoi addons sono preservati</li>
       </ol>
-      <button id="downloadBtn" style="margin-top: 15px;">📥 Scarica backup NUVIO</button>
+      <button id="downloadBtn" style="margin-top: 15px;">📥 Scarica backup NUVIO completo</button>
     </div>
 
     <!-- How to -->
     <div class="howto">
-      <h3>📖 Come ottenere il backup Stremio</h3>
+      <h3>📖 Come ottenere i backup</h3>
       <ol>
-        <li><strong>Stremio Sidekick:</strong> Vai su Libreria → Esporta</li>
-        <li><strong>Stremio Manager (Bestia):</strong> Backup completo</li>
-        <li>Il file avrà estensione .json</li>
+        <li><strong>Backup Stremio:</strong> Usa Sidekick (Libreria → Esporta) o Stremio Manager</li>
+        <li><strong>Backup NUVIO:</strong> In NUVIO → Impostazioni → Backup → Crea backup</li>
+        <li>Carica entrambi qui per unire film Stremio + addons NUVIO</li>
       </ol>
     </div>
 
     <div class="footer">
       <p>🔒 I tuoi dati vengono convertiti localmente • Nessun server intermedio</p>
-      <p>Made for NUVIO community</p>
+      <p>✨ Ora con preservazione addons! Made for NUVIO community</p>
     </div>
   </div>
 
   <script>
-    let selectedFile = null;
+    let stremioFile = null;
+    let nuvioFile = null;
     let convertedData = null;
+    let preservedAddons = [];
 
     // ============================================
-    // UPLOAD AREA
+    // UPLOAD AREA STREMIO
     // ============================================
-    const uploadArea = document.getElementById('uploadArea');
-    const fileInput = document.getElementById('fileInput');
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
-    const convertBtn = document.getElementById('convertBtn');
+    const stremioUploadArea = document.getElementById('stremioUploadArea');
+    const stremioFileInput = document.getElementById('stremioFileInput');
+    const stremioFileInfo = document.getElementById('stremioFileInfo');
+    const stremioFileName = document.getElementById('stremioFileName');
+    const stremioFileSize = document.getElementById('stremioFileSize');
 
-    uploadArea.addEventListener('click', () => fileInput.click());
+    stremioUploadArea.addEventListener('click', () => stremioFileInput.click());
 
-    uploadArea.addEventListener('dragover', (e) => {
+    stremioUploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
-      uploadArea.classList.add('dragover');
+      stremioUploadArea.classList.add('dragover');
     });
 
-    uploadArea.addEventListener('dragleave', () => {
-      uploadArea.classList.remove('dragover');
+    stremioUploadArea.addEventListener('dragleave', () => {
+      stremioUploadArea.classList.remove('dragover');
     });
 
-    uploadArea.addEventListener('drop', (e) => {
+    stremioUploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
-      uploadArea.classList.remove('dragover');
+      stremioUploadArea.classList.remove('dragover');
       const file = e.dataTransfer.files[0];
       if (file && file.type === 'application/json') {
-        handleFileSelect(file);
+        handleStremioFile(file);
       } else {
-        showResult('Per favore seleziona un file JSON valido', 'error');
+        showResult('Per favore seleziona un file JSON valido per Stremio', 'error');
       }
     });
 
-    fileInput.addEventListener('change', (e) => {
+    stremioFileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
-      if (file) handleFileSelect(file);
+      if (file) handleStremioFile(file);
     });
 
-    function handleFileSelect(file) {
-      selectedFile = file;
-      fileName.textContent = file.name;
-      fileSize.textContent = formatFileSize(file.size);
-      fileInfo.style.display = 'flex';
-      convertBtn.disabled = false;
+    function handleStremioFile(file) {
+      stremioFile = file;
+      stremioFileName.textContent = file.name;
+      stremioFileSize.textContent = formatFileSize(file.size);
+      stremioFileInfo.style.display = 'flex';
+      stremioFileInfo.classList.add('success');
+      checkConvertButton();
     }
 
+    // ============================================
+    // UPLOAD AREA NUVIO
+    // ============================================
+    const nuvioUploadArea = document.getElementById('nuvioUploadArea');
+    const nuvioFileInput = document.getElementById('nuvioFileInput');
+    const nuvioFileInfo = document.getElementById('nuvioFileInfo');
+    const nuvioFileName = document.getElementById('nuvioFileName');
+    const nuvioFileSize = document.getElementById('nuvioFileSize');
+
+    nuvioUploadArea.addEventListener('click', () => nuvioFileInput.click());
+
+    nuvioUploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      nuvioUploadArea.classList.add('dragover');
+    });
+
+    nuvioUploadArea.addEventListener('dragleave', () => {
+      nuvioUploadArea.classList.remove('dragover');
+    });
+
+    nuvioUploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      nuvioUploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === 'application/json') {
+        handleNuvioFile(file);
+      } else {
+        showResult('Per favore seleziona un file JSON valido per NUVIO', 'error');
+      }
+    });
+
+    nuvioFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) handleNuvioFile(file);
+    });
+
+    async function handleNuvioFile(file) {
+      nuvioFile = file;
+      nuvioFileName.textContent = file.name;
+      nuvioFileSize.textContent = formatFileSize(file.size);
+      nuvioFileInfo.style.display = 'flex';
+      nuvioFileInfo.classList.add('success');
+      
+      // Estrai e mostra gli addons
+      await extractAddonsFromNuvio(file);
+      
+      checkConvertButton();
+    }
+
+    async function extractAddonsFromNuvio(file) {
+      const formData = new FormData();
+      formData.append('backup', file);
+
+      try {
+        const res = await fetch('/extract-addons', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          preservedAddons = data.addons || [];
+          const addonsCount = preservedAddons.length;
+          
+          if (addonsCount > 0) {
+            document.getElementById('addonsCount').textContent = addonsCount;
+            
+            const addonsList = document.getElementById('addonsList');
+            addonsList.innerHTML = '';
+            
+            preservedAddons.slice(0, 5).forEach(addon => {
+              const div = document.createElement('div');
+              div.className = 'addon-item';
+              div.textContent = `• ${addon.name || addon.id || 'Addon'}`;
+              addonsList.appendChild(div);
+            });
+            
+            if (addonsCount > 5) {
+              const div = document.createElement('div');
+              div.className = 'addon-item';
+              div.textContent = `... e altri ${addonsCount - 5}`;
+              addonsList.appendChild(div);
+            }
+            
+            document.getElementById('addonsPreview').style.display = 'block';
+            showResult(`✅ Trovati ${addonsCount} addons da preservare!`, 'success');
+          }
+        }
+      } catch (err) {
+        console.log('Errore estrazione addons:', err);
+      }
+    }
+
+    // ============================================
+    // UTILS
+    // ============================================
     function formatFileSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
+    function checkConvertButton() {
+      const convertBtn = document.getElementById('convertBtn');
+      convertBtn.disabled = !stremioFile;
+      
+      if (nuvioFile) {
+        convertBtn.textContent = '🔄 Converti e Unisci (con addons)';
+      } else {
+        convertBtn.textContent = '🔄 Converti (senza preservazione addons)';
+      }
+    }
+
     // ============================================
     // CONVERSIONE
     // ============================================
-    convertBtn.addEventListener('click', async () => {
-      if (!selectedFile) return;
+    document.getElementById('convertBtn').addEventListener('click', async () => {
+      if (!stremioFile) return;
 
       const formData = new FormData();
-      formData.append('backup', selectedFile);
+      formData.append('backup', stremioFile);
+      
+      if (nuvioFile) {
+        formData.append('existing', nuvioFile);
+      }
 
+      const convertBtn = document.getElementById('convertBtn');
       convertBtn.disabled = true;
-      convertBtn.textContent = '⏳ Conversione...';
-      showProgress(true, 'Conversione in corso...', 30);
+      convertBtn.textContent = '⏳ Unione in corso...';
+      showProgress(true, 'Unisco film Stremio con addons NUVIO...', 30);
 
       try {
         const res = await fetch('/convert', {
@@ -380,13 +563,18 @@
           convertedData = data.data;
           
           showProgress(false);
-          showResult(data.message || '✅ Conversione completata!', 'success');
+          
+          let message = data.message || '✅ Conversione completata!';
+          if (data.stats.addonsPreserved > 0) {
+            message = `✅ Completato! ${data.stats.addonsPreserved} addons preservati + ${data.stats.movies + data.stats.series} film/serie`;
+          }
+          
+          showResult(message, 'success');
           
           // Mostra stats
           document.getElementById('statMovies').textContent = data.stats.movies || 0;
           document.getElementById('statSeries').textContent = data.stats.series || 0;
-          document.getElementById('statProgress').textContent = data.stats.progress || 0;
-          document.getElementById('statTotal').textContent = data.stats.total || 0;
+          document.getElementById('statAddons').textContent = data.stats.addonsPreserved || 0;
           document.getElementById('stats').style.display = 'block';
           
           // Mostra istruzioni
@@ -400,7 +588,7 @@
         showProgress(false);
         showResult('❌ ' + err.message, 'error');
         convertBtn.disabled = false;
-        convertBtn.textContent = '🔄 Converti per NUVIO';
+        checkConvertButton();
       }
     });
 
@@ -417,14 +605,17 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'nuvio-backup.json';
+      
+      // Nome file personalizzato
+      const date = new Date().toISOString().slice(0,10);
+      a.download = `nuvio-backup-${date}.json`;
       a.click();
       
-      showResult('✅ File scaricato! Segui le istruzioni per ripristinarlo in NUVIO', 'success');
+      showResult('✅ File scaricato! Ora ripristinalo in NUVIO', 'success');
     });
 
     // ============================================
-    // UTILS
+    // PROGRESS E RESULT
     // ============================================
     function showProgress(show, step, percent) {
       const progress = document.getElementById('progress');
