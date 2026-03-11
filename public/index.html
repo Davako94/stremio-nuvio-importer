@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Stremio → NUVIO Converter - Con preservazione addons e sync cloud</title>
+  <title>Stremio → NUVIO Converter - Con preservazione addons</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
@@ -120,27 +120,6 @@
     .badge.nuvio { background: #00a8ff; color: white; }
     .badge.success { background: #00ff9f; color: #000; }
     
-    .input-field {
-      width: 100%;
-      padding: 12px;
-      background: #2a2a2a;
-      border: 1px solid #444;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 14px;
-      margin: 5px 0 15px 0;
-    }
-    .input-field:focus {
-      outline: none;
-      border-color: #00a8ff;
-    }
-    .input-label {
-      color: #ccc;
-      font-size: 13px;
-      margin-bottom: 5px;
-      display: block;
-    }
-    
     button {
       background: linear-gradient(135deg, #00a8ff, #9b59b6);
       color: white;
@@ -160,9 +139,6 @@
     .button-secondary {
       background: #2a2a2a;
       border: 1px solid #444;
-    }
-    .button-secondary:hover:not(:disabled) {
-      background: #3a3a3a;
     }
     
     .progress {
@@ -206,11 +182,6 @@
       border: 1px solid #ffb454;
       color: #ffb454;
     }
-    .result.info {
-      background: rgba(0,168,255,0.1);
-      border: 1px solid #00a8ff;
-      color: #00a8ff;
-    }
     
     .stats {
       display: grid;
@@ -239,20 +210,6 @@
       font-size: 11px;
       color: #00ff9f;
       padding: 2px 0;
-    }
-    
-    .cloud-push-status {
-      background: #2a2a2a;
-      border-radius: 8px;
-      padding: 15px;
-      margin: 15px 0;
-      border-left: 4px solid #ffb454;
-    }
-    .cloud-push-status.success {
-      border-left-color: #00ff9f;
-    }
-    .cloud-push-status.error {
-      border-left-color: #ff6b6b;
     }
     
     .instructions {
@@ -291,23 +248,6 @@
       color: #666;
       font-size: 12px;
     }
-    
-    .checkbox-container {
-      display: flex;
-      align-items: center;
-      margin: 15px 0;
-    }
-    .checkbox-container input {
-      width: 18px;
-      height: 18px;
-      margin-right: 10px;
-      cursor: pointer;
-    }
-    .checkbox-container label {
-      color: #ccc;
-      font-size: 14px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
@@ -325,35 +265,11 @@
 
     <!-- INFO BOX CON NOVITÀ -->
     <div class="info-box">
-      <h3>🎯 NOVITÀ: Preserva addons e sincronizza col cloud!</h3>
+      <h3>🎯 NOVITÀ: Preserva i tuoi addons!</h3>
       <p>1. Carica il backup <strong>Stremio</strong> (da convertire)</p>
       <p>2. Carica il backup <strong>NUVIO esistente</strong> (per preservare addons)</p>
-      <p>3. Inserisci le tue <strong>credenziali Nuvio</strong> per il sync cloud</p>
-      <p>4. Il server caricherà i tuoi film direttamente sul cloud</p>
-      <p>5. Scarichi il file e lo ripristini in NUVIO (opzionale)</p>
-    </div>
-
-    <!-- SEZIONE CREDENZIALI NUVIO (NUOVA!) -->
-    <div class="section-title" style="margin-top: 20px;">
-      🔐 0. Credenziali Nuvio Sync <span class="badge nuvio">consigliato</span>
-    </div>
-    
-    <div style="background: #2a2a2a; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-      <p style="color: #ffb454; font-size: 13px; margin-bottom: 15px;">
-        ⚠️ Inserisci le stesse credenziali che usi per nuvioapp.space. 
-        Il server le userà per caricare i tuoi film sul cloud, così quando attivi il sync non perderai nulla!
-      </p>
-      
-      <label class="input-label">Email Nuvio</label>
-      <input type="email" id="nuvioEmail" class="input-field" placeholder="tua@email.com" value="">
-      
-      <label class="input-label">Password Nuvio</label>
-      <input type="password" id="nuvioPassword" class="input-field" placeholder="••••••••">
-      
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button id="testLoginBtn" class="button-secondary" style="flex: 1; padding: 10px;">🔍 Test Login</button>
-        <button id="saveCredentialsBtn" class="button-secondary" style="flex: 1; padding: 10px;">💾 Salva</button>
-      </div>
+      <p>3. Noi uniamo i film di Stremio con i tuoi addons NUVIO</p>
+      <p>4. Scarichi il file e lo ripristini in NUVIO</p>
     </div>
 
     <!-- SEZIONE BACKUP STREMIO -->
@@ -401,12 +317,6 @@
       <div id="addonsList" class="addons-preview"></div>
     </div>
 
-    <!-- OPZIONI AGGIUNTIVE -->
-    <div class="checkbox-container">
-      <input type="checkbox" id="skipCloudPush" checked>
-      <label for="skipCloudPush">🔵 Salta push cloud (usa solo backup locale)</label>
-    </div>
-
     <!-- Bottone converti -->
     <button id="convertBtn" disabled style="margin-top: 20px;">🔄 Converti e Unisci</button>
 
@@ -419,21 +329,12 @@
     <!-- Result -->
     <div id="result" class="result"></div>
 
-    <!-- Cloud Push Status (dinamico) -->
-    <div id="cloudPushStatus" class="cloud-push-status" style="display: none;">
-      <div id="cloudPushMessage"></div>
-    </div>
-
     <!-- Stats -->
     <div id="stats" style="display: none;">
       <div class="stats">
         <div class="stat-card"><div class="stat-value" id="statMovies">0</div><div class="stat-label">Film Stremio</div></div>
         <div class="stat-card"><div class="stat-value" id="statSeries">0</div><div class="stat-label">Serie Stremio</div></div>
         <div class="stat-card"><div class="stat-value" id="statAddons">0</div><div class="stat-label">Addons preservati</div></div>
-      </div>
-      <div class="stats" style="grid-template-columns: 1fr 1fr; margin-top: 0;">
-        <div class="stat-card"><div class="stat-value" id="statCloudPush">0</div><div class="stat-label">Cloud push</div></div>
-        <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Totale</div></div>
       </div>
     </div>
 
@@ -462,8 +363,8 @@
     </div>
 
     <div class="footer">
-      <p>🔒 I tuoi dati vengono convertiti localmente • Le credenziali sono usate solo per il push cloud</p>
-      <p>✨ Ora con preservazione addons e push cloud! Made for NUVIO community</p>
+      <p>🔒 I tuoi dati vengono convertiti localmente • Nessun server intermedio</p>
+      <p>✨ Ora con preservazione addons! Made for NUVIO community</p>
     </div>
   </div>
 
@@ -613,66 +514,6 @@
     }
 
     // ============================================
-    // TEST LOGIN
-    // ============================================
-    document.getElementById('testLoginBtn').addEventListener('click', async () => {
-      const email = document.getElementById('nuvioEmail').value;
-      const password = document.getElementById('nuvioPassword').value;
-      
-      if (!email || !password) {
-        showResult('❌ Inserisci email e password', 'error');
-        return;
-      }
-      
-      const btn = document.getElementById('testLoginBtn');
-      btn.textContent = '⏳ Test in corso...';
-      btn.disabled = true;
-      
-      try {
-        const res = await fetch('/test-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
-          showResult('✅ Login riuscito!', 'success');
-        } else {
-          showResult('❌ Login fallito: ' + data.message, 'error');
-        }
-      } catch (err) {
-        showResult('❌ Errore di connessione', 'error');
-      } finally {
-        btn.textContent = '🔍 Test Login';
-        btn.disabled = false;
-      }
-    });
-
-    // ============================================
-    // SALVA CREDENZIALI
-    // ============================================
-    document.getElementById('saveCredentialsBtn').addEventListener('click', () => {
-      const email = document.getElementById('nuvioEmail').value;
-      const password = document.getElementById('nuvioPassword').value;
-      
-      if (email && password) {
-        localStorage.setItem('nuvioEmail', email);
-        // Non salviamo la password in localStorage per sicurezza
-        showResult('✅ Email salvata! (La password va reinserita ad ogni sessione)', 'info');
-      } else {
-        showResult('❌ Inserisci almeno l\'email', 'error');
-      }
-    });
-
-    // Carica email salvata
-    const savedEmail = localStorage.getItem('nuvioEmail');
-    if (savedEmail) {
-      document.getElementById('nuvioEmail').value = savedEmail;
-    }
-
-    // ============================================
     // UTILS
     // ============================================
     function formatFileSize(bytes) {
@@ -698,22 +539,11 @@
     document.getElementById('convertBtn').addEventListener('click', async () => {
       if (!stremioFile) return;
 
-      const email = document.getElementById('nuvioEmail').value;
-      const password = document.getElementById('nuvioPassword').value;
-      const skipCloudPush = document.getElementById('skipCloudPush').checked;
-
       const formData = new FormData();
       formData.append('backup', stremioFile);
       
       if (nuvioFile) {
         formData.append('existing', nuvioFile);
-      }
-      
-      // Aggiungi credenziali anche se skipCloudPush è true (tanto il server le ignorerà)
-      if (email && password) {
-        formData.append('email', email);
-        formData.append('password', password);
-        formData.append('skipCloudPush', skipCloudPush ? 'true' : 'false');
       }
 
       const convertBtn = document.getElementById('convertBtn');
@@ -739,37 +569,18 @@
             message = `✅ Completato! ${data.stats.addonsPreserved} addons preservati + ${data.stats.movies + data.stats.series} film/serie`;
           }
           
+          showResult(message, 'success');
+          
           // Mostra stats
           document.getElementById('statMovies').textContent = data.stats.movies || 0;
           document.getElementById('statSeries').textContent = data.stats.series || 0;
           document.getElementById('statAddons').textContent = data.stats.addonsPreserved || 0;
-          document.getElementById('statTotal').textContent = data.stats.total || 0;
-          
-          // Mostra cloud push status se presente
-          if (data.cloudPush) {
-            document.getElementById('statCloudPush').textContent = data.cloudPush.success ? data.cloudPush.count || '✓' : '✗';
-            
-            const cloudStatus = document.getElementById('cloudPushStatus');
-            const cloudMessage = document.getElementById('cloudPushMessage');
-            
-            if (data.cloudPush.success) {
-              cloudStatus.className = 'cloud-push-status success';
-              cloudMessage.textContent = `✅ Cloud push riuscito! ${data.cloudPush.count} film caricati sul cloud. Ora quando attivi il sync non perderai nulla!`;
-            } else {
-              cloudStatus.className = 'cloud-push-status error';
-              cloudMessage.textContent = `❌ Cloud push fallito: ${data.cloudPush.error || 'errore sconosciuto'}. Puoi comunque usare il backup locale.`;
-            }
-            
-            cloudStatus.style.display = 'block';
-          }
-          
           document.getElementById('stats').style.display = 'block';
           
           // Mostra istruzioni
           document.getElementById('instructions').style.display = 'block';
           
           convertBtn.textContent = '✅ Convertito';
-          showResult(message, 'success');
         } else {
           throw new Error(data.error);
         }
