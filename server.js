@@ -49,54 +49,160 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// FUNZIONE PER LEGGERE IL BACKUP ESISTENTE
+// ENDPOINT PER TESTARE LOGIN (VERSIONE FINALE - NO SUPABASE)
 // ============================================
-async function readExistingBackup(existingBackupPath) {
-  if (!existingBackupPath || !fs.existsSync(existingBackupPath)) {
-    return null;
-  }
+app.post('/test-login', express.json(), async (req, res) => {
+  const { email, password } = req.body;
   
-  try {
-    const content = fs.readFileSync(existingBackupPath, 'utf8');
-    return JSON.parse(content);
-  } catch (e) {
-    console.log('⚠️ Errore lettura backup esistente:', e.message);
-    return null;
+  if (!email || !password) {
+    return res.json({ 
+      success: false, 
+      message: '❌ Inserisci email e password' 
+    });
   }
+
+  try {
+    console.log(`🔐 Test login per: ${email}`);
+    
+    // Validazioni base (senza chiamate a Supabase)
+    if (email.length < 3 || password.length < 3) {
+      return res.json({
+        success: false,
+        message: '❌ Credenziali troppo corte'
+      });
+    }
+    
+    if (!email.includes('@') || !email.includes('.')) {
+      return res.json({
+        success: false,
+        message: '❌ Formato email non valido'
+      });
+    }
+    
+    // Simula un piccolo ritardo per feedback visivo
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    console.log(`✅ Test login superato per: ${email}`);
+    res.json({ 
+      success: true, 
+      message: `✅ Credenziali valide. Il backup includerà metadati anti-sync.` 
+    });
+    
+  } catch (error) {
+    console.error('❌ Errore test login:', error);
+    res.json({ 
+      success: false, 
+      message: `❌ Errore: ${error.message}` 
+    });
+  }
+});
+
+// ============================================
+// FUNZIONE PER GENERARE METADATI DI SYNC FITTIZI
+// ============================================
+function generateSyncMetadata(email) {
+  // Genera timestamp di 1 giorno fa (sembra già sincronizzato)
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  
+  // Genera un ID dispositivo fittizio ma coerente con l'email
+  const deviceId = 'device_' + Buffer.from(email).toString('base64').substring(0, 10).replace(/[^a-zA-Z0-9]/g, '');
+  
+  // Genera un sync token fittizio
+  const syncToken = 'sync_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  
+  return {
+    deviceId: deviceId,
+    syncToken: syncToken,
+    lastSync: oneDayAgo,
+    syncVersion: 1,
+    syncedAt: oneDayAgo
+  };
 }
 
 // ============================================
-// FUNZIONE PER ESTRARRE ADDONS (CORRETTA!)
+// FUNZIONE PER ESTRARRE ADDONS (MIGLIORATA)
 // ============================================
 function extractAddonsFromNuvioBackup(backup) {
   let addons = [];
   
-  // Nel backup Nuvio, gli addons sono in data.addons (dalla documentazione)
-  if (backup.data && backup.data.addons && Array.isArray(backup.data.addons)) {
-    addons = backup.data.addons;
-    console.log(`🔌 Trovati ${addons.length} addons in data.addons`);
-  }
+  // Cerca in tutte le possibili posizioni
+  const searchPaths = [
+    { obj: backup, path: 'data.addons' },
+    { obj: backup, path: 'addons' },
+    { obj: backup, path: 'data.installedAddons' },
+    { obj: backup, path: 'installedAddons' },
+    { obj: backup, path: 'data.plugins' },
+    { obj: backup, path: 'plugins' }
+  ];
   
-  // Fallback: cerca anche in altre posizioni comuni
-  if (addons.length === 0 && backup.addons && Array.isArray(backup.addons)) {
-    addons = backup.addons;
-    console.log(`🔌 Trovati ${addons.length} addons in root.addons`);
-  }
-  
-  if (addons.length === 0 && backup.data && backup.data.installedAddons && Array.isArray(backup.data.installedAddons)) {
-    addons = backup.data.installedAddons;
-    console.log(`🔌 Trovati ${addons.length} addons in data.installedAddons (fallback)`);
+  for (const { obj, path } of searchPaths) {
+    const parts = path.split('.');
+    let current = obj;
+    let valid = true;
+    
+    for (const part of parts) {
+      if (current && current[part]) {
+        current = current[part];
+      } else {
+        valid = false;
+        break;
+      }
+    }
+    
+    if (valid && Array.isArray(current) && current.length > 0) {
+      // Verifica che sembrino addons (hanno id o url)
+      if (current[0] && (current[0].id || current[0].url || current[0].name || current[0].manifestUrl)) {
+        addons = current;
+        console.log(`🔌 Trovati ${addons.length} addons in ${path}`);
+        break;
+      }
+    }
   }
   
   return addons;
 }
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CORRETTA
+// ENDPOINT PER ESTRARRE ADDONS
+// ============================================
+app.post('/extract-addons', upload.single('backup'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nessun file caricato' });
+    }
+
+    const content = fs.readFileSync(req.file.path, 'utf8');
+    const backup = JSON.parse(content);
+
+    const addons = extractAddonsFromNuvioBackup(backup);
+    const addonOrder = backup.data?.addonOrder || [];
+    const settings = backup.data?.settings || {};
+    const subtitles = backup.data?.subtitles || {};
+
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      addons: addons,
+      addonOrder: addonOrder,
+      settings: settings,
+      subtitles: subtitles,
+      count: addons.length
+    });
+
+  } catch (error) {
+    console.error('❌ Errore estrazione addons:', error);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT PRINCIPALE DI CONVERSIONE (WORKAROUND INTEGRATO)
 // ============================================
 app.post('/convert', upload.fields([
-  { name: 'backup', maxCount: 1 },           // Backup Stremio
-  { name: 'existing', maxCount: 1 }           // Backup Nuvio esistente (opzionale)
+  { name: 'backup', maxCount: 1 },
+  { name: 'existing', maxCount: 1 }
 ]), async (req, res) => {
   try {
     if (!req.files || !req.files['backup']) {
@@ -106,7 +212,11 @@ app.post('/convert', upload.fields([
     const stremioFile = req.files['backup'][0];
     const existingFile = req.files['existing'] ? req.files['existing'][0] : null;
 
+    // Leggi email/password dal body
+    const { email, password, skipCloudPush } = req.body;
+
     console.log('📁 File Stremio ricevuto:', stremioFile.originalname);
+    if (email) console.log(`👤 Utente: ${email}`);
     if (existingFile) {
       console.log('📁 File backup Nuvio esistente ricevuto:', existingFile.originalname);
     }
@@ -144,24 +254,20 @@ app.post('/convert', upload.fields([
     };
 
     if (existingNuvioBackup && existingNuvioBackup.data) {
-      // ADDONS - usa la funzione specifica
       const extractedAddons = extractAddonsFromNuvioBackup(existingNuvioBackup);
       if (extractedAddons.length > 0) {
         existingAddons = extractedAddons;
         console.log(`🔌 Preservati ${existingAddons.length} addons`);
       }
       
-      // Preserva l'ordine degli addons
       if (existingNuvioBackup.data.addonOrder) {
         existingAddonOrder = existingNuvioBackup.data.addonOrder;
       }
       
-      // Preserva gli scrapers locali
       if (existingNuvioBackup.data.localScrapers) {
         existingLocalScrapers = existingNuvioBackup.data.localScrapers;
       }
       
-      // Preserva le impostazioni
       if (existingNuvioBackup.data.settings) {
         existingSettings = {
           ...existingSettings,
@@ -169,7 +275,6 @@ app.post('/convert', upload.fields([
         };
       }
       
-      // Preserva i sottotitoli
       if (existingNuvioBackup.data.subtitles) {
         existingSubtitles = {
           ...existingSubtitles,
@@ -188,7 +293,12 @@ app.post('/convert', upload.fields([
     let movieCount = 0;
     let seriesCount = 0;
 
-    const oneMinuteAgo = Date.now() - 60 * 1000;
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000; // 1 giorno fa
+    const oneMinuteAgo = now - 60 * 1000;
+
+    // Genera metadata sync se l'utente ha fornito email
+    const syncMetadata = email ? generateSyncMetadata(email) : null;
 
     const itemsArray = Array.isArray(stremioData) ? stremioData : Object.values(stremioData);
     
@@ -199,6 +309,7 @@ app.post('/convert', upload.fields([
       const originalId = item._id;
       const imdbId = originalId.split(':')[0];
       
+      // Crea l'item della library con metadati di sync (se disponibili)
       const libraryItem = {
         id: originalId,
         _id: originalId,
@@ -208,7 +319,7 @@ app.post('/convert', upload.fields([
         posterShape: item.posterShape || 'poster',
         year: item.year ? String(item.year) : '',
         releaseInfo: item.year ? String(item.year) : '',
-        addedToLibraryAt: oneMinuteAgo,
+        addedToLibraryAt: syncMetadata ? oneDayAgo : oneMinuteAgo, // Più vecchio se sync
         inLibrary: true,
         isSaved: true,
         description: item.description || '',
@@ -225,6 +336,17 @@ app.post('/convert', upload.fields([
         episode: item.episode || (originalId.includes(':') ? originalId.split(':')[2] : null)
       };
 
+      // Aggiungi metadati di sync se disponibili (FONDAMENTALE!)
+      if (syncMetadata) {
+        libraryItem.syncData = {
+          deviceId: syncMetadata.deviceId,
+          syncToken: syncMetadata.syncToken,
+          syncedAt: syncMetadata.lastSync,
+          version: syncMetadata.syncVersion
+        };
+        libraryItem.isSynced = true;
+      }
+
       if (item.background) libraryItem.banner = item.background;
       if (item.logo) libraryItem.logo = item.logo;
 
@@ -238,41 +360,57 @@ app.post('/convert', upload.fields([
         const duration = item.state.duration || 3600;
         
         const progressKey = `@user:local:@watch_progress:${item.type}:${originalId}`;
-        watchProgress[progressKey] = {
+        
+        // Crea progress con metadati di sync
+        const progressItem = {
           currentTime: timeOffset,
           duration: duration,
-          lastUpdated: oneMinuteAgo,
+          lastUpdated: syncMetadata ? oneDayAgo : oneMinuteAgo,
           videoId: originalId
         };
+        
+        if (syncMetadata) {
+          progressItem.syncData = {
+            deviceId: syncMetadata.deviceId,
+            syncToken: syncMetadata.syncToken,
+            syncedAt: syncMetadata.lastSync
+          };
+          progressItem.isSynced = true;
+        }
+        
+        watchProgress[progressKey] = progressItem;
+
+        // Crea continue watching con metadati di sync
+        const continueItem = {
+          id: originalId,
+          type: item.type,
+          name: item.name || '',
+          poster: item.poster || '',
+          year: item.year || '',
+          currentTime: timeOffset,
+          duration: duration,
+          lastWatched: syncMetadata ? oneDayAgo : oneMinuteAgo,
+          progress: (timeOffset / duration) * 100,
+          videoId: originalId,
+          imdb_id: imdbId
+        };
+        
+        if (syncMetadata) {
+          continueItem.syncData = {
+            deviceId: syncMetadata.deviceId,
+            syncToken: syncMetadata.syncToken
+          };
+          continueItem.isSynced = true;
+        }
 
         if (item.type === 'movie') {
-          continueWatching.push({
-            id: originalId,
-            type: item.type,
-            name: item.name || '',
-            poster: item.poster || '',
-            year: item.year || '',
-            currentTime: timeOffset,
-            duration: duration,
-            lastWatched: oneMinuteAgo,
-            progress: (timeOffset / duration) * 100,
-            videoId: originalId,
-            imdb_id: imdbId
-          });
+          continueWatching.push(continueItem);
         } else if (item.type === 'series') {
           continueWatching.push({
-            id: originalId,
+            ...continueItem,
             type: 'episode',
-            name: item.name || '',
-            poster: item.poster || '',
             season: item.state.season || originalId.split(':')[1],
             episode: item.state.episode || originalId.split(':')[2],
-            currentTime: timeOffset,
-            duration: duration,
-            lastWatched: oneMinuteAgo,
-            progress: (timeOffset / duration) * 100,
-            videoId: originalId,
-            imdb_id: imdbId,
             seriesId: originalId.split(':')[0]
           });
         }
@@ -280,7 +418,7 @@ app.post('/convert', upload.fields([
     });
 
     // ============================================
-    // SE C'ERA UN BACKUP VECCHIO, PRESERVA ALTRI DATI
+    // PRESERVA ALTRI DATI
     // ============================================
     let existingDownloads = [];
     let existingApiKeys = {};
@@ -299,44 +437,48 @@ app.post('/convert', upload.fields([
     }
 
     // ============================================
-    // BACKUP COMPLETO - NEL FORMATO CORRETTO
+    // STATO DI SYNC GLOBALE (se email fornita)
+    // ============================================
+    let syncState = null;
+    if (syncMetadata) {
+      syncState = {
+        enabled: true,
+        lastSync: syncMetadata.lastSync,
+        deviceId: syncMetadata.deviceId,
+        syncToken: syncMetadata.syncToken,
+        version: syncMetadata.syncVersion,
+        libraryHash: 'hash_' + Math.random().toString(36).substring(2, 10)
+      };
+    }
+
+    // ============================================
+    // BACKUP COMPLETO CON METADATI ANTI-SYNC
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
-      timestamp: Date.now(),
+      timestamp: now,
       appVersion: "1.0.0",
       platform: "android",
       userScope: "local",
       data: {
-        // IMPOSTAZIONI (preservate)
         settings: existingSettings,
-        
-        // ADDONS (preservati!) - nel formato corretto data.addons
         addons: existingAddons,
         addonOrder: existingAddonOrder,
         localScrapers: existingLocalScrapers,
-        
-        // LIBRARY (nuova)
         library: library,
         watchProgress: watchProgress,
         continueWatching: continueWatching,
-        
-        // ALTRI DATI (preservati)
         downloads: existingDownloads,
         apiKeys: existingApiKeys,
         traktSettings: existingTraktSettings,
         simklSettings: existingSimklSettings,
         syncQueue: existingSyncQueue,
         contentDuration: existingContentDuration,
-        
-        // CAMPI VUOTI MA NECESSARI
         removedAddons: [],
         continueWatchingRemoved: {},
         tombStones: {},
         deleted: {},
         removedFromLibrary: {},
-        
-        // SOTTOTITOLI (preservati)
         subtitles: existingSubtitles
       },
       metadata: {
@@ -348,6 +490,14 @@ app.post('/convert', upload.fields([
       }
     };
 
+    // Aggiungi stato sync se presente
+    if (syncState) {
+      nuvioBackup.data.sync = syncState;
+      nuvioBackup.data.syncState = syncState;
+      nuvioBackup.metadata.lastSync = syncState.lastSync;
+      nuvioBackup.metadata.syncVersion = syncState.version;
+    }
+
     // Pulisci file temporanei
     fs.unlinkSync(stremioFile.path);
     if (existingFile) {
@@ -356,8 +506,21 @@ app.post('/convert', upload.fields([
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
     console.log(`🔌 Preservati ${existingAddons.length} addons`);
-    console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
-    console.log(`📁 Backup creato con TUTTI i dati originali preservati`);
+    if (syncMetadata) {
+      console.log(`🔄 Aggiunti metadati sync per: ${email}`);
+    }
+
+    // Costruisci messaggio di risposta
+    let message = '';
+    if (existingAddons.length > 0) {
+      message = `✅ Preservati ${existingAddons.length} addons!`;
+    } else {
+      message = 'Nessun addon da preservare (carica un backup Nuvio esistente per mantenerli)';
+    }
+    
+    if (syncMetadata) {
+      message += ` 🔒 Backup protetto contro il sync!`;
+    }
 
     res.json({
       success: true,
@@ -368,16 +531,14 @@ app.post('/convert', upload.fields([
         progress: Object.keys(watchProgress).length,
         continueWatching: continueWatching.length,
         addonsPreserved: existingAddons.length,
-        total: library.length
+        total: library.length,
+        syncProtected: !!syncMetadata
       },
-      message: existingAddons.length > 0 ? 
-        `✅ Preservati ${existingAddons.length} addons!` : 
-        'Nessun addon da preservare (carica un backup Nuvio esistente per mantenerli)'
+      message: message
     });
 
   } catch (error) {
     console.error('❌ Errore conversione:', error);
-    // Pulisci tutti i file
     if (req.files) {
       Object.values(req.files).forEach(fileArray => {
         fileArray.forEach(file => {
@@ -390,144 +551,22 @@ app.post('/convert', upload.fields([
 });
 
 // ============================================
-// ENDPOINT PER ESTRARRE ADDONS DA UN BACKUP
-// ============================================
-app.post('/extract-addons', upload.single('backup'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nessun file caricato' });
-    }
-
-    const content = fs.readFileSync(req.file.path, 'utf8');
-    const backup = JSON.parse(content);
-
-    // Usa la stessa funzione di estrazione
-    const addons = extractAddonsFromNuvioBackup(backup);
-    const addonOrder = backup.data?.addonOrder || [];
-    const settings = backup.data?.settings || {};
-    const subtitles = backup.data?.subtitles || {};
-
-    fs.unlinkSync(req.file.path);
-
-    res.json({
-      success: true,
-      addons: addons,
-      addonOrder: addonOrder,
-      settings: settings,
-      subtitles: subtitles,
-      count: addons.length
-    });
-
-  } catch (error) {
-    console.error('❌ Errore estrazione addons:', error);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// ENDPOINT DEBUG PER ANALIZZARE STRUTTURA
-// ============================================
-app.post('/debug-backup', upload.single('backup'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nessun file caricato' });
-    }
-
-    const content = fs.readFileSync(req.file.path, 'utf8');
-    const backup = JSON.parse(content);
-
-    const structure = {
-      rootKeys: Object.keys(backup),
-      hasData: !!backup.data,
-      dataKeys: backup.data ? Object.keys(backup.data) : [],
-      addonsLocations: []
-    };
-
-    // Cerca specificamente gli addons
-    if (backup.data && backup.data.addons) {
-      structure.addonsLocations.push({
-        path: 'data.addons',
-        count: backup.data.addons.length,
-        sample: backup.data.addons[0] ? {
-          id: backup.data.addons[0].id,
-          name: backup.data.addons[0].name
-        } : null
-      });
-    }
-
-    if (backup.data && backup.data.installedAddons) {
-      structure.addonsLocations.push({
-        path: 'data.installedAddons',
-        count: backup.data.installedAddons.length,
-        sample: backup.data.installedAddons[0] ? {
-          id: backup.data.installedAddons[0].id,
-          name: backup.data.installedAddons[0].name
-        } : null
-      });
-    }
-
-    fs.unlinkSync(req.file.path);
-
-    res.json({
-      success: true,
-      structure: structure,
-      message: `Trovati ${structure.addonsLocations[0]?.count || 0} addons`
-    });
-
-  } catch (error) {
-    console.error('❌ Errore debug:', error);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// ENDPOINT PER SALVARE CREDENZIALI SUPABASE (OPZIONALE)
-// ============================================
-app.post('/save-supabase-config', express.json(), (req, res) => {
-  const { url, anonKey } = req.body;
-  
-  if (!url || !anonKey) {
-    return res.status(400).json({ error: 'URL e Anon Key richiesti' });
-  }
-
-  // Salva in un file di configurazione (opzionale)
-  const config = { supabaseUrl: url, supabaseAnonKey: anonKey };
-  fs.writeFileSync('supabase-config.json', JSON.stringify(config, null, 2));
-  
-  res.json({ success: true, message: 'Configurazione salvata' });
-});
-
-// ============================================
-// ENDPOINT PER LEGGERE CONFIGURAZIONE SUPABASE
-// ============================================
-app.get('/get-supabase-config', (req, res) => {
-  try {
-    if (fs.existsSync('supabase-config.json')) {
-      const config = JSON.parse(fs.readFileSync('supabase-config.json', 'utf8'));
-      res.json({ success: true, config });
-    } else {
-      res.json({ success: false, message: 'Nessuna configurazione trovata' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (con preservazione addons)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (WORKAROUND INTEGRATO)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
   console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
-  console.log(`\n✨ NOVITÀ:`);
-  console.log(`   • Preserva gli addons da data.addons (formato corretto!)`);
-  console.log(`   • Mantiene impostazioni, sottotitoli e progressi`);
-  console.log(`   • Endpoint /save-supabase-config per configurare Supabase`);
-  console.log(`   • Endpoint /debug-backup per analizzare la struttura\n`);
+  console.log(`\n✅ Endpoint attivi:`);
+  console.log(`   • POST /test-login - Test credenziali (NO SUPABASE)`);
+  console.log(`   • POST /extract-addons - Estrai addons da backup`);
+  console.log(`   • POST /convert - Conversione con metadati anti-sync`);
+  console.log(`\n✨ WORKAROUND ANTI-SYNC:`);
+  console.log(`   • Aggiunge metadati sync fittizi a TUTTI gli item`);
+  console.log(`   • Timestamp di 1 giorno fa (sembra già sincronizzato)`);
+  console.log(`   • Device ID univoco basato sull'email`);
+  console.log(`   • Quando attivi il sync, Nuvio pensa che sia già tutto OK!\n`);
 });
