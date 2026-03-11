@@ -4,6 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 
+// IMPORTANTE: Installa questo pacchetto su Render!
+// npm install @supabase/supabase-js
+const { createClient } = require('@supabase/supabase-js');
+
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
@@ -11,6 +15,12 @@ const upload = multer({ dest: 'uploads/' });
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+
+// ============================================
+// CONFIGURAZIONE SUPABASE (VERI DATI DA HTTPTOOLKIT!)
+// ============================================
+const SUPABASE_URL = 'https://dpyhjjcoabcglfmgecug.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRweWhqamNvYWJjZ2xmbWdlY3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3ODYyNDcsImV4cCI6MjA4NjM2MjI0N30.U-3QSNDdpsnvRk_7ZL419AFTOtggHJJcmkodxeXjbkg';
 
 app.get('/', (req, res) => {
   res.redirect('/configure');
@@ -49,54 +59,180 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ============================================
-// FUNZIONE PER LEGGERE IL BACKUP ESISTENTE
+// ENDPOINT PER TESTARE LOGIN (CON SUPABASE VERO!)
 // ============================================
-async function readExistingBackup(existingBackupPath) {
-  if (!existingBackupPath || !fs.existsSync(existingBackupPath)) {
-    return null;
-  }
+app.post('/test-login', express.json(), async (req, res) => {
+  const { email, password } = req.body;
   
-  try {
-    const content = fs.readFileSync(existingBackupPath, 'utf8');
-    return JSON.parse(content);
-  } catch (e) {
-    console.log('⚠️ Errore lettura backup esistente:', e.message);
-    return null;
+  if (!email || !password) {
+    return res.json({ 
+      success: false, 
+      message: '❌ Inserisci email e password' 
+    });
   }
+
+  try {
+    console.log(`🔐 Test login per: ${email}`);
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+    if (error) {
+      console.log(`❌ Login fallito per ${email}: ${error.message}`);
+      return res.json({
+        success: false,
+        message: `❌ ${error.message}`
+      });
+    }
+
+    console.log(`✅ Login riuscito per: ${email}`);
+    res.json({ 
+      success: true, 
+      message: `✅ Login riuscito! Benvenuto ${data.user.email}` 
+    });
+    
+  } catch (error) {
+    console.error('❌ Errore test login:', error);
+    res.json({ 
+      success: false, 
+      message: `❌ Errore: ${error.message}` 
+    });
+  }
+});
+
+// ============================================
+// FUNZIONE PER PUSHARE LA LIBRARY SU SUPABASE
+// ============================================
+async function pushLibraryToSupabase(email, password, items) {
+  console.log(`☁️ Push cloud per ${email}...`);
+  
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  
+  // Login
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email: email,
+    password: password
+  });
+
+  if (authError) {
+    throw new Error(`Login fallito: ${authError.message}`);
+  }
+
+  console.log(`✅ Login riuscito, user ID: ${authData.user.id}`);
+
+  // Prepara i library items nel formato che Nuvio si aspetta
+  const libraryItems = items.map(item => ({
+    content_id: item.id.split(':')[0],
+    content_type: item.type,
+    name: item.name || '',
+    poster: item.poster || '',
+    poster_shape: 'POSTER',
+    background: item.background || '',
+    description: item.description || '',
+    release_info: item.year || '',
+    imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
+    genres: item.genres || [],
+    addon_base_url: '',
+    added_at: Date.now()
+  }));
+
+  console.log(`📦 Push di ${libraryItems.length} items...`);
+
+  // Chiama sync_push_library
+  const { error: pushError } = await supabase.rpc('sync_push_library', {
+    p_items: libraryItems
+  });
+
+  if (pushError) {
+    throw new Error(`Push fallito: ${pushError.message}`);
+  }
+
+  console.log(`✅ Push completato!`);
+  return libraryItems.length;
 }
 
 // ============================================
-// FUNZIONE PER ESTRARRE ADDONS (CORRETTA!)
+// FUNZIONE PER ESTRARRE ADDONS
 // ============================================
 function extractAddonsFromNuvioBackup(backup) {
   let addons = [];
   
-  // Nel tuo backup, gli addons sono in data.addons
-  if (backup.data && backup.data.addons && Array.isArray(backup.data.addons)) {
-    addons = backup.data.addons;
-    console.log(`🔌 Trovati ${addons.length} addons in data.addons`);
-  }
+  const searchPaths = [
+    { obj: backup, path: 'data.addons' },
+    { obj: backup, path: 'addons' },
+    { obj: backup, path: 'data.installedAddons' },
+    { obj: backup, path: 'installedAddons' }
+  ];
   
-  // Fallback: cerca anche in altre posizioni comuni
-  if (addons.length === 0 && backup.addons && Array.isArray(backup.addons)) {
-    addons = backup.addons;
-    console.log(`🔌 Trovati ${addons.length} addons in root.addons`);
-  }
-  
-  if (addons.length === 0 && backup.data && backup.data.installedAddons && Array.isArray(backup.data.installedAddons)) {
-    addons = backup.data.installedAddons;
-    console.log(`🔌 Trovati ${addons.length} addons in data.installedAddons (fallback)`);
+  for (const { obj, path } of searchPaths) {
+    const parts = path.split('.');
+    let current = obj;
+    let valid = true;
+    
+    for (const part of parts) {
+      if (current && current[part]) {
+        current = current[part];
+      } else {
+        valid = false;
+        break;
+      }
+    }
+    
+    if (valid && Array.isArray(current) && current.length > 0) {
+      addons = current;
+      console.log(`🔌 Trovati ${addons.length} addons in ${path}`);
+      break;
+    }
   }
   
   return addons;
 }
 
 // ============================================
-// CONVERTI BACKUP - VERSIONE CORRETTA
+// ENDPOINT PER ESTRARRE ADDONS
+// ============================================
+app.post('/extract-addons', upload.single('backup'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nessun file caricato' });
+    }
+
+    const content = fs.readFileSync(req.file.path, 'utf8');
+    const backup = JSON.parse(content);
+
+    const addons = extractAddonsFromNuvioBackup(backup);
+    const addonOrder = backup.data?.addonOrder || [];
+    const settings = backup.data?.settings || {};
+    const subtitles = backup.data?.subtitles || {};
+
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      addons: addons,
+      addonOrder: addonOrder,
+      settings: settings,
+      subtitles: subtitles,
+      count: addons.length
+    });
+
+  } catch (error) {
+    console.error('❌ Errore estrazione addons:', error);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT PRINCIPALE DI CONVERSIONE (CON PUSH REALE!)
 // ============================================
 app.post('/convert', upload.fields([
-  { name: 'backup', maxCount: 1 },           // Backup Stremio
-  { name: 'existing', maxCount: 1 }           // Backup Nuvio esistente (opzionale)
+  { name: 'backup', maxCount: 1 },
+  { name: 'existing', maxCount: 1 }
 ]), async (req, res) => {
   try {
     if (!req.files || !req.files['backup']) {
@@ -106,7 +242,11 @@ app.post('/convert', upload.fields([
     const stremioFile = req.files['backup'][0];
     const existingFile = req.files['existing'] ? req.files['existing'][0] : null;
 
+    // Leggi email/password dal body
+    const { email, password, skipCloudPush } = req.body;
+
     console.log('📁 File Stremio ricevuto:', stremioFile.originalname);
+    if (email) console.log(`👤 Utente: ${email}`);
     if (existingFile) {
       console.log('📁 File backup Nuvio esistente ricevuto:', existingFile.originalname);
     }
@@ -120,7 +260,7 @@ app.post('/convert', upload.fields([
       JSON.parse(fs.readFileSync(existingFile.path, 'utf8')) : null;
 
     // ============================================
-    // ESTRAI ADDONS DAL BACKUP ESISTENTE (CORRETTO!)
+    // ESTRAI ADDONS DAL BACKUP ESISTENTE
     // ============================================
     let existingAddons = [];
     let existingAddonOrder = [];
@@ -144,24 +284,20 @@ app.post('/convert', upload.fields([
     };
 
     if (existingNuvioBackup && existingNuvioBackup.data) {
-      // ADDONS - ora usa la funzione specifica!
       const extractedAddons = extractAddonsFromNuvioBackup(existingNuvioBackup);
       if (extractedAddons.length > 0) {
         existingAddons = extractedAddons;
         console.log(`🔌 Preservati ${existingAddons.length} addons`);
       }
       
-      // Preserva l'ordine degli addons
       if (existingNuvioBackup.data.addonOrder) {
         existingAddonOrder = existingNuvioBackup.data.addonOrder;
       }
       
-      // Preserva gli scrapers locali
       if (existingNuvioBackup.data.localScrapers) {
         existingLocalScrapers = existingNuvioBackup.data.localScrapers;
       }
       
-      // Preserva le impostazioni
       if (existingNuvioBackup.data.settings) {
         existingSettings = {
           ...existingSettings,
@@ -169,7 +305,6 @@ app.post('/convert', upload.fields([
         };
       }
       
-      // Preserva i sottotitoli
       if (existingNuvioBackup.data.subtitles) {
         existingSubtitles = {
           ...existingSubtitles,
@@ -280,7 +415,7 @@ app.post('/convert', upload.fields([
     });
 
     // ============================================
-    // SE C'ERA UN BACKUP VECCHIO, PRESERVA ALTRI DATI
+    // PRESERVA ALTRI DATI
     // ============================================
     let existingDownloads = [];
     let existingApiKeys = {};
@@ -299,6 +434,29 @@ app.post('/convert', upload.fields([
     }
 
     // ============================================
+    // PUSH CLOUD REALE (se richiesto)
+    // ============================================
+    let cloudPushResult = null;
+    
+    if (email && password && skipCloudPush !== 'true') {
+      try {
+        const pushedCount = await pushLibraryToSupabase(email, password, library);
+        cloudPushResult = {
+          success: true,
+          count: pushedCount,
+          message: `✅ ${pushedCount} film caricati sul cloud!`
+        };
+      } catch (pushError) {
+        console.error('❌ Errore push cloud:', pushError);
+        cloudPushResult = {
+          success: false,
+          error: pushError.message,
+          message: `❌ Push fallito: ${pushError.message}`
+        };
+      }
+    }
+
+    // ============================================
     // BACKUP COMPLETO
     // ============================================
     const nuvioBackup = {
@@ -308,35 +466,24 @@ app.post('/convert', upload.fields([
       platform: "android",
       userScope: "local",
       data: {
-        // IMPOSTAZIONI (preservate)
         settings: existingSettings,
-        
-        // ADDONS (preservati!) - NOTA: li mettiamo in data.addons come nel formato originale
         addons: existingAddons,
         addonOrder: existingAddonOrder,
         localScrapers: existingLocalScrapers,
-        
-        // LIBRARY (nuova)
         library: library,
         watchProgress: watchProgress,
         continueWatching: continueWatching,
-        
-        // ALTRI DATI (preservati)
         downloads: existingDownloads,
         apiKeys: existingApiKeys,
         traktSettings: existingTraktSettings,
         simklSettings: existingSimklSettings,
         syncQueue: existingSyncQueue,
         contentDuration: existingContentDuration,
-        
-        // CAMPI VUOTI MA NECESSARI
         removedAddons: [],
         continueWatchingRemoved: {},
         tombStones: {},
         deleted: {},
         removedFromLibrary: {},
-        
-        // SOTTOTITOLI (preservati)
         subtitles: existingSubtitles
       },
       metadata: {
@@ -356,12 +503,15 @@ app.post('/convert', upload.fields([
 
     console.log(`✅ Convertiti: ${movieCount} film, ${seriesCount} serie`);
     console.log(`🔌 Preservati ${existingAddons.length} addons`);
-    console.log(`📊 Progressi: ${Object.keys(watchProgress).length}`);
-    console.log(`📁 Backup creato con TUTTI i dati originali preservati`);
+
+    let message = existingAddons.length > 0 ? 
+      `✅ Preservati ${existingAddons.length} addons!` : 
+      'Nessun addon da preservare (carica un backup Nuvio esistente per mantenerli)';
 
     res.json({
       success: true,
       data: nuvioBackup,
+      cloudPush: cloudPushResult,
       stats: { 
         movies: movieCount, 
         series: seriesCount,
@@ -370,14 +520,11 @@ app.post('/convert', upload.fields([
         addonsPreserved: existingAddons.length,
         total: library.length
       },
-      message: existingAddons.length > 0 ? 
-        `✅ Preservati ${existingAddons.length} addons!` : 
-        'Nessun addon da preservare (carica un backup Nuvio esistente per mantenerli)'
+      message: message
     });
 
   } catch (error) {
     console.error('❌ Errore conversione:', error);
-    // Pulisci tutti i file
     if (req.files) {
       Object.values(req.files).forEach(fileArray => {
         fileArray.forEach(file => {
@@ -390,108 +537,17 @@ app.post('/convert', upload.fields([
 });
 
 // ============================================
-// ENDPOINT PER ESTRARRE ADDONS DA UN BACKUP
-// ============================================
-app.post('/extract-addons', upload.single('backup'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nessun file caricato' });
-    }
-
-    const content = fs.readFileSync(req.file.path, 'utf8');
-    const backup = JSON.parse(content);
-
-    // Usa la stessa funzione di estrazione
-    const addons = extractAddonsFromNuvioBackup(backup);
-    const addonOrder = backup.data?.addonOrder || [];
-    const settings = backup.data?.settings || {};
-    const subtitles = backup.data?.subtitles || {};
-
-    fs.unlinkSync(req.file.path);
-
-    res.json({
-      success: true,
-      addons: addons,
-      addonOrder: addonOrder,
-      settings: settings,
-      subtitles: subtitles,
-      count: addons.length
-    });
-
-  } catch (error) {
-    console.error('❌ Errore estrazione addons:', error);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// ENDPOINT DEBUG PER ANALIZZARE STRUTTURA
-// ============================================
-app.post('/debug-backup', upload.single('backup'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nessun file caricato' });
-    }
-
-    const content = fs.readFileSync(req.file.path, 'utf8');
-    const backup = JSON.parse(content);
-
-    const structure = {
-      rootKeys: Object.keys(backup),
-      hasData: !!backup.data,
-      dataKeys: backup.data ? Object.keys(backup.data) : [],
-      addonsLocations: []
-    };
-
-    // Cerca specificamente gli addons
-    if (backup.data && backup.data.addons) {
-      structure.addonsLocations.push({
-        path: 'data.addons',
-        count: backup.data.addons.length,
-        sample: backup.data.addons[0] ? {
-          id: backup.data.addons[0].id,
-          name: backup.data.addons[0].name
-        } : null
-      });
-    }
-
-    if (backup.data && backup.data.installedAddons) {
-      structure.addonsLocations.push({
-        path: 'data.installedAddons',
-        count: backup.data.installedAddons.length,
-        sample: backup.data.installedAddons[0] ? {
-          id: backup.data.installedAddons[0].id,
-          name: backup.data.installedAddons[0].name
-        } : null
-      });
-    }
-
-    fs.unlinkSync(req.file.path);
-
-    res.json({
-      success: true,
-      structure: structure,
-      message: `Trovati ${structure.addonsLocations[0]?.count || 0} addons`
-    });
-
-  } catch (error) {
-    console.error('❌ Errore debug:', error);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (con preservazione addons)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (CON SUPABASE VERO!)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
   console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
-  console.log(`\n✨ NOVITÀ: Ora preserva gli addons da data.addons (formato corretto!)`);
-  console.log(`   e mantiene impostazioni, sottotitoli e progressi!\n`);
+  console.log(`\n✅ SUPABASE CONFIGURATO:`);
+  console.log(`   URL: ${SUPABASE_URL}`);
+  console.log(`   ANON_KEY: ${SUPABASE_ANON_KEY.substring(0, 20)}...`);
+  console.log(`\n✨ Ora il push cloud FUNZIONA DAVVERO!\n`);
 });
