@@ -1,594 +1,428 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Stremio → NUVIO Converter - Con preservazione addons</title>
+  <title>Stremio → NUVIO Converter</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0a0a;
-      color: #fff;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+      background: #0a0a0a; color: #fff; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
     }
-    .container {
-      max-width: 600px;
-      width: 100%;
-      background: #1a1a1a;
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-    }
+    .container { max-width: 620px; width: 100%; background: #1a1a1a; border-radius: 20px; padding: 40px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
     .logo-container { text-align: center; margin-bottom: 20px; }
-    .logo {
-      max-width: 120px;
-      max-height: 120px;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #00a8ff, #9b59b6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-align: center;
-    }
-    .subtitle {
-      color: #aaa;
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    
-    .info-box {
-      background: #2a2a2a;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 30px;
-      border-left: 4px solid #00a8ff;
-    }
-    .info-box h3 {
-      color: #00a8ff;
-      margin-bottom: 10px;
-    }
-    .info-box p {
-      color: #ccc;
-      line-height: 1.5;
-    }
-    
-    .section-title {
-      color: #fff;
-      font-size: 18px;
-      margin: 20px 0 10px 0;
-      font-weight: 600;
-    }
-    
-    .upload-area {
-      border: 2px dashed #444;
-      border-radius: 12px;
-      padding: 30px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s;
-      margin: 10px 0;
-    }
-    .upload-area:hover {
-      border-color: #00a8ff;
-      background: rgba(0,168,255,0.05);
-    }
-    .upload-area.dragover {
-      border-color: #00a8ff;
-      background: rgba(0,168,255,0.1);
-    }
-    .upload-area.small {
-      padding: 20px;
-    }
-    .upload-icon { font-size: 32px; margin-bottom: 10px; }
-    .upload-text { color: #ccc; font-size: 14px; }
-    .upload-hint { color: #888; font-size: 12px; margin-top: 5px; }
-    
-    .file-info {
-      background: #2a2a2a;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .file-info.success {
-      border-left: 4px solid #00ff9f;
-    }
-    .file-icon { font-size: 20px; }
-    .file-name { flex: 1; font-weight: 500; color: #00a8ff; font-size: 14px; }
+    .logo { max-width: 100px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    h1 { font-size: 26px; margin-bottom: 8px; background: linear-gradient(135deg, #00a8ff, #9b59b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; }
+    .subtitle { color: #aaa; text-align: center; margin-bottom: 28px; font-size: 14px; }
+    .info-box { background: #2a2a2a; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; border-left: 4px solid #00a8ff; }
+    .info-box h3 { color: #00a8ff; margin-bottom: 8px; font-size: 14px; }
+    .info-box p { color: #ccc; line-height: 1.6; font-size: 13px; }
+    .section-title { color: #fff; font-size: 15px; margin: 20px 0 8px 0; font-weight: 600; }
+    .upload-area { border: 2px dashed #444; border-radius: 12px; padding: 24px 20px; text-align: center; cursor: pointer; transition: all 0.3s; margin: 8px 0; }
+    .upload-area:hover { border-color: #00a8ff; background: rgba(0,168,255,0.05); }
+    .upload-area.dragover { border-color: #00a8ff; background: rgba(0,168,255,0.1); }
+    .upload-icon { font-size: 28px; margin-bottom: 8px; }
+    .upload-text { color: #ccc; font-size: 13px; }
+    .upload-hint { color: #888; font-size: 11px; margin-top: 4px; }
+    .file-info { background: #2a2a2a; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .file-info.success { border-left: 4px solid #00ff9f; }
+    .file-icon { font-size: 18px; }
+    .file-name { flex: 1; font-weight: 500; color: #00a8ff; font-size: 13px; }
     .file-size { color: #aaa; font-size: 11px; }
-    
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: bold;
-      margin-left: 8px;
-    }
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 6px; }
     .badge.stremio { background: #7e57c2; color: white; }
     .badge.nuvio { background: #00a8ff; color: white; }
-    .badge.success { background: #00ff9f; color: #000; }
-    
-    button {
-      background: linear-gradient(135deg, #00a8ff, #9b59b6);
-      color: white;
-      border: none;
-      padding: 16px;
-      width: 100%;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      margin: 10px 0;
-      transition: transform 0.2s, opacity 0.2s;
-    }
+    .badge.optional { background: #444; color: #aaa; }
+    button { background: linear-gradient(135deg, #00a8ff, #9b59b6); color: white; border: none; padding: 14px; width: 100%; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; margin: 8px 0; transition: transform 0.2s, opacity 0.2s; }
     button:hover:not(:disabled) { transform: translateY(-2px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    
-    .button-secondary {
-      background: #2a2a2a;
-      border: 1px solid #444;
-    }
-    
-    .progress {
-      margin-top: 20px;
-      display: none;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: #2a2a2a;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-bottom: 10px;
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #00a8ff, #9b59b6);
-      transition: width 0.3s;
-      width: 0%;
-    }
-    .progress-step { color: #00a8ff; font-size: 14px; text-align: center; }
-    
-    .result {
-      margin-top: 20px;
-      padding: 16px;
-      border-radius: 10px;
-      display: none;
-    }
-    .result.success {
-      background: rgba(0,255,159,0.1);
-      border: 1px solid #00ff9f;
-      color: #00ff9f;
-    }
-    .result.error {
-      background: rgba(255,107,107,0.1);
-      border: 1px solid #ff6b6b;
-      color: #ff6b6b;
-    }
-    .result.warning {
-      background: rgba(255,180,84,0.1);
-      border: 1px solid #ffb454;
-      color: #ffb454;
-    }
-    
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin: 20px 0;
-    }
-    .stat-card {
-      background: #2a2a2a;
-      padding: 12px;
-      border-radius: 8px;
-      text-align: center;
-    }
-    .stat-value { font-size: 18px; font-weight: bold; color: #00a8ff; }
-    .stat-label { color: #aaa; font-size: 10px; margin-top: 5px; }
-    
-    .addons-preview {
-      background: #2a2a2a;
-      border-radius: 8px;
-      padding: 12px;
-      margin: 10px 0;
-      max-height: 100px;
-      overflow-y: auto;
-    }
-    .addon-item {
-      font-size: 11px;
-      color: #00ff9f;
-      padding: 2px 0;
-    }
-    
-    .instructions {
-      background: #2a2a2a;
-      border-radius: 10px;
-      padding: 20px;
-      margin-top: 30px;
-      border-left: 4px solid #00ff9f;
-      display: none;
-    }
-    .instructions h3 {
-      color: #00ff9f;
-      margin-bottom: 15px;
-    }
-    .instructions ol {
-      padding-left: 20px;
-      color: #ccc;
-    }
-    .instructions li {
-      margin: 10px 0;
-    }
-    
-    .howto {
-      margin-top: 30px;
-      padding: 20px;
-      background: #2a2a2a;
-      border-radius: 10px;
-    }
-    .howto h3 { color: #00a8ff; margin-bottom: 15px; }
-    .howto ol { padding-left: 20px; color: #ccc; }
-    .howto li { margin: 10px 0; }
-    
-    .footer {
-      margin-top: 30px;
-      text-align: center;
-      color: #666;
-      font-size: 12px;
-    }
+    .button-secondary { background: #2a2a2a; border: 1px solid #444; }
+    .button-cloud { background: linear-gradient(135deg, #00ff9f, #00a8ff); color: #000; }
+    .progress { margin-top: 16px; display: none; }
+    .progress-bar { width: 100%; height: 5px; background: #2a2a2a; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #00a8ff, #9b59b6); transition: width 0.3s; width: 0%; }
+    .progress-step { color: #00a8ff; font-size: 13px; text-align: center; }
+    .result { margin-top: 16px; padding: 14px; border-radius: 10px; display: none; font-size: 13px; }
+    .result.success { background: rgba(0,255,159,0.1); border: 1px solid #00ff9f; color: #00ff9f; }
+    .result.error { background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; color: #ff6b6b; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
+    .stat-card { background: #2a2a2a; padding: 10px; border-radius: 8px; text-align: center; }
+    .stat-value { font-size: 20px; font-weight: bold; color: #00a8ff; }
+    .stat-label { color: #aaa; font-size: 10px; margin-top: 3px; }
+    .addons-preview { background: #2a2a2a; border-radius: 8px; padding: 10px 12px; margin: 8px 0; max-height: 90px; overflow-y: auto; }
+    .addon-item { font-size: 11px; color: #00ff9f; padding: 2px 0; }
+
+    /* CLOUD PUSH SECTION */
+    .cloud-section { margin-top: 28px; background: #141414; border-radius: 14px; padding: 20px; border: 1px solid #2a2a2a; }
+    .cloud-section h3 { color: #00ff9f; margin-bottom: 14px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .cloud-status { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: bold; }
+    .cloud-status.active { background: rgba(0,255,159,0.15); color: #00ff9f; }
+    .cloud-status.inactive { background: rgba(255,180,0,0.15); color: #ffb400; }
+    .input-group { margin-bottom: 12px; }
+    .input-group label { display: block; color: #aaa; font-size: 12px; margin-bottom: 5px; }
+    .input-group input { width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .input-group input:focus { border-color: #00a8ff; }
+    .cloud-result { margin-top: 12px; padding: 12px; border-radius: 8px; display: none; font-size: 13px; }
+    .cloud-result.success { background: rgba(0,255,159,0.1); border: 1px solid #00ff9f; color: #00ff9f; }
+    .cloud-result.error { background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; color: #ff6b6b; }
+    .cloud-result.warning { background: rgba(255,180,0,0.1); border: 1px solid #ffb400; color: #ffb400; }
+    .cloud-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+    .cloud-stat { background: #1a1a1a; padding: 8px 6px; border-radius: 6px; text-align: center; }
+    .cloud-stat-value { font-size: 16px; font-weight: bold; color: #00ff9f; }
+    .cloud-stat-label { color: #888; font-size: 9px; margin-top: 2px; }
+
+    .instructions { background: #2a2a2a; border-radius: 10px; padding: 18px; margin-top: 24px; border-left: 4px solid #00ff9f; display: none; }
+    .instructions h3 { color: #00ff9f; margin-bottom: 12px; font-size: 14px; }
+    .instructions ol { padding-left: 18px; color: #ccc; font-size: 13px; }
+    .instructions li { margin: 8px 0; }
+    .howto { margin-top: 24px; padding: 18px; background: #2a2a2a; border-radius: 10px; }
+    .howto h3 { color: #00a8ff; margin-bottom: 12px; font-size: 14px; }
+    .howto ol { padding-left: 18px; color: #ccc; font-size: 13px; }
+    .howto li { margin: 8px 0; }
+    .footer { margin-top: 24px; text-align: center; color: #666; font-size: 11px; }
+    .divider { border: none; border-top: 1px solid #2a2a2a; margin: 24px 0; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="logo-container">
-      <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="Stremio NUVIO Importer Logo" class="logo">
+      <img src="https://i.imgur.com/AIZFSRF.jpeg" alt="Logo" class="logo">
     </div>
 
     <h1>Stremio → NUVIO Converter</h1>
     <div class="subtitle">
-      Converti il backup di Stremio nel formato nativo di NUVIO
+      Converti il backup Stremio e sincronizza direttamente con il cloud Nuvio
       <span class="badge stremio">Stremio</span>
       <span class="badge nuvio">NUVIO</span>
     </div>
 
-    <!-- INFO BOX CON NOVITÀ -->
     <div class="info-box">
-      <h3>🎯 NOVITÀ: Preserva i tuoi addons!</h3>
-      <p>1. Carica il backup <strong>Stremio</strong> (da convertire)</p>
-      <p>2. Carica il backup <strong>NUVIO esistente</strong> (per preservare addons)</p>
-      <p>3. Noi uniamo i film di Stremio con i tuoi addons NUVIO</p>
-      <p>4. Scarichi il file e lo ripristini in NUVIO</p>
+      <h3>🎯 Come funziona</h3>
+      <p>1. Carica il backup <strong>Stremio</strong> (obbligatorio)<br>
+         2. Carica il backup <strong>NUVIO esistente</strong> (per preservare addons)<br>
+         3. Converti → poi usa <strong>"Push al Cloud"</strong> per sovrascrivere il sync remoto<br>
+         4. Riattiva Nuvio Sync: il cloud ha già i tuoi dati ✅</p>
     </div>
 
-    <!-- SEZIONE BACKUP STREMIO -->
-    <div class="section-title">
-      📁 1. Backup Stremio <span class="badge stremio">obbligatorio</span>
-    </div>
-    
+    <!-- STREMIO BACKUP -->
+    <div class="section-title">📁 1. Backup Stremio <span class="badge stremio">obbligatorio</span></div>
     <div id="stremioUploadArea" class="upload-area">
       <div class="upload-icon">🎬</div>
       <div class="upload-text">Clicca per selezionare il backup Stremio</div>
       <div class="upload-hint">File JSON da Stremio Sidekick o Manager</div>
-      <input type="file" id="stremioFileInput" accept=".json" style="display: none;">
+      <input type="file" id="stremioFileInput" accept=".json" style="display:none">
     </div>
-
-    <div id="stremioFileInfo" class="file-info" style="display: none;">
+    <div id="stremioFileInfo" class="file-info" style="display:none">
       <span class="file-icon">🎬</span>
       <span class="file-name" id="stremioFileName"></span>
       <span class="file-size" id="stremioFileSize"></span>
     </div>
 
-    <!-- SEZIONE BACKUP NUVIO ESISTENTE -->
-    <div class="section-title" style="margin-top: 30px;">
-      ☁️ 2. Backup NUVIO esistente <span class="badge nuvio">opzionale</span>
-    </div>
-    
-    <div id="nuvioUploadArea" class="upload-area small">
+    <!-- NUVIO BACKUP -->
+    <div class="section-title" style="margin-top:22px">☁️ 2. Backup NUVIO esistente <span class="badge optional">opzionale</span></div>
+    <div id="nuvioUploadArea" class="upload-area">
       <div class="upload-icon">📦</div>
-      <div class="upload-text">Clicca per selezionare il tuo backup NUVIO</div>
-      <div class="upload-hint">Serve per preservare addons e impostazioni</div>
-      <input type="file" id="nuvioFileInput" accept=".json" style="display: none;">
+      <div class="upload-text">Clicca per selezionare il backup NUVIO</div>
+      <div class="upload-hint">Per preservare addons e impostazioni</div>
+      <input type="file" id="nuvioFileInput" accept=".json" style="display:none">
     </div>
-
-    <div id="nuvioFileInfo" class="file-info" style="display: none;">
+    <div id="nuvioFileInfo" class="file-info" style="display:none">
       <span class="file-icon">📦</span>
       <span class="file-name" id="nuvioFileName"></span>
       <span class="file-size" id="nuvioFileSize"></span>
     </div>
 
-    <!-- ANTEPRIMA ADDONS (se presenti) -->
-    <div id="addonsPreview" style="display: none; margin-top: 15px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-        <span style="color: #00ff9f; font-size: 13px;">🔌 Addons preservati:</span>
-        <span id="addonsCount" style="color: #fff; font-size: 12px;">0</span>
+    <div id="addonsPreview" style="display:none; margin-top:12px">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
+        <span style="color:#00ff9f; font-size:12px">🔌 Addons trovati:</span>
+        <span id="addonsCount" style="color:#fff; font-size:11px">0</span>
       </div>
       <div id="addonsList" class="addons-preview"></div>
     </div>
 
-    <!-- Bottone converti -->
-    <button id="convertBtn" disabled style="margin-top: 20px;">🔄 Converti e Unisci</button>
+    <!-- CONVERT BUTTON -->
+    <button id="convertBtn" disabled style="margin-top:18px">🔄 Converti</button>
 
-    <!-- Progress bar -->
     <div id="progress" class="progress">
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-step" id="progressStep"></div>
     </div>
-
-    <!-- Result -->
     <div id="result" class="result"></div>
 
-    <!-- Stats -->
-    <div id="stats" style="display: none;">
+    <div id="stats" style="display:none">
       <div class="stats">
-        <div class="stat-card"><div class="stat-value" id="statMovies">0</div><div class="stat-label">Film Stremio</div></div>
-        <div class="stat-card"><div class="stat-value" id="statSeries">0</div><div class="stat-label">Serie Stremio</div></div>
-        <div class="stat-card"><div class="stat-value" id="statAddons">0</div><div class="stat-label">Addons preservati</div></div>
+        <div class="stat-card"><div class="stat-value" id="statMovies">0</div><div class="stat-label">Film</div></div>
+        <div class="stat-card"><div class="stat-value" id="statSeries">0</div><div class="stat-label">Serie</div></div>
+        <div class="stat-card"><div class="stat-value" id="statAddons">0</div><div class="stat-label">Addons</div></div>
       </div>
     </div>
 
-    <!-- Istruzioni finali -->
-    <div id="instructions" class="instructions">
-      <h3>✅ Pronto per NUVIO!</h3>
-      <ol>
-        <li><strong>Scarica il file</strong> qui sotto</li>
-        <li><strong>Apri NUVIO</strong> sul telefono</li>
-        <li>Vai su <strong>Impostazioni → Backup e ripristino</strong></li>
-        <li>Scegli <strong>"Ripristina da backup"</strong></li>
-        <li>Seleziona il file appena scaricato</li>
-        <li><strong>Fatto!</strong> I tuoi film + i tuoi addons sono preservati</li>
-      </ol>
-      <button id="downloadBtn" style="margin-top: 15px;">📥 Scarica backup NUVIO completo</button>
+    <!-- CLOUD PUSH SECTION -->
+    <div id="cloudSection" class="cloud-section" style="display:none">
+      <h3>
+        ☁️ Push al Cloud Nuvio
+        <span id="cloudStatusBadge" class="cloud-status inactive">Caricamento...</span>
+      </h3>
+
+      <div id="cloudConfigured" style="display:none">
+        <p style="color:#aaa; font-size:13px; margin-bottom:14px">
+          Inserisci le credenziali del tuo account Nuvio per sovrascrivere il cloud con i dati convertiti. Così quando riattivi il sync, il cloud avrà già i tuoi film.
+        </p>
+        <div class="input-group">
+          <label>📧 Email account Nuvio</label>
+          <input type="email" id="nuvioEmail" placeholder="tua@email.com">
+        </div>
+        <div class="input-group">
+          <label>🔒 Password account Nuvio</label>
+          <input type="password" id="nuvioPassword" placeholder="••••••••">
+        </div>
+        <button id="pushCloudBtn" class="button-cloud" disabled>☁️ Push al Cloud (sovrascrive sync remoto)</button>
+        <div id="cloudResult" class="cloud-result"></div>
+        <div id="cloudStats" class="cloud-stats" style="display:none">
+          <div class="cloud-stat"><div class="cloud-stat-value" id="cLibrary">0</div><div class="cloud-stat-label">Library</div></div>
+          <div class="cloud-stat"><div class="cloud-stat-value" id="cProgress">0</div><div class="cloud-stat-label">Progressi</div></div>
+          <div class="cloud-stat"><div class="cloud-stat-value" id="cAddons">0</div><div class="cloud-stat-label">Addons</div></div>
+          <div class="cloud-stat"><div class="cloud-stat-value" id="cWatched">0</div><div class="cloud-stat-label">Visti</div></div>
+        </div>
+      </div>
+
+      <div id="cloudNotConfigured" style="display:none">
+        <p style="color:#ffb400; font-size:13px; line-height:1.6">
+          ⚠️ <strong>Server non ancora configurato</strong><br><br>
+          Per abilitare il push cloud devi impostare due variabili d'ambiente su Render:
+          <br><br>
+          <code style="background:#2a2a2a; padding:2px 6px; border-radius:4px; font-size:12px">SUPABASE_URL</code> e
+          <code style="background:#2a2a2a; padding:2px 6px; border-radius:4px; font-size:12px">SUPABASE_ANON_KEY</code>
+          <br><br>
+          <strong>Come ottenerli (1 volta sola):</strong><br>
+          1. Installa <a href="https://httptoolkit.com" target="_blank" style="color:#00a8ff">HTTP Toolkit</a> sul PC<br>
+          2. Collega il telefono e intercetta il traffico di Nuvio<br>
+          3. Accedi a Nuvio → cerca richieste verso <code style="background:#2a2a2a; padding:1px 4px; border-radius:3px">*.supabase.co</code><br>
+          4. Copia l'URL e l'header <code style="background:#2a2a2a; padding:1px 4px; border-radius:3px">apikey</code><br>
+          5. Impostali come env vars su Render e riavvia
+        </p>
+      </div>
     </div>
 
-    <!-- How to -->
+    <!-- DOWNLOAD SECTION -->
+    <div id="instructions" class="instructions">
+      <h3>✅ Backup pronto!</h3>
+      <ol>
+        <li><strong>Opzione A (consigliata):</strong> Usa il <strong>Push al Cloud</strong> qui sopra — riattiva poi il Nuvio Sync</li>
+        <li><strong>Opzione B (manuale):</strong> Scarica il file → Nuvio → Impostazioni → Backup → Ripristina → poi fai subito <strong>Push to Cloud</strong> dall'app</li>
+      </ol>
+      <button id="downloadBtn" class="button-secondary" style="margin-top:12px">📥 Scarica backup JSON</button>
+    </div>
+
+    <hr class="divider">
+
     <div class="howto">
       <h3>📖 Come ottenere i backup</h3>
       <ol>
         <li><strong>Backup Stremio:</strong> Usa Sidekick (Libreria → Esporta) o Stremio Manager</li>
-        <li><strong>Backup NUVIO:</strong> In NUVIO → Impostazioni → Backup → Crea backup</li>
-        <li>Carica entrambi qui per unire film Stremio + addons NUVIO</li>
+        <li><strong>Backup NUVIO:</strong> NUVIO → Impostazioni → Backup → Crea backup</li>
+        <li>Per il Push Cloud: accedi con le stesse credenziali del tuo account Nuvio</li>
       </ol>
     </div>
 
     <div class="footer">
-      <p>🔒 I tuoi dati vengono convertiti localmente • Nessun server intermedio</p>
-      <p>✨ Ora con preservazione addons! Made for NUVIO community</p>
+      <p>🔒 Credenziali usate solo per autenticarti con Supabase • Mai salvate sul server</p>
+      <p>✨ Con push diretto al cloud Nuvio</p>
     </div>
   </div>
 
   <script>
-    let stremioFile = null;
-    let nuvioFile = null;
-    let convertedData = null;
-    let preservedAddons = [];
+    let stremioFile = null, nuvioFile = null, convertedData = null;
 
     // ============================================
-    // UPLOAD AREA STREMIO
+    // CHECK SUPABASE STATUS
+    // ============================================
+    async function checkSupabaseStatus() {
+      try {
+        const res = await fetch('/supabase-status');
+        const data = await res.json();
+        const badge = document.getElementById('cloudStatusBadge');
+        if (data.configured) {
+          badge.textContent = '✅ Attivo';
+          badge.className = 'cloud-status active';
+          document.getElementById('cloudConfigured').style.display = 'block';
+          document.getElementById('cloudNotConfigured').style.display = 'none';
+        } else {
+          badge.textContent = '⚠️ Da configurare';
+          badge.className = 'cloud-status inactive';
+          document.getElementById('cloudConfigured').style.display = 'none';
+          document.getElementById('cloudNotConfigured').style.display = 'block';
+        }
+      } catch (e) {
+        console.log('Status check failed:', e);
+      }
+    }
+
+    // ============================================
+    // UPLOAD STREMIO
     // ============================================
     const stremioUploadArea = document.getElementById('stremioUploadArea');
     const stremioFileInput = document.getElementById('stremioFileInput');
-    const stremioFileInfo = document.getElementById('stremioFileInfo');
-    const stremioFileName = document.getElementById('stremioFileName');
-    const stremioFileSize = document.getElementById('stremioFileSize');
-
     stremioUploadArea.addEventListener('click', () => stremioFileInput.click());
-
-    stremioUploadArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      stremioUploadArea.classList.add('dragover');
+    stremioUploadArea.addEventListener('dragover', e => { e.preventDefault(); stremioUploadArea.classList.add('dragover'); });
+    stremioUploadArea.addEventListener('dragleave', () => stremioUploadArea.classList.remove('dragover'));
+    stremioUploadArea.addEventListener('drop', e => {
+      e.preventDefault(); stremioUploadArea.classList.remove('dragover');
+      const f = e.dataTransfer.files[0];
+      if (f?.type === 'application/json') handleStremioFile(f);
+      else showResult('Seleziona un file JSON valido', 'error');
     });
-
-    stremioUploadArea.addEventListener('dragleave', () => {
-      stremioUploadArea.classList.remove('dragover');
-    });
-
-    stremioUploadArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      stremioUploadArea.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type === 'application/json') {
-        handleStremioFile(file);
-      } else {
-        showResult('Per favore seleziona un file JSON valido per Stremio', 'error');
-      }
-    });
-
-    stremioFileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleStremioFile(file);
-    });
+    stremioFileInput.addEventListener('change', e => { if (e.target.files[0]) handleStremioFile(e.target.files[0]); });
 
     function handleStremioFile(file) {
       stremioFile = file;
-      stremioFileName.textContent = file.name;
-      stremioFileSize.textContent = formatFileSize(file.size);
-      stremioFileInfo.style.display = 'flex';
-      stremioFileInfo.classList.add('success');
+      document.getElementById('stremioFileName').textContent = file.name;
+      document.getElementById('stremioFileSize').textContent = formatSize(file.size);
+      const el = document.getElementById('stremioFileInfo');
+      el.style.display = 'flex'; el.classList.add('success');
       checkConvertButton();
     }
 
     // ============================================
-    // UPLOAD AREA NUVIO
+    // UPLOAD NUVIO
     // ============================================
     const nuvioUploadArea = document.getElementById('nuvioUploadArea');
     const nuvioFileInput = document.getElementById('nuvioFileInput');
-    const nuvioFileInfo = document.getElementById('nuvioFileInfo');
-    const nuvioFileName = document.getElementById('nuvioFileName');
-    const nuvioFileSize = document.getElementById('nuvioFileSize');
-
     nuvioUploadArea.addEventListener('click', () => nuvioFileInput.click());
-
-    nuvioUploadArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      nuvioUploadArea.classList.add('dragover');
+    nuvioUploadArea.addEventListener('dragover', e => { e.preventDefault(); nuvioUploadArea.classList.add('dragover'); });
+    nuvioUploadArea.addEventListener('dragleave', () => nuvioUploadArea.classList.remove('dragover'));
+    nuvioUploadArea.addEventListener('drop', e => {
+      e.preventDefault(); nuvioUploadArea.classList.remove('dragover');
+      const f = e.dataTransfer.files[0];
+      if (f?.type === 'application/json') handleNuvioFile(f);
     });
-
-    nuvioUploadArea.addEventListener('dragleave', () => {
-      nuvioUploadArea.classList.remove('dragover');
-    });
-
-    nuvioUploadArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      nuvioUploadArea.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type === 'application/json') {
-        handleNuvioFile(file);
-      } else {
-        showResult('Per favore seleziona un file JSON valido per NUVIO', 'error');
-      }
-    });
-
-    nuvioFileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleNuvioFile(file);
-    });
+    nuvioFileInput.addEventListener('change', e => { if (e.target.files[0]) handleNuvioFile(e.target.files[0]); });
 
     async function handleNuvioFile(file) {
       nuvioFile = file;
-      nuvioFileName.textContent = file.name;
-      nuvioFileSize.textContent = formatFileSize(file.size);
-      nuvioFileInfo.style.display = 'flex';
-      nuvioFileInfo.classList.add('success');
-      
-      // Estrai e mostra gli addons
+      document.getElementById('nuvioFileName').textContent = file.name;
+      document.getElementById('nuvioFileSize').textContent = formatSize(file.size);
+      const el = document.getElementById('nuvioFileInfo');
+      el.style.display = 'flex'; el.classList.add('success');
       await extractAddonsFromNuvio(file);
-      
       checkConvertButton();
     }
 
     async function extractAddonsFromNuvio(file) {
       const formData = new FormData();
       formData.append('backup', file);
-
       try {
-        const res = await fetch('/extract-addons', {
-          method: 'POST',
-          body: formData
-        });
-
+        const res = await fetch('/extract-addons', { method: 'POST', body: formData });
         const data = await res.json();
-
-        if (data.success) {
-          preservedAddons = data.addons || [];
-          const addonsCount = preservedAddons.length;
-          
-          if (addonsCount > 0) {
-            document.getElementById('addonsCount').textContent = addonsCount;
-            
-            const addonsList = document.getElementById('addonsList');
-            addonsList.innerHTML = '';
-            
-            preservedAddons.slice(0, 5).forEach(addon => {
-              const div = document.createElement('div');
-              div.className = 'addon-item';
-              div.textContent = `• ${addon.name || addon.id || 'Addon'}`;
-              addonsList.appendChild(div);
-            });
-            
-            if (addonsCount > 5) {
-              const div = document.createElement('div');
-              div.className = 'addon-item';
-              div.textContent = `... e altri ${addonsCount - 5}`;
-              addonsList.appendChild(div);
-            }
-            
-            document.getElementById('addonsPreview').style.display = 'block';
-            showResult(`✅ Trovati ${addonsCount} addons da preservare!`, 'success');
+        if (data.success && data.addons.length > 0) {
+          document.getElementById('addonsCount').textContent = data.addons.length;
+          const list = document.getElementById('addonsList');
+          list.innerHTML = '';
+          data.addons.slice(0, 5).forEach(addon => {
+            const d = document.createElement('div');
+            d.className = 'addon-item';
+            d.textContent = `• ${addon.name || addon.id || 'Addon'}`;
+            list.appendChild(d);
+          });
+          if (data.addons.length > 5) {
+            const d = document.createElement('div');
+            d.className = 'addon-item';
+            d.textContent = `... e altri ${data.addons.length - 5}`;
+            list.appendChild(d);
           }
+          document.getElementById('addonsPreview').style.display = 'block';
+          showResult(`✅ Trovati ${data.addons.length} addons da preservare`, 'success');
         }
-      } catch (err) {
-        console.log('Errore estrazione addons:', err);
-      }
+      } catch(e) { console.log('Errore estrazione addons:', e); }
     }
 
     // ============================================
-    // UTILS
+    // CONVERT
     // ============================================
-    function formatFileSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
     function checkConvertButton() {
-      const convertBtn = document.getElementById('convertBtn');
-      convertBtn.disabled = !stremioFile;
-      
-      if (nuvioFile) {
-        convertBtn.textContent = '🔄 Converti e Unisci (con addons)';
-      } else {
-        convertBtn.textContent = '🔄 Converti (senza preservazione addons)';
-      }
+      const btn = document.getElementById('convertBtn');
+      btn.disabled = !stremioFile;
+      btn.textContent = nuvioFile ? '🔄 Converti e unisci (con addons)' : '🔄 Converti';
     }
 
-    // ============================================
-    // CONVERSIONE
-    // ============================================
     document.getElementById('convertBtn').addEventListener('click', async () => {
       if (!stremioFile) return;
-
       const formData = new FormData();
       formData.append('backup', stremioFile);
-      
-      if (nuvioFile) {
-        formData.append('existing', nuvioFile);
-      }
+      if (nuvioFile) formData.append('existing', nuvioFile);
 
-      const convertBtn = document.getElementById('convertBtn');
-      convertBtn.disabled = true;
-      convertBtn.textContent = '⏳ Unione in corso...';
-      showProgress(true, 'Unisco film Stremio con addons NUVIO...', 30);
+      const btn = document.getElementById('convertBtn');
+      btn.disabled = true; btn.textContent = '⏳ Conversione...';
+      showProgress(true, 'Conversione in corso...', 40);
 
       try {
-        const res = await fetch('/convert', {
-          method: 'POST',
-          body: formData
-        });
-
+        const res = await fetch('/convert', { method: 'POST', body: formData });
         const data = await res.json();
-
         if (data.success) {
           convertedData = data.data;
-          
           showProgress(false);
-          
-          let message = data.message || '✅ Conversione completata!';
-          if (data.stats.addonsPreserved > 0) {
-            message = `✅ Completato! ${data.stats.addonsPreserved} addons preservati + ${data.stats.movies + data.stats.series} film/serie`;
-          }
-          
-          showResult(message, 'success');
-          
-          // Mostra stats
-          document.getElementById('statMovies').textContent = data.stats.movies || 0;
-          document.getElementById('statSeries').textContent = data.stats.series || 0;
-          document.getElementById('statAddons').textContent = data.stats.addonsPreserved || 0;
+          showResult(data.message || '✅ Conversione completata!', 'success');
+          document.getElementById('statMovies').textContent = data.stats.movies;
+          document.getElementById('statSeries').textContent = data.stats.series;
+          document.getElementById('statAddons').textContent = data.stats.addonsPreserved;
           document.getElementById('stats').style.display = 'block';
-          
-          // Mostra istruzioni
           document.getElementById('instructions').style.display = 'block';
-          
-          convertBtn.textContent = '✅ Convertito';
-        } else {
-          throw new Error(data.error);
-        }
+          document.getElementById('cloudSection').style.display = 'block';
+          document.getElementById('pushCloudBtn').disabled = false;
+          checkSupabaseStatus();
+          btn.textContent = '✅ Convertito';
+        } else throw new Error(data.error);
       } catch (err) {
         showProgress(false);
         showResult('❌ ' + err.message, 'error');
-        convertBtn.disabled = false;
-        checkConvertButton();
+        btn.disabled = false; checkConvertButton();
+      }
+    });
+
+    // ============================================
+    // PUSH TO CLOUD
+    // ============================================
+    document.getElementById('pushCloudBtn').addEventListener('click', async () => {
+      const email = document.getElementById('nuvioEmail').value.trim();
+      const password = document.getElementById('nuvioPassword').value;
+      if (!email || !password) {
+        showCloudResult('⚠️ Inserisci email e password del tuo account Nuvio', 'error');
+        return;
+      }
+      if (!convertedData) {
+        showCloudResult('⚠️ Prima converti il backup Stremio', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('pushCloudBtn');
+      btn.disabled = true; btn.textContent = '⏳ Push in corso...';
+
+      try {
+        const res = await fetch('/push-to-cloud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, backup: convertedData })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showCloudResult(`✅ ${data.message}\n\nOra riattiva il Nuvio Sync → il cloud ha già i tuoi dati!`, 'success');
+          const r = data.results;
+          document.getElementById('cLibrary').textContent = r.library || 0;
+          document.getElementById('cProgress').textContent = r.watchProgress || 0;
+          document.getElementById('cAddons').textContent = r.addons || 0;
+          document.getElementById('cWatched').textContent = r.watchedItems || 0;
+          document.getElementById('cloudStats').style.display = 'grid';
+          btn.textContent = '✅ Push completato!';
+        } else {
+          throw new Error(data.error || 'Push fallito');
+        }
+      } catch(err) {
+        showCloudResult('❌ ' + err.message + (err.message.includes('credentials') ? '\n\nControlla email e password' : ''), 'error');
+        btn.disabled = false;
+        btn.textContent = '☁️ Push al Cloud (sovrascrive sync remoto)';
       }
     });
 
@@ -597,49 +431,37 @@
     // ============================================
     document.getElementById('downloadBtn').addEventListener('click', () => {
       if (!convertedData) return;
-      
-      const blob = new Blob([JSON.stringify(convertedData, null, 2)], { 
-        type: 'application/json' 
-      });
-      
+      const blob = new Blob([JSON.stringify(convertedData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      
-      // Nome file personalizzato
-      const date = new Date().toISOString().slice(0,10);
-      a.download = `nuvio-backup-${date}.json`;
+      a.download = `nuvio-backup-${new Date().toISOString().slice(0,10)}.json`;
       a.click();
-      
-      showResult('✅ File scaricato! Ora ripristinalo in NUVIO', 'success');
     });
 
     // ============================================
-    // PROGRESS E RESULT
+    // UTILS
     // ============================================
-    function showProgress(show, step, percent) {
-      const progress = document.getElementById('progress');
-      const stepEl = document.getElementById('progressStep');
-      const fill = document.getElementById('progressFill');
-
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+      return (bytes/(1024*1024)).toFixed(1) + ' MB';
+    }
+    function showProgress(show, step, pct) {
+      document.getElementById('progress').style.display = show ? 'block' : 'none';
       if (show) {
-        progress.style.display = 'block';
-        stepEl.textContent = step || '';
-        fill.style.width = (percent || 0) + '%';
-      } else {
-        progress.style.display = 'none';
+        document.getElementById('progressStep').textContent = step || '';
+        document.getElementById('progressFill').style.width = (pct||0) + '%';
       }
     }
-
-    function showResult(message, type) {
-      const result = document.getElementById('result');
-      result.textContent = message;
-      result.className = `result ${type}`;
-      result.style.display = 'block';
-
-      setTimeout(() => {
-        result.style.display = 'none';
-      }, 5000);
+    function showResult(msg, type) {
+      const el = document.getElementById('result');
+      el.textContent = msg; el.className = `result ${type}`; el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 6000);
+    }
+    function showCloudResult(msg, type) {
+      const el = document.getElementById('cloudResult');
+      el.textContent = msg; el.className = `cloud-result ${type}`; el.style.display = 'block';
     }
   </script>
 </body>
