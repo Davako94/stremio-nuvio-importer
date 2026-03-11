@@ -107,7 +107,7 @@ app.post('/test-login', express.json(), async (req, res) => {
 });
 
 // ============================================
-// FUNZIONE PER PUSHARE LA LIBRARY SU SUPABASE
+// FUNZIONE PER PUSHARE LA LIBRARY SU SUPABASE (CON DEDUPLICA!)
 // ============================================
 async function pushLibraryToSupabase(email, password, items) {
   console.log(`☁️ Push cloud per ${email}...`);
@@ -116,23 +116,35 @@ async function pushLibraryToSupabase(email, password, items) {
   const accessToken = session.access_token;
   console.log(`✅ Login riuscito, user ID: ${session.user?.id}`);
 
-  // Prepara i library items nel formato che Nuvio si aspetta
-  const libraryItems = items.map(item => ({
-    content_id: item.id.split(':')[0],
-    content_type: item.type,
-    name: item.name || '',
-    poster: item.poster || '',
-    poster_shape: 'POSTER',
-    background: item.banner || item.background || '',
-    description: item.description || '',
-    release_info: item.year || '',
-    imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
-    genres: item.genres || [],
-    addon_base_url: '',
-    added_at: Date.now()
-  }));
+  // PASSO 1: DEDUPLICA - usa un Map con content_id come chiave
+  const uniqueItems = new Map();
+  
+  items.forEach(item => {
+    const contentId = item.id.split(':')[0]; // Prendi l'IMDB ID puro
+    if (!uniqueItems.has(contentId)) {
+      uniqueItems.set(contentId, {
+        content_id: contentId,
+        content_type: item.type,
+        name: item.name || '',
+        poster: item.poster || '',
+        poster_shape: 'POSTER',
+        background: item.banner || item.background || '',
+        description: item.description || '',
+        release_info: item.year || '',
+        imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
+        genres: item.genres || [],
+        addon_base_url: '',
+        added_at: Date.now()
+      });
+    } else {
+      console.log(`⚠️ Trovato duplicato saltato: ${contentId} - ${item.name}`);
+    }
+  });
 
-  console.log(`📦 Push di ${libraryItems.length} items...`);
+  // Converti il Map in array
+  const libraryItems = Array.from(uniqueItems.values());
+
+  console.log(`📦 Push di ${libraryItems.length} items unici (su ${items.length} totali)`);
 
   // Chiama sync_push_library
   await supabaseRpc('sync_push_library', { p_items: libraryItems }, accessToken);
@@ -335,7 +347,7 @@ app.post('/convert', upload.fields([
           cloudPushResult = {
             success: true,
             count: pushedCount,
-            message: `✅ ${pushedCount} film caricati sul cloud!`
+            message: `✅ ${pushedCount} film/serie unici caricati sul cloud!`
           };
         } catch (pushError) {
           console.error('❌ Errore push cloud:', pushError.message);
@@ -451,7 +463,7 @@ app.post('/debug-backup', upload.single('backup'), async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (CON DEDUPLICA!)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`☁️  Push cloud: ${isSupabaseConfigured() ? '✅ ATTIVO' : '⚠️  NON CONFIGURATO'}`);
@@ -466,5 +478,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • POST /test-login - Test credenziali`);
   console.log(`   • POST /extract-addons - Estrai addons da backup`);
   console.log(`   • POST /convert - Conversione principale`);
-  console.log(`   • GET /supabase-status - Stato configurazione\n`);
+  console.log(`   • GET /supabase-status - Stato configurazione`);
+  console.log(`\n🔄 NOVITÀ: Deduplica automatica dei film per evitare errori di conflitto!\n`);
 });
