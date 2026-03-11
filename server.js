@@ -71,7 +71,7 @@ async function readExistingBackup(existingBackupPath) {
 function extractAddonsFromNuvioBackup(backup) {
   let addons = [];
   
-  // Nel tuo backup, gli addons sono in data.addons
+  // Nel backup Nuvio, gli addons sono in data.addons (dalla documentazione)
   if (backup.data && backup.data.addons && Array.isArray(backup.data.addons)) {
     addons = backup.data.addons;
     console.log(`🔌 Trovati ${addons.length} addons in data.addons`);
@@ -120,7 +120,7 @@ app.post('/convert', upload.fields([
       JSON.parse(fs.readFileSync(existingFile.path, 'utf8')) : null;
 
     // ============================================
-    // ESTRAI ADDONS DAL BACKUP ESISTENTE (CORRETTO!)
+    // ESTRAI ADDONS DAL BACKUP ESISTENTE
     // ============================================
     let existingAddons = [];
     let existingAddonOrder = [];
@@ -144,7 +144,7 @@ app.post('/convert', upload.fields([
     };
 
     if (existingNuvioBackup && existingNuvioBackup.data) {
-      // ADDONS - ora usa la funzione specifica!
+      // ADDONS - usa la funzione specifica
       const extractedAddons = extractAddonsFromNuvioBackup(existingNuvioBackup);
       if (extractedAddons.length > 0) {
         existingAddons = extractedAddons;
@@ -299,7 +299,7 @@ app.post('/convert', upload.fields([
     }
 
     // ============================================
-    // BACKUP COMPLETO
+    // BACKUP COMPLETO - NEL FORMATO CORRETTO
     // ============================================
     const nuvioBackup = {
       version: "1.0.0",
@@ -311,7 +311,7 @@ app.post('/convert', upload.fields([
         // IMPOSTAZIONI (preservate)
         settings: existingSettings,
         
-        // ADDONS (preservati!) - NOTA: li mettiamo in data.addons come nel formato originale
+        // ADDONS (preservati!) - nel formato corretto data.addons
         addons: existingAddons,
         addonOrder: existingAddonOrder,
         localScrapers: existingLocalScrapers,
@@ -483,6 +483,39 @@ app.post('/debug-backup', upload.single('backup'), async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT PER SALVARE CREDENZIALI SUPABASE (OPZIONALE)
+// ============================================
+app.post('/save-supabase-config', express.json(), (req, res) => {
+  const { url, anonKey } = req.body;
+  
+  if (!url || !anonKey) {
+    return res.status(400).json({ error: 'URL e Anon Key richiesti' });
+  }
+
+  // Salva in un file di configurazione (opzionale)
+  const config = { supabaseUrl: url, supabaseAnonKey: anonKey };
+  fs.writeFileSync('supabase-config.json', JSON.stringify(config, null, 2));
+  
+  res.json({ success: true, message: 'Configurazione salvata' });
+});
+
+// ============================================
+// ENDPOINT PER LEGGERE CONFIGURAZIONE SUPABASE
+// ============================================
+app.get('/get-supabase-config', (req, res) => {
+  try {
+    if (fs.existsSync('supabase-config.json')) {
+      const config = JSON.parse(fs.readFileSync('supabase-config.json', 'utf8'));
+      res.json({ success: true, config });
+    } else {
+      res.json({ success: false, message: 'Nessuna configurazione trovata' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
@@ -492,6 +525,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com/`);
   console.log(`🔧 Configurazione: https://stremio-nuvio-importer.onrender.com/configure`);
   console.log(`📋 Manifest: https://stremio-nuvio-importer.onrender.com/manifest.json`);
-  console.log(`\n✨ NOVITÀ: Ora preserva gli addons da data.addons (formato corretto!)`);
-  console.log(`   e mantiene impostazioni, sottotitoli e progressi!\n`);
+  console.log(`\n✨ NOVITÀ:`);
+  console.log(`   • Preserva gli addons da data.addons (formato corretto!)`);
+  console.log(`   • Mantiene impostazioni, sottotitoli e progressi`);
+  console.log(`   • Endpoint /save-supabase-config per configurare Supabase`);
+  console.log(`   • Endpoint /debug-backup per analizzare la struttura\n`);
 });
