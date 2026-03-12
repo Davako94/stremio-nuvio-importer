@@ -677,21 +677,15 @@ app.post('/get-stremio-data', async (req, res) => {
   try {
     const auth = await stremioLogin(email, password);
     
-    const [libraryFiltered, libraryAll, continueWatching, watchedHistory, rawData] = await Promise.all([
+    const [libraryFiltered, libraryAll, continueWatching, watchedHistory] = await Promise.all([
       getStremioLibrary(auth.token, { includeAll: false }),
       getStremioLibrary(auth.token, { includeAll: true }),
       getStremioContinueWatching(auth.token),
-      getStremioWatchedHistory(auth.token),
-      fetch(`${STREMIO_API}/api/datastoreGet`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
-        body: JSON.stringify({ authKey: auth.token, collection: 'libraryItem', all: true })
-      }).then(r => r.json())
+      getStremioWatchedHistory(auth.token)
     ]);
 
     const normalizedAll = libraryAll.map(normalizeLibraryItem);
     
-    // Usiamo il metodo stabile (quello che funziona)
     const watchedMoviesRaw = buildWatchedMoviesPayload(normalizedAll);
     const watchedMovieIds = watchedMoviesRaw.map(w => w.contentId).filter(Boolean);
     const seriesWithWatched = normalizedAll.filter(i => i.type === 'series' && i.state.watchedField);
@@ -711,7 +705,7 @@ app.post('/get-stremio-data', async (req, res) => {
         watchedSeriesCount: seriesWithWatched.length,
         totalWatchedItems: watchedMoviesRaw.length,
         watchedMoviesCount: watchedMoviesRaw.length,
-        watchedEpisodesCount: 0 // non le calcoliamo qui
+        watchedEpisodesCount: 0
       }
     });
   } catch (error) {
@@ -769,7 +763,7 @@ app.post('/get-nuvio-data', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: SYNC DIRETTO (VERSIONE FINALE CON I FIX)
+// ENDPOINT: SYNC DIRETTO (VERSIONE FINALE CON METODO STABILE)
 // ============================================
 app.post('/sync', async (req, res) => {
   const {
@@ -798,7 +792,7 @@ app.post('/sync', async (req, res) => {
     // ✅ METODO STABILE (quello del debug-watched che vede 125 film)
     console.log(`🎬 Estrazione watched dal libraryItem (metodo 100% funzionante)...`);
     
-    const watchedMoviesRaw = buildWatchedMoviesPayload(items);
+    const watchedMoviesRaw = buildWatchedMoviesPayload(items);           // film visti
     let watchedEpisodesRaw = [];
     
     if (includeWatchedEpisodes) {
@@ -812,11 +806,11 @@ app.post('/sync', async (req, res) => {
     ].map(item => normalizeWatchedItem(item));
 
     const watchedMovies = allWatchedItems.filter(i => i.contentType === 'movie' && !i.season);
-    const watchedEpisodes = allWatchedItems.filter(i => i.contentType === 'series' && i.season != null);
+    const watchedEpisodes = allWatchedItems.filter(i => i.contentType === 'series' && i.season != null && i.episode != null);
 
     console.log(`✅ Estratti: ${watchedMovies.length} film + ${watchedEpisodes.length} episodi`);
     if (watchedMovies.length > 0) {
-      console.log(`   Esempio primo film: ${watchedMovies[0].contentId} - ${watchedMovies[0].title}`);
+      console.log(`   Primo esempio: ${watchedMovies[0].contentId} → ${watchedMovies[0].title}`);
     }
 
     const progressPayload = buildWatchProgressPayload(items);
@@ -1482,6 +1476,37 @@ app.post('/compare-libraries', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: VERIFICA SINGOLO ITEM
+// ============================================
+app.post('/check-item', async (req, res) => {
+  const { nuvioEmail, nuvioPassword, contentId } = req.body;
+  try {
+    const session = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = session.access_token;
+    const profileId = 1;
+
+    // Verifica in library
+    const library = await getNuvioLibrary(accessToken);
+    const inLibrary = library.find(i => i.content_id === contentId);
+
+    // Verifica in watched
+    const watched = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
+    const inWatched = watched.find(i => i.content_id === contentId);
+
+    res.json({
+      success: true,
+      contentId,
+      inLibrary: !!inLibrary,
+      libraryItem: inLibrary || null,
+      inWatched: !!inWatched,
+      watchedItem: inWatched || null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
@@ -1509,5 +1534,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • POST /check-nuvio-watched`);
   console.log(`   • POST /test-single-episode`);
   console.log(`   • POST /compare-libraries`);
+  console.log(`   • POST /check-item                ← NUOVO: verifica singolo item`);
   console.log(`   • GET  /supabase-status\n`);
 });
