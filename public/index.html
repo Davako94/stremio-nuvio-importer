@@ -1212,7 +1212,8 @@
         if (data.success) {
           stremioData = data; stremioAuth = { email, password };
           stremioWatchedIds = new Set(data.watchedIds || []);
-          setStatus('stremioLoginStatus','success',`✅ Caricati ${data.stats.movies + data.stats.series} film/serie · ${data.stats.watched || 0} visti`);
+          // Nota: watchedIds contiene solo FILM (le serie richiedono dati episodio)
+          setStatus('stremioLoginStatus','success',`✅ Caricati ${data.stats.movies + data.stats.series} film/serie · ${data.stats.watched || 0} film visti`);
           updatePreviews();
           showResult('✅ Dati Stremio caricati!','success');
         } else { throw new Error(data.error); }
