@@ -73,7 +73,7 @@ async function getNuvioLibrary(accessToken) {
 }
 
 // ============================================
-// FUNZIONI STREMIO API (VERSIONE CORRETTA)
+// FUNZIONI STREMIO API
 // ============================================
 const STREMIO_API = 'https://api.strem.io';
 const STREMIO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio/4.4.159';
@@ -142,6 +142,7 @@ async function getStremioLibrary(authKey) {
     throw new Error(`Risposta non JSON: ${text.substring(0, 300)}`);
   }
 
+  // PARSING ROBUSTO
   let items = [];
   if (data.result) {
     if (Array.isArray(data.result)) {
@@ -157,6 +158,7 @@ async function getStremioLibrary(authKey) {
     items = data.items;
   }
 
+  // Filter finale
   items = items.filter(item => {
     if (!item) return false;
     if (item.removed || item.temp) return false;
@@ -199,55 +201,47 @@ async function getStremioWatchedHistory(authKey) {
 }
 
 // ============================================
-// FUNZIONE CORRETTA PER PUSH (MERGE, NON REPLACE)
+// FUNZIONE PER PUSHARE LA LIBRARY SU SUPABASE (COPIA TOTALE)
 // ============================================
-async function pushLibraryToSupabase(email, password, newItems) {
+async function pushLibraryToSupabase(email, password, items) {
   console.log(`☁️ Push cloud per ${email}...`);
   
   const session = await supabaseLogin(email, password);
   const accessToken = session.access_token;
 
-  // 1. Ottieni la library attuale
-  const currentLibrary = await getNuvioLibrary(accessToken);
-  const currentMap = new Map(currentLibrary.map(item => [item.content_id, item]));
+  // Prepara TUTTI gli items senza confronti
+  const uniqueItems = new Map();
   
-  console.log(`📊 Library attuale: ${currentMap.size} elementi`);
-
-  // 2. Aggiungi/aggiorna i nuovi items
-  let addedCount = 0;
-  newItems.forEach(item => {
+  items.forEach(item => {
     const fullId = item._id || item.id || '';
     const contentId = fullId.split(':')[0];
     if (!contentId) return;
     
-    if (!currentMap.has(contentId)) {
-      addedCount++;
-      currentMap.set(contentId, {
-        content_id: contentId,
-        content_type: item.type === 'series' ? 'series' : 'movie',
-        name: item.name || '',
-        poster: item.poster || '',
-        poster_shape: 'POSTER',
-        background: item.background || '',
-        description: item.description || '',
-        release_info: String(item.year || ''),
-        imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
-        genres: Array.isArray(item.genres) ? item.genres : [],
-        added_at: Date.now()
-      });
-    }
+    // Se c'è già, aggiorna (ma non perdiamo tempo a confrontare)
+    uniqueItems.set(contentId, {
+      content_id: contentId,
+      content_type: item.type === 'series' ? 'series' : 'movie',
+      name: item.name || '',
+      poster: item.poster || '',
+      poster_shape: 'POSTER',
+      background: item.background || '',
+      description: item.description || '',
+      release_info: String(item.year || ''),
+      imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
+      genres: Array.isArray(item.genres) ? item.genres : [],
+      added_at: Date.now()
+    });
   });
 
-  // 3. Push TUTTA la library (quella vecchia + i nuovi)
-  const libraryItems = Array.from(currentMap.values());
-  console.log(`📦 Push di ${libraryItems.length} items totali (${addedCount} nuovi)`);
+  const libraryItems = Array.from(uniqueItems.values());
+  console.log(`📦 Push di ${libraryItems.length} items (TUTTI quelli di Stremio)`);
 
   if (libraryItems.length > 0) {
     await supabaseRpc('sync_push_library', { p_items: libraryItems }, accessToken);
     console.log(`✅ Push completato!`);
   }
   
-  return addedCount;
+  return libraryItems.length;
 }
 
 // ============================================
@@ -350,7 +344,7 @@ app.post('/get-nuvio-data', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: SYNC DIRETTO (VERSIONE CORRETTA CON MERGE)
+// ENDPOINT: SYNC DIRETTO (VERSIONE COPIA TOTALE)
 // ============================================
 app.post('/sync', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
@@ -362,36 +356,39 @@ app.post('/sync', async (req, res) => {
   try {
     console.log('🚀 Avvio sync diretto...');
     
-    // 1. Login Stremio e ottieni library
+    // 1. Login Stremio e ottieni TUTTA la library
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     let stremioItems = await getStremioLibrary(stremioAuth.token);
     stremioItems = stremioItems || [];
 
     console.log(`📊 Trovati ${stremioItems.length} elementi su Stremio`);
 
-    // 2. Login Nuvio e ottieni library attuale (PER BACKUP)
+    if (stremioItems.length === 0) {
+      throw new Error("La tua libreria Stremio è vuota");
+    }
+
+    // 2. Login Nuvio
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     
-    const currentNuvioLibrary = await getNuvioLibrary(accessToken);
-    const currentArray = Array.isArray(currentNuvioLibrary) ? currentNuvioLibrary : [];
-    
-    console.log(`📊 Trovati ${currentArray.length} elementi su Nuvio (PRIMA del sync)`);
-
-    // 3. Crea backup PRIMA del sync
+    // 3. Crea backup PRIMA di sovrascrivere
     const backupId = Date.now().toString();
     const backupDir = path.join(__dirname, 'backups');
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     
+    // Backup della library Nuvio attuale
+    const currentNuvioLibrary = await getNuvioLibrary(accessToken);
     fs.writeFileSync(
       path.join(backupDir, `pre-sync-${backupId}.json`),
-      JSON.stringify(currentArray, null, 2)
+      JSON.stringify(currentNuvioLibrary, null, 2)
     );
-    
-    // 4. Push TUTTI gli item Stremio (la funzione push ora fa merge)
-    const addedCount = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, stremioItems);
+    console.log(`💾 Backup creato: pre-sync-${backupId}.json (${currentNuvioLibrary.length} elementi)`);
+
+    // 4. Push TUTTA la library Stremio (SOVRASCRIVE Nuvio)
+    const pushedCount = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, stremioItems);
+    console.log(`✅ Copia completata! ${pushedCount} elementi trasferiti`);
 
     // 5. Verifica il risultato DOPO il sync
     const newNuvioLibrary = await getNuvioLibrary(accessToken);
@@ -401,12 +398,13 @@ app.post('/sync', async (req, res) => {
       success: true,
       backupId: `pre-sync-${backupId}`,
       stats: {
-        before: currentArray.length,
-        after: newArray.length,
-        added: addedCount,
-        total: newArray.length
+        stremio: stremioItems.length,
+        stremioUnici: pushedCount,
+        nuvioPrima: currentNuvioLibrary.length,
+        nuvioDopo: newArray.length,
+        copiati: pushedCount
       },
-      message: `✅ Sync completato! Aggiunti ${addedCount} nuovi film. Nuvio ora ha ${newArray.length} elementi (prima ${currentArray.length}). Backup: pre-sync-${backupId}`
+      message: `✅ COPIA COMPLETATA! Nuvio ora ha ${newArray.length} elementi (come Stremio). Backup: pre-sync-${backupId}`
     });
 
   } catch (error) {
@@ -576,7 +574,7 @@ app.post('/debug-stremio-library', async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE CON MERGE)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE COPIA TOTALE)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
@@ -591,11 +589,11 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • POST /debug-stremio-library - Debug library Stremio`);
   console.log(`   • POST /test-login - Test login Nuvio`);
   console.log(`   • POST /get-nuvio-data - Ottieni library Nuvio`);
-  console.log(`   • POST /sync - Sync diretto (con MERGE!)`);
+  console.log(`   • POST /sync - SYNC TOTALE (sovrascrive Nuvio con Stremio)`);
   console.log(`   • POST /debug-sync - Debug sync (vedi cosa manca)`);
   console.log(`   • GET /backups - Lista backup`);
   console.log(`   • POST /restore - Ripristina backup`);
   console.log(`   • GET /supabase-status - Stato Supabase`);
-  console.log(`\n✨ IMPORTANTE: Ora il sync fa MERGE, non REPLACE!`);
-  console.log(`   I tuoi film Nuvio NON verranno più cancellati.\n`);
+  console.log(`\n✨ IMPORTANTE: Ora il sync fa una COPIA TOTALE di Stremio su Nuvio!`);
+  console.log(`   I due servizi avranno ESATTAMENTE la stessa library.\n`);
 });
