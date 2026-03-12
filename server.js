@@ -80,18 +80,33 @@ const STREMIO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio/4.4.159';
 
 async function stremioLogin(email, password) {
   console.log(`🔐 Login Stremio per: ${email}`);
+  
   const response = await fetch(`${STREMIO_API}/api/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
-    body: JSON.stringify({ email, password, facebook: false, type: 'login' })
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': STREMIO_UA
+    },
+    body: JSON.stringify({
+      email: email,
+      password: password,
+      facebook: false,
+      type: 'login'
+    })
   });
 
   const text = await response.text();
-  if (!response.ok) throw new Error(`Login fallito: ${text.substring(0, 300)}`);
+  if (!response.ok) {
+    throw new Error(`Login fallito (${response.status}): ${text.substring(0, 300)}`);
+  }
 
-  const data = JSON.parse(text);
+  let data = JSON.parse(text);
   const authKey = data?.result?.authKey;
-  if (!authKey) throw new Error('Login fallito: authKey non trovato');
+
+  if (!authKey) {
+    console.error('❌ Risposta login:', JSON.stringify(data, null, 2));
+    throw new Error('Login fallito: authKey non trovato');
+  }
 
   console.log(`✅ Login Stremio OK`);
   return { token: authKey };
@@ -99,27 +114,92 @@ async function stremioLogin(email, password) {
 
 async function getStremioLibrary(authKey) {
   console.log(`📚 Richiesta library Stremio...`);
+  
   const response = await fetch(`${STREMIO_API}/api/datastoreGet`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
-    body: JSON.stringify({ authKey, collection: 'libraryItem', all: true })
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': STREMIO_UA
+    },
+    body: JSON.stringify({
+      authKey: authKey,
+      collection: 'libraryItem',
+      all: true
+    })
   });
 
-  const data = await response.json();
-  let items = Array.isArray(data.result) ? data.result : (data.result?.rows || []).map(r => r.value).filter(Boolean);
+  const text = await response.text();
+  console.log(`📥 Status: ${response.status}`);
+
+  if (!response.ok) {
+    throw new Error(`Stremio API errore ${response.status}: ${text.substring(0, 500)}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Risposta non JSON: ${text.substring(0, 300)}`);
+  }
+
+  let items = [];
+  if (data.result) {
+    if (Array.isArray(data.result)) {
+      items = data.result;
+    } else if (data.result.rows && Array.isArray(data.result.rows)) {
+      items = data.result.rows.map(row => row.value).filter(Boolean);
+    } else if (data.result.value) {
+      items = [data.result.value];
+    }
+  } else if (Array.isArray(data)) {
+    items = data;
+  } else if (data.items) {
+    items = data.items;
+  }
 
   items = items.filter(item => {
-    if (!item || item.removed || item.temp) return false;
+    if (!item) return false;
+    if (item.removed || item.temp) return false;
+    const id = item._id || item.id;
+    if (!id) return false;
     const type = item.type || '';
     return type === 'movie' || type === 'series' || type === 'show';
   });
 
   console.log(`✅ Trovati ${items.length} elementi validi nella library`);
-  return items;
+  return items || [];
+}
+
+async function getStremioContinueWatching(authKey) {
+  try {
+    const response = await fetch(`${STREMIO_API}/api/datastoreGet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+      body: JSON.stringify({ authKey, collection: 'continueWatching', all: true })
+    });
+    const data = await response.json();
+    return (data?.result?.rows || []).map(r => r.value).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function getStremioWatchedHistory(authKey) {
+  try {
+    const response = await fetch(`${STREMIO_API}/api/datastoreGet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+      body: JSON.stringify({ authKey, collection: 'watched', all: true })
+    });
+    const data = await response.json();
+    return (data?.result?.rows || []).map(r => r.value).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 // ============================================
-// HELPER "VISTO" – COPIA TOTALE (film + serie)
+// === NUOVA PARTE: COPIA TOTALE DEL "VISTO" (film + serie) ===
 // ============================================
 function normalizeText(v) { return String(v ?? "").trim(); }
 
@@ -197,9 +277,6 @@ function mapStremioWatchedItem(item = {}) {
   });
 }
 
-// ============================================
-// PUSH VISTO (COPIA TOTALE – sovrascrive tutto)
-// ============================================
 async function pushWatchedToSupabase(accessToken, profileId = 1, items) {
   if (!items || items.length === 0) return 0;
   await supabaseRpc('sync_push_watched_items', {
@@ -221,14 +298,17 @@ async function pushWatchedToSupabase(accessToken, profileId = 1, items) {
 // ============================================
 async function pushLibraryToSupabase(email, password, items) {
   console.log(`☁️ Push cloud per ${email}...`);
+  
   const session = await supabaseLogin(email, password);
   const accessToken = session.access_token;
 
   const uniqueItems = new Map();
+  
   items.forEach(item => {
     const fullId = item._id || item.id || '';
     const contentId = fullId.split(':')[0];
     if (!contentId) return;
+    
     uniqueItems.set(contentId, {
       content_id: contentId,
       content_type: item.type === 'series' ? 'series' : 'movie',
@@ -245,14 +325,150 @@ async function pushLibraryToSupabase(email, password, items) {
   });
 
   const libraryItems = Array.from(uniqueItems.values());
+  console.log(`📦 Push di ${libraryItems.length} items (TUTTI quelli di Stremio)`);
+
   if (libraryItems.length > 0) {
     await supabaseRpc('sync_push_library', { p_items: libraryItems }, accessToken);
+    console.log(`✅ Push completato!`);
   }
+  
   return libraryItems.length;
 }
 
 // ============================================
-// ENDPOINT: SYNC DIRETTO (LIBRARY + VISTO COPIA TOTALE)
+// ENDPOINT TMDB PER POSTER (DA AGGIUNGERE SU RENDER)
+// ============================================
+app.get('/tmdb-poster', async (req, res) => {
+  const apiKey = process.env.TMDB_API_KEY;
+
+  if (!apiKey) return res.status(204).end();
+
+  const { title, year, type } = req.query;
+  if (!title) return res.status(400).json({ error: 'title required' });
+
+  try {
+    const isMovie = type === 'movie';
+    const endpoint = isMovie
+      ? `https://api.themoviedb.org/3/search/movie?api_key=\( {apiKey}&query= \){encodeURIComponent(title)}&year=${year || ''}&language=it-IT`
+      : `https://api.themoviedb.org/3/search/tv?api_key=\( {apiKey}&query= \){encodeURIComponent(title)}&language=it-IT`;
+
+    const response = await fetch(endpoint);
+    const data = await response.json();
+
+    const hit = data.results && data.results[0];
+    const posterPath = hit && hit.poster_path;
+    const url = posterPath ? `https://image.tmdb.org/t/p/w185${posterPath}` : null;
+
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.json({ url });
+
+  } catch (err) {
+    console.error('TMDB error:', err.message);
+    res.status(500).json({ url: null });
+  }
+});
+
+// ============================================
+// ENDPOINT: TEST LOGIN STREMIO
+// ============================================
+app.post('/test-stremio-login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    await stremioLogin(email, password);
+    res.json({ success: true, message: '✅ Login Stremio funzionante!' });
+  } catch (error) {
+    res.json({ success: false, message: `❌ ${error.message}` });
+  }
+});
+
+// ============================================
+// ENDPOINT: OTTIENI DATI STREMIO
+// ============================================
+app.post('/get-stremio-data', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const auth = await stremioLogin(email, password);
+    const [library, continueWatching, watchedHistory] = await Promise.all([
+      getStremioLibrary(auth.token),
+      getStremioContinueWatching(auth.token),
+      getStremioWatchedHistory(auth.token)
+    ]);
+
+    res.json({
+      success: true,
+      library: library || [],
+      continueWatching: continueWatching || [],
+      watchedHistory: watchedHistory || [],
+      stats: {
+        movies: (library || []).filter(i => i.type === 'movie').length,
+        series: (library || []).filter(i => i.type === 'series').length,
+        continueWatching: (continueWatching || []).length,
+        watched: (watchedHistory || []).length
+      }
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: TEST LOGIN NUVIO
+// ============================================
+app.post('/test-login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.json({ success: false, message: '❌ Inserisci email e password' });
+  }
+
+  if (!isSupabaseConfigured()) {
+    return res.json({ 
+      success: false, 
+      message: '❌ Supabase non configurato sul server' 
+    });
+  }
+
+  try {
+    const session = await supabaseLogin(email, password);
+    res.json({ success: true, message: `✅ Login Nuvio riuscito!` });
+  } catch (error) {
+    res.json({ success: false, message: `❌ ${error.message}` });
+  }
+});
+
+// ============================================
+// ENDPOINT: OTTIENI DATI NUVIO
+// ============================================
+app.post('/get-nuvio-data', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.json({ success: false, error: 'Email e password richieste' });
+  }
+  
+  try {
+    const session = await supabaseLogin(email, password);
+    const library = await getNuvioLibrary(session.access_token);
+    
+    const libraryArray = Array.isArray(library) ? library : [];
+    
+    res.json({
+      success: true,
+      library: libraryArray,
+      stats: {
+        total: libraryArray.length,
+        movies: libraryArray.filter(i => i.content_type === 'movie').length,
+        series: libraryArray.filter(i => i.content_type === 'series').length
+      }
+    });
+  } catch (error) {
+    console.error('❌ Errore get-nuvio-data:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: SYNC DIRETTO (VERSIONE COPIA TOTALE + VISTO)
 // ============================================
 app.post('/sync', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword, profileId } = req.body;
@@ -264,45 +480,65 @@ app.post('/sync', async (req, res) => {
   const finalProfileId = parseInt(profileId) || 1;
 
   try {
-    console.log('🚀 Avvio COPIA TOTALE (Library + VISTO film e serie)...');
-
+    console.log('🚀 Avvio sync diretto (Library + VISTO)...');
+    
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     let stremioItems = await getStremioLibrary(stremioAuth.token);
+    stremioItems = stremioItems || [];
 
-    if (stremioItems.length === 0) throw new Error("La tua libreria Stremio è vuota");
+    console.log(`📊 Trovati ${stremioItems.length} elementi su Stremio`);
+
+    if (stremioItems.length === 0) {
+      throw new Error("La tua libreria Stremio è vuota");
+    }
 
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
-
-    // Backup library (come prima)
+    
     const backupId = Date.now().toString();
     const backupDir = path.join(__dirname, 'backups');
-    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    
     const currentNuvioLibrary = await getNuvioLibrary(accessToken);
     const backupPath = path.join(backupDir, `pre-sync-${backupId}.json`);
-    fs.writeFileSync(backupPath, JSON.stringify(currentNuvioLibrary, null, 2));
+    fs.writeFileSync(
+      backupPath,
+      JSON.stringify(currentNuvioLibrary, null, 2)
+    );
+    console.log(`💾 Backup creato: pre-sync-\( {backupId}.json ( \){currentNuvioLibrary.length} elementi)`);
 
-    // 1. COPIA LIBRARY
+    // 1. COPIA LIBRARY (esattamente come prima)
     const pushedCount = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, stremioItems);
 
-    // 2. COPIA VISTO (film + serie – sovrascrive completamente)
+    // 2. COPIA TOTALE DEL "VISTO" (film + serie – sovrascrive completamente)
+    console.log('📺 Copia badge "VISTO" (film + serie)...');
     const watchedRaw = stremioItems.filter(item => isWatchedState(item.state || {}));
     const watchedItems = watchedRaw.map(mapStremioWatchedItem).filter(Boolean);
     const watchedCount = await pushWatchedToSupabase(accessToken, finalProfileId, watchedItems);
 
+    console.log(`✅ ${watchedCount} contenuti segnati come "VISTO" copiati`);
+
     const newNuvioLibrary = await getNuvioLibrary(accessToken);
+    const newArray = Array.isArray(newNuvioLibrary) ? newNuvioLibrary : [];
 
     res.json({
       success: true,
       backupId: `pre-sync-${backupId}`,
+      backupPath: backupPath,
       stats: {
-        library_copiati: pushedCount,
+        stremio: stremioItems.length,
+        stremioUnici: pushedCount,
+        nuvioPrima: currentNuvioLibrary.length,
+        nuvioDopo: newArray.length,
+        copiati: pushedCount,
         watched_copiati: watchedCount,
         profileId: finalProfileId
       },
       message: `✅ COPIA COMPLETATA!\n` +
-               `Libreria: ${pushedCount} film/serie (come Stremio)\n` +
-               `Badge "VISTO": ${watchedCount} contenuti (film + serie) ora hanno il ✓ verde\n` +
+               `Libreria: ${newArray.length} elementi (come Stremio)\n` +
+               `Badge "VISTO": ${watchedCount} film/serie ora hanno il ✓ verde\n` +
                `Profilo Nuvio: ${finalProfileId}`
     });
 
@@ -313,27 +549,190 @@ app.post('/sync', async (req, res) => {
 });
 
 // ============================================
-// (Tutti gli altri endpoint rimangono identici a prima)
+// ENDPOINT: LISTA BACKUP (FIXATO!)
 // ============================================
-app.get('/tmdb-poster', /* ... invariato ... */);
-app.post('/test-stremio-login', /* ... invariato ... */);
-app.post('/get-stremio-data', /* ... invariato ... */);
-app.post('/test-login', /* ... invariato ... */);
-app.post('/get-nuvio-data', /* ... invariato ... */);
-app.get('/backups', /* ... invariato ... */);
-app.post('/restore', /* ... invariato ... */);
-app.post('/debug-sync', /* ... invariato ... */);
-app.get('/supabase-status', /* ... invariato ... */);
+app.get('/backups', (req, res) => {
+  const backupsDir = path.join(__dirname, 'backups');
+  
+  if (!fs.existsSync(backupsDir)) {
+    return res.json({ backups: [] });
+  }
+
+  try {
+    const files = fs.readdirSync(backupsDir);
+    const backups = files
+      .filter(f => f.endsWith('.json') && f.startsWith('pre-sync-'))
+      .map(f => {
+        const id = f.replace('.json', '').replace('pre-sync-', '');
+        const stats = fs.statSync(path.join(backupsDir, f));
+        return {
+          id: id,
+          fullName: f,
+          date: new Date(parseInt(id)).toLocaleString(),
+          size: stats.size
+        };
+      })
+      .sort((a, b) => parseInt(b.id) - parseInt(a.id));
+
+    res.json({ backups });
+  } catch (error) {
+    console.error('Errore lettura backup:', error);
+    res.json({ backups: [] });
+  }
+});
+
+// ============================================
+// ENDPOINT: RIPRISTINA BACKUP (FIXATO!)
+// ============================================
+app.post('/restore', async (req, res) => {
+  const { backupId, nuvioEmail, nuvioPassword } = req.body;
+
+  if (!backupId || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ success: false, error: 'backupId, email e password richiesti' });
+  }
+
+  try {
+    let backupPath = path.join(__dirname, 'backups', `pre-sync-${backupId}.json`);
+    
+    if (!fs.existsSync(backupPath)) {
+      backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
+    }
+    
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ success: false, error: 'Backup non trovato' });
+    }
+
+    const backupLibrary = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+    const backupArray = Array.isArray(backupLibrary) ? backupLibrary : [];
+
+    const session = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = session.access_token;
+
+    const items = backupArray.map(item => ({
+      _id: item.content_id,
+      type: item.content_type,
+      name: item.name,
+      poster: item.poster,
+      year: item.release_info,
+      description: item.description,
+      genres: item.genres,
+      imdbRating: item.imdb_rating?.toString()
+    }));
+
+    const restored = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, items);
+
+    res.json({
+      success: true,
+      message: `✅ Backup ripristinato! ${restored} film/serie.`
+    });
+
+  } catch (error) {
+    console.error('❌ Errore restore:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: DEBUG SYNC
+// ============================================
+app.post('/debug-sync', async (req, res) => {
+  const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+
+  try {
+    const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+    let stremioItems = await getStremioLibrary(stremioAuth.token);
+    stremioItems = stremioItems || [];
+
+    const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = nuvioSession.access_token;
+    const currentNuvioLibrary = await getNuvioLibrary(accessToken);
+    const currentArray = Array.isArray(currentNuvioLibrary) ? currentNuvioLibrary : [];
+
+    const existingIds = new Set(currentArray.map(i => i.content_id));
+
+    const missing = [];
+    stremioItems.forEach(item => {
+      const stremioId = item._id?.split(':')[0];
+      if (stremioId && !existingIds.has(stremioId)) {
+        missing.push({
+          id: item._id,
+          name: item.name,
+          type: item.type
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        stremio: stremioItems.length,
+        nuvio: currentArray.length,
+        missing: missing.length
+      },
+      missing: missing.slice(0, 20)
+    });
+
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: STATO SUPABASE
+// ============================================
+app.get('/supabase-status', (req, res) => {
+  res.json({
+    configured: isSupabaseConfigured(),
+    message: isSupabaseConfigured() ? '✅ Supabase pronto' : '⚠️ Supabase non configurato'
+  });
+});
+
+// ============================================
+// ENDPOINT: HEALTH CHECK
+// ============================================
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
-app.get('/configure', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.post('/debug-stremio-library', /* ... invariato ... */);
+
+// ============================================
+// ENDPOINT: CONFIGURE PAGE
+// ============================================
+app.get('/configure', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ============================================
+// ENDPOINT: DEBUG STREMIO LIBRARY
+// ============================================
+app.post('/debug-stremio-library', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const auth = await stremioLogin(email, password);
+    const response = await fetch(`${STREMIO_API}/api/datastoreGet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+      body: JSON.stringify({ authKey: auth.token, collection: 'libraryItem', all: true })
+    });
+    const data = await response.json();
+    res.json({ success: true, raw_response: data, rows_count: data?.result?.rows?.length || 0 });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
 
 // ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE FINALE - COPIA TOTALE + VISTO FILM E SERIE)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE FINALE con VISTO copiato)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
-  console.log(`\n✅ Ora il badge "VISTO" viene copiato anche sulle serie TV!\n`);
+  console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
+  console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
+  
+  if (!isSupabaseConfigured()) {
+    console.log(`   → Imposta SUPABASE_URL e SUPABASE_ANON_KEY su Render`);
+  }
+  
+  console.log(`\n✅ ENDPOINT ATTIVI:`);
+  console.log(`   • POST /sync - SYNC TOTALE (library + badge VISTO copiati su film e serie)`);
+  console.log(`\n✨ Il badge ✓ verde ora appare anche sulle serie TV!\n`);
 });
