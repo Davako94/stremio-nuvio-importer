@@ -27,7 +27,7 @@ async function supabaseRequest(path, { method = 'GET', body, authToken } = {}) {
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(`${SUPABASE_URL}${path}`, {
+  const res = await fetch(`\( {SUPABASE_URL} \){path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -60,82 +60,68 @@ async function supabaseRpc(functionName, payload, accessToken) {
 }
 
 // ============================================
-// FUNZIONI STREMIO API (CORRETTE)
+// FUNZIONI STREMIO API (VERSIONE UFFICIALE 2026 - PLUG & PLAY)
 // ============================================
 const STREMIO_API = 'https://api.strem.io';
 
 async function stremioLogin(email, password) {
-  // Stremio richiede spesso User-Agent specifici per non rispondere 404
-  const commonHeaders = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio/4.4.159'
+  const headers = {
+    'Content-Type': 'application/json'
+    // NESSUN User-Agent, Accept o altri header → evita il 404 di Cloudflare
   };
 
-  // Proviamo prima l'endpoint standard senza il path /auth/
-  const endpoints = [
-    `${STREMIO_API}/api/login`,
-    `${STREMIO_API}/api/auth/login`
-  ];
+  console.log(`🔐 Tentativo login Stremio su: ${STREMIO_API}/api/login`);
 
-  let lastError = '';
+  const response = await fetch(`${STREMIO_API}/api/login`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ email, password })
+  });
 
-  for (const url of endpoints) {
-    try {
-      console.log(`🔐 Tentativo login Stremio su: ${url}`);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: commonHeaders,
-        body: JSON.stringify({ email, password })
-      });
-
-      const text = await response.text();
-      if (!response.ok) {
-        lastError = `Status ${response.status}: ${text.substring(0, 100)}`;
-        continue;
-      }
-
-      const data = JSON.parse(text);
-      // Il token può essere in data.token o data.result.token
-      const token = data.token || (data.result && data.result.token);
-      
-      if (!token) {
-        lastError = "Risposta ricevuta ma token mancante";
-        continue;
-      }
-
-      console.log(`✅ Login Stremio riuscito`);
-      return { token, user: data.user || data.result?.user };
-    } catch (e) {
-      lastError = e.message;
-    }
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Stremio login fallito: ${response.status} - ${text.substring(0, 200)}`);
   }
 
-  throw new Error(`Errore login Stremio: ${lastError || 'Endpoint non raggiungibile'}`);
+  const data = await response.json();
+  const result = data.result || data;
+
+  const authKey = result.authKey || result.token;
+  if (!authKey) {
+    throw new Error("Login riuscito ma authKey mancante nella risposta");
+  }
+
+  console.log(`✅ Login Stremio riuscito (authKey ottenuto)`);
+  return { 
+    token: authKey, 
+    user: result.user 
+  };
 }
 
 async function getStremioLibrary(authToken) {
   try {
-    const response = await fetch(`${STREMIO_API}/api/library`, {
-      method: 'POST', // Molti endpoint Stremio preferiscono POST anche per lettura
+    const response = await fetch(`${STREMIO_API}/api/datastoreGet`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ authKey: authToken }) // Stremio usa spesso authKey nel body
+      body: JSON.stringify({
+        all: true,
+        authKey: authToken,
+        collection: "libraryItem"
+      })
     });
-    
-    // Fallback se il primo metodo fallisce (alcuni account usano il Bearer)
+
     if (!response.ok) {
-        const resAlt = await fetch(`${STREMIO_API}/api/library`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const dataAlt = await resAlt.json();
-        return dataAlt.items || dataAlt.result || [];
+      throw new Error(`Stremio datastoreGet: ${response.status}`);
     }
 
     const data = await response.json();
-    return data.items || data.result || [];
+    const items = data.result || data.items || data || [];
+
+    console.log(`✅ Libreria Stremio caricata: ${items.length} elementi`);
+    return items;
   } catch (error) {
     console.error('❌ Stremio library error:', error.message);
-    return [];
+    throw error; // così l'errore arriva chiaro all'utente
   }
 }
 
@@ -188,8 +174,8 @@ app.post('/sync', async (req, res) => {
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     const stremioItems = await getStremioLibrary(stremioAuth.token);
     
-    if (!stremioItems || stremioItems.length === 0) {
-        throw new Error("La tua libreria Stremio sembra vuota.");
+    if (stremioItems.length === 0) {
+      throw new Error("La tua libreria Stremio sembra vuota.");
     }
 
     const pushedCount = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, stremioItems);
@@ -200,17 +186,19 @@ app.post('/sync', async (req, res) => {
       message: `✅ Sync completato! Importati ${pushedCount} elementi.`
     });
   } catch (error) {
+    console.error('❌ Errore sync:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.post('/test-stremio-login', async (req, res) => {
-    try {
-        await stremioLogin(req.body.email, req.body.password);
-        res.json({ success: true, message: '✅ Login Stremio funzionante!' });
-    } catch (e) {
-        res.json({ success: false, message: `❌ ${e.message}` });
-    }
+  const { email, password } = req.body;
+  try {
+    await stremioLogin(email, password);
+    res.json({ success: true, message: '✅ Login Stremio funzionante!' });
+  } catch (e) {
+    res.json({ success: false, message: `❌ ${e.message}` });
+  }
 });
 
 app.get('/supabase-status', (req, res) => {
