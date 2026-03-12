@@ -87,15 +87,14 @@ async function getNuvioProfileId(accessToken) {
   return 1;
 }
 
-async function getNuvioWatchedItems(accessToken, profileId) {
-  // Se profileId non passato, lo risolviamo da get_sync_owner
-  const pid = profileId ?? await getNuvioProfileId(accessToken);
+async function getNuvioWatchedItems(accessToken, profileId = 1) {
   try {
-    const items = await supabaseRpc('sync_pull_watched_items', { p_profile_id: pid }, accessToken);
-    console.log(`📖 Watched items per profileId=${pid}: ${Array.isArray(items) ? items.length : 0}`);
-    return Array.isArray(items) ? items : [];
+    const items = await supabaseRpc('sync_pull_watched_items', { p_profile_id: Number(profileId) }, accessToken);
+    const arr = Array.isArray(items) ? items : [];
+    console.log(`📖 sync_pull_watched_items (profileId=${profileId}): ${arr.length} items`);
+    return arr;
   } catch (error) {
-    console.error('❌ Errore getNuvioWatchedItems:', error);
+    console.error('❌ Errore getNuvioWatchedItems:', error.message);
     return [];
   }
 }
@@ -115,6 +114,22 @@ function extractSupportedContentId(value) {
   return '';
 }
 
+// ============================================
+// WATCHED LOGIC — porta fedele dello script originale sync.mjs
+// IMPORTANTE: solo film vengono sincronizzati come "visti".
+// Le serie richiedono dati episodio per episodio (S01E01...) che
+// Stremio non espone in modo affidabile — come da nota dello script.
+// ============================================
+
+function isSupportedContentId(value) {
+  return Boolean(extractSupportedContentId(value));
+}
+
+function normalizeContentType(value) {
+  const text = String(value ?? '').trim().toLowerCase();
+  return text === 'series' || text === 'tv' ? 'series' : 'movie';
+}
+
 // Determina se un item Stremio è "visto"
 function isWatchedState(state = {}) {
   const timesWatched = Number(state.timesWatched || 0);
@@ -123,6 +138,14 @@ function isWatchedState(state = {}) {
   const timeWatched = Number(state.timeWatched || 0);
   const completionRatio = duration > 0 ? timeWatched / duration : 0;
   return timesWatched > 0 || flaggedWatched > 0 || completionRatio >= 0.7;
+}
+
+// Solo film visti (come da script originale — le serie vengono saltate)
+function isWatchedStremioMovieItem(item = {}) {
+  if (String(item.type || '').toLowerCase() !== 'movie') return false;
+  const contentId = extractSupportedContentId(item._id || item.id);
+  if (!isSupportedContentId(contentId)) return false;
+  return isWatchedState(item.state || {});
 }
 
 function toTimestamp(value, fallback = Date.now()) {
@@ -139,36 +162,121 @@ function toTimestamp(value, fallback = Date.now()) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-// Mappa un item Stremio watched nel formato Nuvio
-function mapStremioItemToWatched(item) {
-  const contentId = extractSupportedContentId(item._id || item.id);
+// Formato intermedio camelCase (come normalizeWatchedItem nello script)
+function normalizeWatchedItem(item = {}) {
+  const contentId = extractSupportedContentId(item.contentId);
   if (!contentId) return null;
-  const state = item.state || {};
+  const seasonValue = item.season == null ? null : Number(item.season);
+  const episodeValue = item.episode == null ? null : Number(item.episode);
   return {
-    content_id: contentId,
-    content_type: item.type === 'series' ? 'series' : 'movie',
-    title: item.name || '',
-    season: null,
-    episode: null,
-    watched_at: toTimestamp(state.lastWatched || item._mtime, Date.now())
+    contentId,
+    contentType: normalizeContentType(item.contentType),
+    title: String(item.title ?? '').trim(),
+    season: Number.isFinite(seasonValue) && seasonValue > 0 ? Math.trunc(seasonValue) : null,
+    episode: Number.isFinite(episodeValue) && episodeValue > 0 ? Math.trunc(episodeValue) : null,
+    watchedAt: toTimestamp(item.watchedAt)
   };
 }
 
-// Costruisce la lista degli items watched da pushare su Nuvio
-function buildWatchedItemsFromStremio(stremioItems) {
-  const seen = new Set();
-  const result = [];
-  for (const item of stremioItems) {
-    if (!item) continue;
-    if (!isWatchedState(item.state || {})) continue;
-    const mapped = mapStremioItemToWatched(item);
-    if (!mapped || !mapped.content_id) continue;
-    if (seen.has(mapped.content_id)) continue;
-    seen.add(mapped.content_id);
-    result.push(mapped);
-  }
-  return result;
+// Chiave univoca per deduplicazione (come watchedKey nello script)
+function watchedKey(item = {}) {
+  const contentId = String(item.contentId || '').trim();
+  const season = item.season == null ? '' : String(Number(item.season));
+  const episode = item.episode == null ? '' : String(Number(item.episode));
+  return `${contentId}:${season}:${episode}`;
 }
+
+// Deduplica: tieni il più recente per ogni chiave
+function dedupeWatchedItems(items = []) {
+  const byKey = new Map();
+  for (const rawItem of (Array.isArray(items) ? items : [])) {
+    const item = normalizeWatchedItem(rawItem);
+    if (!item?.contentId) continue;
+    const key = watchedKey(item);
+    const existing = byKey.get(key);
+    if (!existing || Number(item.watchedAt || 0) >= Number(existing.watchedAt || 0)) {
+      byKey.set(key, item);
+    }
+  }
+  return Array.from(byKey.values())
+    .sort((a, b) => Number(b.watchedAt || 0) - Number(a.watchedAt || 0));
+}
+
+// Merge: unisce remote + incoming, tieni il più recente
+function mergeWatchedItems(remoteItems = [], incomingItems = []) {
+  const merged = new Map();
+  for (const item of dedupeWatchedItems(remoteItems)) {
+    merged.set(watchedKey(item), item);
+  }
+  for (const item of dedupeWatchedItems(incomingItems)) {
+    const key = watchedKey(item);
+    const existing = merged.get(key);
+    if (!existing) { merged.set(key, item); continue; }
+    const existingTs = Number(existing.watchedAt || 0);
+    const incomingTs = Number(item.watchedAt || 0);
+    if (incomingTs > existingTs) { merged.set(key, { ...existing, ...item }); continue; }
+    if (incomingTs === existingTs) {
+      merged.set(key, { ...existing, title: existing.title || item.title, contentType: existing.contentType || item.contentType });
+    }
+  }
+  return Array.from(merged.values())
+    .sort((a, b) => Number(b.watchedAt || 0) - Number(a.watchedAt || 0));
+}
+
+// Formato snake_case per Supabase (come toRemotePayloadItem nello script)
+function toRemotePayloadItem(item = {}) {
+  return {
+    content_id: item.contentId,
+    content_type: item.contentType,
+    title: item.title || '',
+    season: item.season == null ? null : Number(item.season),
+    episode: item.episode == null ? null : Number(item.episode),
+    watched_at: Number(item.watchedAt || Date.now())
+  };
+}
+
+// Converte item da Stremio a formato intermedio camelCase (solo FILM visti)
+function mapStremioMovieToWatched(item) {
+  const contentId = extractSupportedContentId(item._id || item.id);
+  if (!isSupportedContentId(contentId)) return null;
+  const state = item.state || {};
+  return normalizeWatchedItem({
+    contentId,
+    contentType: 'movie', // solo film
+    title: item.name || '',
+    watchedAt: state.lastWatched || item._mtime || Date.now()
+  });
+}
+
+// Converte item da Nuvio (snake_case) a formato intermedio camelCase
+function mapRemoteWatchedItem(row = {}) {
+  return normalizeWatchedItem({
+    contentId: row.content_id || row.contentId,
+    contentType: row.content_type || row.contentType,
+    title: row.title || row.name,
+    season: row.season,
+    episode: row.episode,
+    watchedAt: row.watched_at || row.watchedAt
+  });
+}
+
+// Estrae solo i film visti da Stremio (come fetchStremioWatchedItems nello script)
+function extractWatchedMoviesFromStremio(stremioItems) {
+  return dedupeWatchedItems(
+    stremioItems
+      .filter(item => isWatchedStremioMovieItem(item))
+      .map(item => mapStremioMovieToWatched(item))
+      .filter(Boolean)
+  );
+}
+
+// Signature per confronto (evita push inutili)
+function buildWatchedSignature(items = []) {
+  return dedupeWatchedItems(items)
+    .map(item => `${watchedKey(item)}|${item.contentType}|${item.title}|${item.watchedAt}`)
+    .join('\n');
+}
+
 
 // ============================================
 // FUNZIONI STREMIO API
@@ -344,11 +452,9 @@ app.post('/get-stremio-data', async (req, res) => {
       getStremioWatchedHistory(auth.token)
     ]);
 
-    // Calcola watched IDs dalla library (usando lo stato degli item)
-    const watchedIds = (library || [])
-      .filter(item => isWatchedState(item.state || {}))
-      .map(item => extractSupportedContentId(item._id || item.id))
-      .filter(Boolean);
+    // watchedIds: solo i film visti (le serie non hanno dati episodio affidabili)
+    const watchedMovies = extractWatchedMoviesFromStremio(library || []);
+    const watchedIds = watchedMovies.map(w => w.contentId).filter(Boolean);
 
     res.json({
       success: true,
@@ -436,106 +542,95 @@ app.post('/sync', async (req, res) => {
     let stremioItems = await getStremioLibrary(stremioAuth.token);
     stremioItems = stremioItems || [];
     console.log(`📊 Trovati ${stremioItems.length} elementi su Stremio`);
-    if (stremioItems.length === 0) throw new Error("La tua libreria Stremio è vuota");
+    if (stremioItems.length === 0) throw new Error('La tua libreria Stremio è vuota');
 
-    // 2. Watched items da Stremio
-    const watchedItems = buildWatchedItemsFromStremio(stremioItems);
-    console.log(`👁️  Trovati ${watchedItems.length} film/serie visti su Stremio`);
+    // 2. Watched: solo FILM (come da script originale — le serie richiedono dati episodio)
+    const incomingWatched = extractWatchedMoviesFromStremio(stremioItems);
+    console.log(`👁️  Film visti su Stremio: ${incomingWatched.length} (le serie vengono saltate)`);
 
-    // 3. Login Nuvio + profileId reale + backup
+    // 3. Login Nuvio
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
+    const profileId = 1; // sempre 1 come da script originale
+    console.log(`👤 profileId: ${profileId}`);
 
-    // ← Recupera il profileId reale (fondamentale per sync_push_watched_items)
-    const profileId = await getNuvioProfileId(accessToken);
-    console.log(`👤 Nuvio profileId: ${profileId}`);
-
+    // 4. Backup
     const backupId = Date.now().toString();
     const backupDir = path.join(__dirname, 'backups');
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
     const currentNuvioLibrary = await getNuvioLibrary(accessToken);
-    const currentWatched = await getNuvioWatchedItems(accessToken, profileId);
+    const currentWatchedRaw = await getNuvioWatchedItems(accessToken, profileId);
 
-    // Backup di library + watched
-    const backupPath = path.join(backupDir, `pre-sync-${backupId}.json`);
-    fs.writeFileSync(backupPath, JSON.stringify({
-      library: currentNuvioLibrary,
-      watched: currentWatched
-    }, null, 2));
-    console.log(`💾 Backup creato: pre-sync-${backupId}.json`);
+    fs.writeFileSync(
+      path.join(backupDir, `pre-sync-${backupId}.json`),
+      JSON.stringify({ library: currentNuvioLibrary, watched: currentWatchedRaw }, null, 2)
+    );
+    console.log(`💾 Backup pre-sync-${backupId}.json`);
 
-    // 4. Push library
+    // 5. Push library Stremio → Nuvio
     const { count: pushedCount } = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, stremioItems);
 
-    // 5. Push watched items
-    let watchedPushResult = { pushed: 0, errors: [] };
-    if (watchedItems.length > 0) {
+    // 6. Push watched — merge fedele allo script originale
+    let watchedPushed = 0;
+    let watchedWarning = null;
+
+    if (incomingWatched.length > 0) {
       try {
-        // Merge: porta avanti i watched già su Nuvio + aggiungi quelli nuovi da Stremio
-        const existingWatchedIds = new Set(currentWatched.map(w => w.content_id));
-        const newWatched = watchedItems.filter(w => !existingWatchedIds.has(w.content_id));
+        // Converti watched già su Nuvio in formato camelCase per il merge
+        const remoteWatched = currentWatchedRaw
+          .map(row => mapRemoteWatchedItem(row))
+          .filter(Boolean);
 
-        // Items già presenti su Nuvio (mantieni il loro formato)
-        const existingFormatted = currentWatched.map(w => ({
-          content_id: String(w.content_id),
-          content_type: String(w.content_type || 'movie'),
-          title: String(w.title || ''),
-          season: w.season != null ? Number(w.season) : null,
-          episode: w.episode != null ? Number(w.episode) : null,
-          watched_at: Number(w.watched_at || Date.now())
-        }));
+        // Merge: porta avanti remoti + integra nuovi Stremio
+        const mergedWatched = mergeWatchedItems(remoteWatched, incomingWatched);
 
-        // Nuovi da Stremio
-        const newFormatted = newWatched.map(w => ({
-          content_id: String(w.content_id),
-          content_type: String(w.content_type || 'movie'),
-          title: String(w.title || ''),
-          season: null,
-          episode: null,
-          watched_at: Number(w.watched_at || Date.now())
-        }));
+        const remoteSig = buildWatchedSignature(remoteWatched);
+        const mergedSig = buildWatchedSignature(mergedWatched);
 
-        const allWatched = [...existingFormatted, ...newFormatted];
+        if (remoteSig === mergedSig) {
+          console.log('✅ Watched già aggiornati, nessun push necessario');
+        } else {
+          // Converti in formato snake_case per Supabase (come toRemotePayloadItem)
+          const payload = dedupeWatchedItems(mergedWatched).map(item => toRemotePayloadItem(item));
 
-        console.log(`👁️  Push watched: ${allWatched.length} totali (${existingFormatted.length} esistenti + ${newFormatted.length} nuovi), profileId=${profileId}`);
-        console.log(`   Esempio item: ${JSON.stringify(allWatched[0])}`);
+          console.log(`📤 Push watched: ${payload.length} items, profileId=${profileId}`);
+          console.log(`   Esempio: ${JSON.stringify(payload[0])}`);
 
-        const pushResult = await supabaseRpc('sync_push_watched_items', {
-          p_profile_id: Number(profileId), // FORZA integer
-          p_items: allWatched
-        }, accessToken);
+          const pushRes = await supabaseRpc('sync_push_watched_items', {
+            p_profile_id: profileId,
+            p_items: payload
+          }, accessToken);
 
-        console.log(`✅ sync_push_watched_items risposta:`, JSON.stringify(pushResult));
-        watchedPushResult.pushed = newFormatted.length;
-      } catch (watchedErr) {
-        // NON bloccare l'intero sync per un errore watched — logga e segnala
-        console.error(`❌ Errore push watched:`, watchedErr.message);
-        watchedPushResult.errors.push(watchedErr.message);
+          console.log(`✅ Risposta push watched:`, JSON.stringify(pushRes));
+          watchedPushed = payload.length - remoteWatched.length;
+        }
+      } catch (err) {
+        console.error('❌ Errore push watched:', err.message);
+        watchedWarning = err.message;
       }
     }
 
-    // 6. Verifica
+    // 7. Verifica finale
     const newNuvioLibrary = await getNuvioLibrary(accessToken);
-    const newWatchedItems = await getNuvioWatchedItems(accessToken, profileId);
+    const newWatchedRaw = await getNuvioWatchedItems(accessToken, profileId);
     const newArray = Array.isArray(newNuvioLibrary) ? newNuvioLibrary : [];
 
     res.json({
       success: true,
       backupId: `pre-sync-${backupId}`,
-      watchedWarning: watchedPushResult.errors.length > 0 ? watchedPushResult.errors[0] : null,
+      watchedWarning,
       stats: {
         stremio: stremioItems.length,
         pushedLibrary: pushedCount,
-        pushedWatched: watchedPushResult.pushed,
-        watchedDaStremio: watchedItems.length,
+        watchedDaStremio: incomingWatched.length,
         nuvioPrima: currentNuvioLibrary.length,
         nuvioDopo: newArray.length,
-        nuvioWatchedDopo: newWatchedItems.length
+        nuvioWatchedDopo: newWatchedRaw.length
       },
-      message: watchedPushResult.errors.length > 0
-        ? `✅ Library sincronizzata (${newArray.length} titoli). ⚠️ Watched non sincronizzati: ${watchedPushResult.errors[0]}`
-        : `✅ SYNC COMPLETATO! ${newArray.length} titoli, ${newWatchedItems.length} visti su Nuvio. Backup: pre-sync-${backupId}`
+      message: watchedWarning
+        ? `✅ Library OK (${newArray.length} titoli). ⚠️ Watched: ${watchedWarning}`
+        : `✅ SYNC COMPLETATO! ${newArray.length} titoli · ${newWatchedRaw.length} film visti su Nuvio · Backup: pre-sync-${backupId}`
     });
 
   } catch (error) {
@@ -543,6 +638,7 @@ app.post('/sync', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ============================================
 // ENDPOINT: LISTA BACKUP
@@ -588,7 +684,7 @@ app.post('/restore', async (req, res) => {
 
     const session = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = session.access_token;
-    const profileId = await getNuvioProfileId(accessToken);
+    const profileId = 1; // come da script originale
 
     // Ripristina library
     const items = backupLibrary.map(item => ({
@@ -603,18 +699,20 @@ app.post('/restore', async (req, res) => {
     }));
     const { count: restored } = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, items);
 
-    // Ripristina watched se presenti
+    // Ripristina watched se presenti (usa toRemotePayloadItem per formato corretto)
     if (backupWatched.length > 0) {
+      const watchedPayload = backupWatched.map(w => ({
+        content_id: String(w.content_id || ''),
+        content_type: String(w.content_type || 'movie'),
+        title: String(w.title || ''),
+        season: w.season != null ? Number(w.season) : null,
+        episode: w.episode != null ? Number(w.episode) : null,
+        watched_at: Number(w.watched_at || Date.now())
+      })).filter(w => w.content_id);
+
       await supabaseRpc('sync_push_watched_items', {
         p_profile_id: profileId,
-        p_items: backupWatched.map(w => ({
-          content_id: w.content_id,
-          content_type: w.content_type,
-          title: w.title || '',
-          season: null,
-          episode: null,
-          watched_at: Number(w.watched_at || Date.now())
-        }))
+        p_items: watchedPayload
       }, accessToken);
     }
 
@@ -638,42 +736,37 @@ app.post('/debug-watched', async (req, res) => {
     addLog('🔐 Login Stremio...');
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     const stremioItems = await getStremioLibrary(stremioAuth.token);
-    const watchedItems = buildWatchedItemsFromStremio(stremioItems);
-    addLog(`✅ Stremio: ${stremioItems.length} totali, ${watchedItems.length} visti`);
-    if (watchedItems.length > 0) addLog(`   Esempio: ${JSON.stringify(watchedItems[0])}`);
+    const watchedItems = extractWatchedMoviesFromStremio(stremioItems);
+    addLog(`✅ Stremio: ${stremioItems.length} totali, ${watchedItems.length} film visti`);
+    addLog(`   (le serie sono escluse — Nuvio richiede dati episodio per episodio)`);
+    if (watchedItems.length > 0) addLog(`   Esempio: ${JSON.stringify(toRemotePayloadItem(watchedItems[0]))}`);
 
     // 2. Login Nuvio
     addLog('🔐 Login Nuvio...');
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
-    addLog(`✅ Login Nuvio OK, token: ${accessToken.substring(0, 20)}...`);
+    addLog(`✅ Login Nuvio OK`);
 
-    // 3. get_sync_owner
+    // 3. get_sync_owner (solo informativo)
     try {
       const owner = await supabaseRpc('get_sync_owner', {}, accessToken);
       addLog(`👤 get_sync_owner: ${JSON.stringify(owner)}`);
-    } catch (e) { addLog(`⚠️  get_sync_owner: ${e.message}`); }
+    } catch (e) { addLog(`ℹ️  get_sync_owner: ${e.message}`); }
 
     // 4. Pull watched con profileId=1
+    const profileId = 1;
     try {
-      const existing = await supabaseRpc('sync_pull_watched_items', { p_profile_id: 1 }, accessToken);
-      addLog(`📖 sync_pull_watched_items (profileId=1): ${Array.isArray(existing) ? existing.length : JSON.stringify(existing)} items`);
-    } catch (e) { addLog(`❌ sync_pull_watched_items (1): ${e.message}`); }
+      const existing = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
+      addLog(`📖 sync_pull_watched_items (profileId=${profileId}): ${Array.isArray(existing) ? existing.length : JSON.stringify(existing)} items`);
+    } catch (e) { addLog(`❌ sync_pull_watched_items: ${e.message}`); }
 
     // 5. Test push con 1 solo item
     if (watchedItems.length > 0) {
-      const testItem = {
-        content_id: String(watchedItems[0].content_id),
-        content_type: String(watchedItems[0].content_type),
-        title: String(watchedItems[0].title || ''),
-        season: null,
-        episode: null,
-        watched_at: Number(watchedItems[0].watched_at || Date.now())
-      };
+      const testItem = toRemotePayloadItem(watchedItems[0]);
       addLog(`🧪 Test push 1 item: ${JSON.stringify(testItem)}`);
       try {
         const pushRes = await supabaseRpc('sync_push_watched_items', {
-          p_profile_id: 1,
+          p_profile_id: profileId,
           p_items: [testItem]
         }, accessToken);
         addLog(`✅ Push OK: ${JSON.stringify(pushRes)}`);
@@ -681,12 +774,12 @@ app.post('/debug-watched', async (req, res) => {
 
       // 6. Verifica che sia stato salvato
       try {
-        const afterPush = await supabaseRpc('sync_pull_watched_items', { p_profile_id: 1 }, accessToken);
+        const afterPush = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
         addLog(`📖 Dopo push: ${Array.isArray(afterPush) ? afterPush.length : '?'} items`);
       } catch (e) { addLog(`❌ Pull dopo push: ${e.message}`); }
     }
 
-    res.json({ success: true, log, watchedItems: watchedItems.slice(0, 5) });
+    res.json({ success: true, log, watchedItems: watchedItems.slice(0, 5).map(toRemotePayloadItem) });
   } catch (error) {
     log.push(`💥 ERRORE FATALE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
