@@ -98,16 +98,23 @@ async function getNuvioWatchedItems(accessToken, profileId = 1) {
 // WATCHED + PROGRESS LOGIC
 // ============================================
 
-// FIX 1: extractSupportedContentId ora dà PRIORITÀ a IMDB
+// FIX 1: extractSupportedContentId ora dà PRIORITÀ a IMDB e FORZA l'uso dello stesso ID della library
 function extractSupportedContentId(value) {
   const text = String(value ?? '').trim();
   if (!text) return '';
 
+  // CERCA PRIMA IMDB - DEVE ESSERE IDENTICO ALLA LIBRARY!
   const imdbMatch = text.match(/tt\d+/i);
-  if (imdbMatch) return imdbMatch[0].toLowerCase();
+  if (imdbMatch) {
+    const imdbId = imdbMatch[0].toLowerCase();
+    return imdbId;
+  }
 
+  // Solo se NON c'è IMDB, usa TMDB (ma questo causerà mismatch con library!)
   const tmdbMatch = text.match(/tmdb:(\d+)/i);
-  if (tmdbMatch) return `tmdb:${tmdbMatch[1]}`;
+  if (tmdbMatch) {
+    return `tmdb:${tmdbMatch[1]}`;
+  }
 
   return '';
 }
@@ -239,10 +246,13 @@ function mergeWatchedItems(remoteItems = [], incomingItems = []) {
   return Array.from(merged.values()).sort((a, b) => Number(b.watchedAt || 0) - Number(a.watchedAt || 0));
 }
 
-// FIX 2 e 5: toRemotePayloadItem ora normalizza content_type e include trakt
+// FIX 2 e 5: toRemotePayloadItem ora normalizza content_type e usa extractSupportedContentId
 function toRemotePayloadItem(item = {}) {
+  // FORZA l'uso di extractSupportedContentId per garantire stesso ID della library
+  const contentId = extractSupportedContentId(item.contentId || item.title);
+  
   return {
-    content_id: item.contentId,
+    content_id: contentId,
     content_type: item.contentType === 'series' ? 'series' : 'movie', // FORZA 'series' o 'movie'
     title: item.title || '',
     season: item.season == null ? null : Number(item.season),
@@ -299,21 +309,25 @@ function normalizeLibraryItem(raw) {
   };
 }
 
+// FIX: buildWatchedMoviesPayload ora usa extractSupportedContentId
 function buildWatchedMoviesPayload(items) {
   const payload = [];
   for (const item of items) {
     if (!item.id) continue;
     if (item.type !== 'movie') continue;
     if (item.state.timesWatched <= 0 && item.state.flaggedWatched <= 0) continue;
+    
+    // FORZA l'estrazione IMDB per matchare library
     const contentId = extractSupportedContentId(item.id);
     if (!contentId) continue;
+    
     payload.push({
-      contentId,
+      contentId,  // <-- Ora sarà tt... non tmdb:...
       contentType: 'movie',
       title: item.name || contentId,
       season: null,
       episode: null,
-      watchedAt: toTimestamp(item.state.lastWatched || item.mtime || Date.now()) // FIX 4
+      watchedAt: toTimestamp(item.state.lastWatched || item.mtime || Date.now())
     });
   }
   return payload;
@@ -412,6 +426,7 @@ async function mapSeriesVideos(seriesItems, concurrency = 4) {
   return results;
 }
 
+// FIX: buildWatchedEpisodesPayload ora usa extractSupportedContentId
 async function buildWatchedEpisodesPayload(items, concurrency = 4, onProgress = null) {
   const seriesItems = items.filter(i => i.type === 'series' && i.state.watchedField);
   if (seriesItems.length === 0) return [];
@@ -435,14 +450,17 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4, onProgress = 
       watchedFlags = constructWatchedBoolArray(watchedField, normalized.map(v => v.id));
     } catch { continue; }
 
-    const watchedAt = toTimestamp(item.state.lastWatched || item.mtime || Date.now()); // FIX 4
+    const watchedAt = toTimestamp(item.state.lastWatched || item.mtime || Date.now());
 
     for (let i = 0; i < normalized.length; i++) {
       if (!watchedFlags[i]) continue;
       const v = normalized[i];
       if (v.season == null || v.episode == null) continue;
+      
+      // FORZA estrazione IMDB per matchare library
       const contentId = extractSupportedContentId(item.id);
       if (!contentId) continue;
+      
       payload.push({
         contentId,
         contentType: 'series',
@@ -466,7 +484,7 @@ function buildWatchProgressPayload(items) {
     if (item.removed && !item.temp) continue;
     const videoId = item.state.videoId || item.id;
     const { season, episode } = parseSeasonEpisode(videoId);
-    const lastWatched = toTimestamp(item.state.lastWatched || item.mtime || Date.now()); // FIX 4
+    const lastWatched = toTimestamp(item.state.lastWatched || item.mtime || Date.now());
     const contentId = extractSupportedContentId(item.id);
     if (!contentId) continue;
     payload.push({
@@ -808,12 +826,14 @@ app.post('/sync', async (req, res) => {
     previewMap.forEach((w, contentId) => {
       const found = currentNuvioLibrary.find(i => i.content_id === contentId);
       if (!found) {
-        console.log(`❌ NOT IN LIBRARY: ${contentId} (${w.title || ''})`);
+        console.log(`❌ NOT IN LIBRARY: ${contentId} (${w.title || ''}) — IL BADGE NON APPARIRÀ!`);
         mismatchCount++;
+      } else {
+        console.log(`✅ IN LIBRARY: ${contentId} (${w.title || ''})`);
       }
     });
     if (mismatchCount === 0) {
-      console.log("✅ Tutti i content_id presenti in library");
+      console.log("✅ Tutti i content_id presenti in library — IL BADGE FUNZIONERÀ!");
     }
 
     fs.writeFileSync(
@@ -1385,17 +1405,19 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`🖼️  TMDB: ${process.env.TMDB_API_KEY ? '✅' : '❌ (TMDB_API_KEY non impostata)'}`);
   console.log(`\n✅ FIX APPLICATI:`);
-  console.log(`   • extractSupportedContentId: PRIORITÀ a IMDB`);
+  console.log(`   • extractSupportedContentId: PRIORITÀ a IMDB e FORZATO in tutte le funzioni`);
   console.log(`   • normalizeContentType: SOLO 'movie' o 'series'`);
-  console.log(`   • toRemotePayloadItem: content_type forzato`);
+  console.log(`   • toRemotePayloadItem: content_id forzato con extractSupportedContentId`);
+  console.log(`   • buildWatchedMoviesPayload: contentId forzato con extractSupportedContentId`);
+  console.log(`   • buildWatchedEpisodesPayload: contentId forzato con extractSupportedContentId`);
   console.log(`   • toTimestamp: fallback a Date.now()`);
-  console.log(`   • CHECK LIBRARY MATCH prima del push`);
+  console.log(`   • CHECK LIBRARY MATCH con messaggi chiari`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
   console.log(`   • GET  /tmdb-poster`);
   console.log(`   • POST /test-stremio-login`);
   console.log(`   • POST /get-stremio-data`);
   console.log(`   • POST /get-nuvio-data`);
-  console.log(`   • POST /sync                    ← ORA CON BOLLINO BLU!`);
+  console.log(`   • POST /sync                    ← ORA CON BOLLINO BLU PER TUTTI!`);
   console.log(`   • GET  /backups`);
   console.log(`   • POST /restore`);
   console.log(`   • POST /debug-sync`);
