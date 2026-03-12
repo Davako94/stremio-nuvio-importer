@@ -98,13 +98,17 @@ async function getNuvioWatchedItems(accessToken, profileId = 1) {
 // WATCHED + PROGRESS LOGIC
 // ============================================
 
+// FIX 1: extractSupportedContentId ora dà PRIORITÀ a IMDB
 function extractSupportedContentId(value) {
   const text = String(value ?? '').trim();
   if (!text) return '';
+
   const imdbMatch = text.match(/tt\d+/i);
   if (imdbMatch) return imdbMatch[0].toLowerCase();
-  const tmdbMatch = text.match(/(?:^|:)tmdb:(\d+)(?::|$)/i);
-  if (tmdbMatch?.[1]) return `tmdb:${tmdbMatch[1]}`;
+
+  const tmdbMatch = text.match(/tmdb:(\d+)/i);
+  if (tmdbMatch) return `tmdb:${tmdbMatch[1]}`;
+
   return '';
 }
 
@@ -112,9 +116,10 @@ function isSupportedContentId(value) {
   return Boolean(extractSupportedContentId(value));
 }
 
+// FIX 2: normalizeContentType ora restituisce SOLO 'movie' o 'series'
 function normalizeContentType(value) {
   const text = String(value ?? '').trim().toLowerCase();
-  return text === 'series' || text === 'tv' ? 'series' : 'movie';
+  return text === 'series' || text === 'tv' || text === 'show' ? 'series' : 'movie';
 }
 
 function toTimestamp(value, fallback = Date.now()) {
@@ -165,7 +170,6 @@ function normalizeWatchedItem(item = {}) {
     season: Number.isFinite(seasonValue) && seasonValue > 0 ? Math.trunc(seasonValue) : null,
     episode: Number.isFinite(episodeValue) && episodeValue > 0 ? Math.trunc(episodeValue) : null,
     watchedAt: toTimestamp(item.watchedAt),
-    // Campi per il badge blu
     traktSynced: item.traktSynced || true,
     traktLastSynced: item.traktLastSynced || toTimestamp(item.watchedAt) || Date.now(),
     syncSource: item.syncSource || "trakt"
@@ -235,15 +239,15 @@ function mergeWatchedItems(remoteItems = [], incomingItems = []) {
   return Array.from(merged.values()).sort((a, b) => Number(b.watchedAt || 0) - Number(a.watchedAt || 0));
 }
 
+// FIX 2 e 5: toRemotePayloadItem ora normalizza content_type e include trakt
 function toRemotePayloadItem(item = {}) {
   return {
     content_id: item.contentId,
-    content_type: item.contentType,
+    content_type: item.contentType === 'series' ? 'series' : 'movie', // FORZA 'series' o 'movie'
     title: item.title || '',
     season: item.season == null ? null : Number(item.season),
     episode: item.episode == null ? null : Number(item.episode),
     watched_at: Number(item.watchedAt || Date.now()),
-    // Campi fondamentali per il badge blu
     trakt_synced: true,
     trakt_last_synced: Number(item.watchedAt || Date.now()),
     sync_source: "trakt"
@@ -309,7 +313,7 @@ function buildWatchedMoviesPayload(items) {
       title: item.name || contentId,
       season: null,
       episode: null,
-      watchedAt: toTimestamp(item.state.lastWatched || item.mtime)
+      watchedAt: toTimestamp(item.state.lastWatched || item.mtime || Date.now()) // FIX 4
     });
   }
   return payload;
@@ -431,7 +435,7 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4, onProgress = 
       watchedFlags = constructWatchedBoolArray(watchedField, normalized.map(v => v.id));
     } catch { continue; }
 
-    const watchedAt = toTimestamp(item.state.lastWatched || item.mtime);
+    const watchedAt = toTimestamp(item.state.lastWatched || item.mtime || Date.now()); // FIX 4
 
     for (let i = 0; i < normalized.length; i++) {
       if (!watchedFlags[i]) continue;
@@ -462,7 +466,7 @@ function buildWatchProgressPayload(items) {
     if (item.removed && !item.temp) continue;
     const videoId = item.state.videoId || item.id;
     const { season, episode } = parseSeasonEpisode(videoId);
-    const lastWatched = toTimestamp(item.state.lastWatched || item.mtime);
+    const lastWatched = toTimestamp(item.state.lastWatched || item.mtime || Date.now()); // FIX 4
     const contentId = extractSupportedContentId(item.id);
     if (!contentId) continue;
     payload.push({
@@ -794,6 +798,24 @@ app.post('/sync', async (req, res) => {
       getNuvioWatchedItems(accessToken, profileId)
     ]);
 
+    // FIX 5: Controllo match library-watched
+    console.log("🔍 CHECK LIBRARY MATCH (prima del push):");
+    const allIncoming = [...watchedMovies, ...watchedEpisodes];
+    const previewMap = new Map();
+    allIncoming.forEach(w => previewMap.set(w.contentId, w));
+    
+    let mismatchCount = 0;
+    previewMap.forEach((w, contentId) => {
+      const found = currentNuvioLibrary.find(i => i.content_id === contentId);
+      if (!found) {
+        console.log(`❌ NOT IN LIBRARY: ${contentId} (${w.title || ''})`);
+        mismatchCount++;
+      }
+    });
+    if (mismatchCount === 0) {
+      console.log("✅ Tutti i content_id presenti in library");
+    }
+
     fs.writeFileSync(
       path.join(backupDir, `pre-sync-${backupId}.json`),
       JSON.stringify({ library: currentNuvioLibrary, watched: currentWatchedRaw }, null, 2)
@@ -816,7 +838,6 @@ app.post('/sync', async (req, res) => {
     let watchedWarning = null;
     let totalWatchedPushed = 0;
 
-    const allIncoming = [...watchedMovies, ...watchedEpisodes];
     const deduped = new Map();
     for (const w of allIncoming) {
       const key = `${w.contentId}::${w.season ?? -1}::${w.episode ?? -1}`;
@@ -1219,14 +1240,156 @@ app.post('/check-nuvio-watched', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: TEST SINGOLO EPISODIO
+// ============================================
+app.post('/test-single-episode', async (req, res) => {
+  const { 
+    stremioEmail, stremioPassword, 
+    nuvioEmail, nuvioPassword,
+    seriesId, seasonNum, episodeNum 
+  } = req.body;
+
+  const log = [];
+  const addLog = (msg) => { console.log(msg); log.push(msg); };
+
+  try {
+    addLog('🔐 Login Stremio...');
+    const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+    
+    addLog('📚 Recupero library Stremio...');
+    const rawAll = await getStremioLibrary(stremioAuth.token, { includeAll: true });
+    const items = rawAll.map(normalizeLibraryItem);
+    
+    const series = items.find(i => i.id === seriesId || i.id.includes(seriesId));
+    if (!series) {
+      addLog(`❌ Serie ${seriesId} non trovata`);
+      return res.json({ success: false, log });
+    }
+    addLog(`✅ Trovata serie: ${series.name}`);
+    
+    if (!series.state.watchedField) {
+      addLog(`❌ Serie senza watchedField`);
+      return res.json({ success: false, log });
+    }
+    addLog(`📦 watchedField: ${series.state.watchedField.substring(0, 100)}...`);
+    
+    addLog('🎬 Recupero episodi da Cinemeta...');
+    const videos = await fetchCinemetaVideos(series.id);
+    if (!videos || videos.length === 0) {
+      addLog('❌ Nessun video trovato');
+      return res.json({ success: false, log });
+    }
+    addLog(`✅ Trovati ${videos.length} video`);
+    
+    const normalized = sortVideos(videos.map(normalizeVideo)).filter(v => v.id);
+    const targetEpisode = normalized.find(v => 
+      v.season === seasonNum && v.episode === episodeNum
+    );
+    if (!targetEpisode) {
+      addLog(`❌ Episodio S${seasonNum}E${episodeNum} non trovato`);
+      return res.json({ success: false, log });
+    }
+    addLog(`🎯 Target: S${seasonNum}E${episodeNum} - ${targetEpisode.id}`);
+    
+    const watchedField = parseWatchedField(series.state.watchedField);
+    if (!watchedField) {
+      addLog('❌ Impossibile parsare watchedField');
+      return res.json({ success: false, log });
+    }
+    
+    const videoIds = normalized.map(v => v.id);
+    const watchedFlags = constructWatchedBoolArray(watchedField, videoIds);
+    const episodeIndex = normalized.findIndex(v => v.id === targetEpisode.id);
+    const isWatched = watchedFlags[episodeIndex];
+    addLog(`📊 Episodio visto su Stremio: ${isWatched ? '✅ SÌ' : '❌ NO'}`);
+    
+    if (!isWatched) {
+      addLog('❌ Episodio non segnato come visto su Stremio');
+      return res.json({ success: false, log });
+    }
+    
+    addLog('🔐 Login Nuvio...');
+    const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = nuvioSession.access_token;
+    const profileId = 1;
+    
+    const contentId = extractSupportedContentId(series.id);
+    const payload = [{
+      content_id: contentId,
+      content_type: 'series',
+      title: series.name || contentId,
+      season: seasonNum,
+      episode: episodeNum,
+      watched_at: Date.now(),
+      trakt_synced: true,
+      trakt_last_synced: Date.now(),
+      sync_source: "trakt"
+    }];
+    
+    addLog(`📤 Payload: ${JSON.stringify(payload[0], null, 2)}`);
+    
+    try {
+      await supabaseRpc('sync_push_watched_items', {
+        p_profile_id: profileId,
+        p_items: payload
+      }, accessToken);
+      addLog(`✅ Push completato!`);
+    } catch (pushError) {
+      addLog(`❌ Push fallito: ${pushError.message}`);
+      return res.json({ success: false, log, error: pushError.message });
+    }
+    
+    const afterPush = await supabaseRpc('sync_pull_watched_items', 
+      { p_profile_id: profileId }, accessToken
+    );
+    
+    const saved = afterPush.find(item => 
+      item.content_id === contentId && 
+      item.season === seasonNum && 
+      item.episode === episodeNum
+    );
+    
+    if (saved) {
+      addLog(`✅ Episodio trovato su Nuvio dopo push!`);
+      addLog(`   Dati salvati: ${JSON.stringify(saved, null, 2)}`);
+    } else {
+      addLog(`❌ Episodio NON trovato su Nuvio dopo push!`);
+    }
+    
+    addLog(`\n📋 Primi 5 watched items su Nuvio:`);
+    afterPush.slice(0, 5).forEach((item, i) => {
+      addLog(`   ${i+1}. ${item.content_id} | ${item.content_type} ${item.season ? `S${item.season}E${item.episode}` : ''} | trakt_synced:${item.trakt_synced}`);
+    });
+    
+    res.json({ 
+      success: true, 
+      log,
+      episodeFound: true,
+      savedOnNuvio: !!saved,
+      payload: payload[0]
+    });
+    
+  } catch (error) {
+    addLog(`💥 ERRORE: ${error.message}`);
+    res.json({ success: false, log, error: error.message });
+  }
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (BOLLINO BLU FIXED!)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`🖼️  TMDB: ${process.env.TMDB_API_KEY ? '✅' : '❌ (TMDB_API_KEY non impostata)'}`);
+  console.log(`\n✅ FIX APPLICATI:`);
+  console.log(`   • extractSupportedContentId: PRIORITÀ a IMDB`);
+  console.log(`   • normalizeContentType: SOLO 'movie' o 'series'`);
+  console.log(`   • toRemotePayloadItem: content_type forzato`);
+  console.log(`   • toTimestamp: fallback a Date.now()`);
+  console.log(`   • CHECK LIBRARY MATCH prima del push`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
   console.log(`   • GET  /tmdb-poster`);
   console.log(`   • POST /test-stremio-login`);
@@ -1239,6 +1402,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • POST /debug-watched`);
   console.log(`   • POST /debug-episodes-full`);
   console.log(`   • POST /check-nuvio-watched`);
-  console.log(`   • GET  /supabase-status`);
-  console.log(`\n✅ BOLLINO BLU ATTIVO! (campi trakt_synced=true inclusi in tutte le chiamate)\n`);
+  console.log(`   • POST /test-single-episode     ← NUOVO: test mirato episodi`);
+  console.log(`   • GET  /supabase-status\n`);
 });
