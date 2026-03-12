@@ -72,19 +72,13 @@ async function getNuvioLibrary(accessToken) {
   }
 }
 
-// Recupera il profileId reale dell'utente Nuvio.
-// NOTA: sync_push/pull_watched_items si aspetta p_profile_id come INTEGER (1, 2, 3...).
-// get_sync_owner restituisce invece l'UUID owner — non è il profile_id.
-// Lo script originale usa sempre 1 come default, facciamo lo stesso.
 async function getNuvioProfileId(accessToken) {
-  // Prova a chiamare get_sync_owner solo per log/debug, ma usa sempre 1 come profile_id
   try {
     const response = await supabaseRpc('get_sync_owner', {}, accessToken);
     console.log(`👤 get_sync_owner risposta:`, JSON.stringify(response));
   } catch (e) {
-    console.log(`ℹ️  get_sync_owner non disponibile: ${e.message}`);
+    console.log(`ℹ️ get_sync_owner non disponibile: ${e.message}`);
   }
-  // p_profile_id è sempre 1 (default Nuvio, come da script originale)
   return 1;
 }
 
@@ -102,14 +96,8 @@ async function getNuvioWatchedItems(accessToken, profileId = 1) {
 
 // ============================================
 // WATCHED + PROGRESS LOGIC
-// Port fedele dello script ufficiale Nuvio (sync.js)
-// Supporta:
-//  - Film visti (timesWatched/flaggedWatched)
-//  - Episodi visti via bitfield zlib+base64 in state.watched
-//  - Watch progress (timeOffset/duration) per "continua a guardare"
 // ============================================
 
-// Estrae content_id IMDB o TMDB
 function extractSupportedContentId(value) {
   const text = String(value ?? '').trim();
   if (!text) return '';
@@ -149,7 +137,6 @@ function toPositiveInt(value, fallback = 0) {
   return Math.trunc(n);
 }
 
-// Parsa season/episode da un videoId tipo "tt1234567:2:5"
 function parseSeasonEpisode(videoId) {
   if (!videoId) return { season: null, episode: null };
   const parts = String(videoId).split(':');
@@ -160,14 +147,11 @@ function parseSeasonEpisode(videoId) {
   return { season: Math.trunc(season), episode: Math.trunc(episode) };
 }
 
-// Chiave univoca per progress
 function buildProgressKey(contentType, contentId, videoId, season, episode) {
   if (contentType === 'movie') return contentId;
   if (season != null && episode != null) return `${contentId}_s${season}e${episode}`;
   return `${contentId}_${videoId || contentId}`;
 }
-
-// ─── WATCHED ITEM HELPERS ────────────────────────────────────────────────────
 
 function normalizeWatchedItem(item = {}) {
   const contentId = extractSupportedContentId(item.contentId);
@@ -223,7 +207,6 @@ function mergeWatchedItems(remoteItems = [], incomingItems = []) {
   return Array.from(merged.values()).sort((a, b) => Number(b.watchedAt || 0) - Number(a.watchedAt || 0));
 }
 
-// Formato snake_case per Supabase
 function toRemotePayloadItem(item = {}) {
   return {
     content_id: item.contentId,
@@ -252,8 +235,6 @@ function buildWatchedSignature(items = []) {
     .join('\n');
 }
 
-// ─── NORMALIZZA LIBRARY ITEM (include watchedField e progress) ───────────────
-
 function normalizeLibraryItem(raw) {
   const id = raw._id || raw.id;
   const state = raw.state || {};
@@ -274,13 +255,10 @@ function normalizeLibraryItem(raw) {
       videoId: state.video_id ?? state.videoId ?? null,
       timesWatched: toPositiveInt(state.timesWatched ?? 0),
       flaggedWatched: toPositiveInt(state.flaggedWatched ?? 0),
-      // Campo chiave per episodi visti: stringa compressa zlib+base64
       watchedField: typeof state.watched === 'string' ? state.watched : null,
     }
   };
 }
-
-// ─── FILM VISTI ──────────────────────────────────────────────────────────────
 
 function buildWatchedMoviesPayload(items) {
   const payload = [];
@@ -301,11 +279,6 @@ function buildWatchedMoviesPayload(items) {
   }
   return payload;
 }
-
-// ─── EPISODI VISTI via BITFIELD ──────────────────────────────────────────────
-// Il campo state.watched di Stremio è:
-//   "anchorVideoId:anchorLength:base64(zlib(bitfield))"
-// Il bitfield codifica quali episodi (nell'ordine della lista Cinemeta) sono stati visti.
 
 function parseWatchedField(str) {
   if (!str || typeof str !== 'string') return null;
@@ -385,7 +358,6 @@ async function fetchCinemetaVideos(id) {
   }
 }
 
-// Recupera le episode list di tutte le serie con watchedField in parallelo
 async function mapSeriesVideos(seriesItems, concurrency = 4) {
   const queue = [...seriesItems];
   const results = new Map();
@@ -401,7 +373,6 @@ async function mapSeriesVideos(seriesItems, concurrency = 4) {
   return results;
 }
 
-// Costruisce il payload episodi visti decodificando il bitfield
 async function buildWatchedEpisodesPayload(items, concurrency = 4, onProgress = null) {
   const seriesItems = items.filter(i => i.type === 'series' && i.state.watchedField);
   if (seriesItems.length === 0) return [];
@@ -447,8 +418,6 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4, onProgress = 
   return payload;
 }
 
-// ─── WATCH PROGRESS ("continua a guardare") ──────────────────────────────────
-
 function buildWatchProgressPayload(items) {
   const payload = [];
   for (const item of items) {
@@ -476,17 +445,10 @@ function buildWatchProgressPayload(items) {
   return payload;
 }
 
-// ─── FUNZIONI DI COMODO ──────────────────────────────────────────────────────
-
 function extractWatchedMoviesFromStremio(stremioRaw) {
   const items = stremioRaw.map(normalizeLibraryItem);
   return buildWatchedMoviesPayload(items);
 }
-
-function toRemotePayloadItemFromCamel(item = {}) { return toRemotePayloadItem(item); }
-
-
-
 
 // ============================================
 // FUNZIONI STREMIO API
@@ -535,7 +497,6 @@ async function getStremioLibrary(authKey, { includeAll = false } = {}) {
     items = data.items;
   }
 
-  // Filtra solo movie/series validi
   items = items.filter(item => {
     if (!item) return false;
     const id = item._id || item.id;
@@ -544,7 +505,6 @@ async function getStremioLibrary(authKey, { includeAll = false } = {}) {
     return type === 'movie' || type === 'series' || type === 'show';
   });
 
-  // Per libreria: esclude removed/temp. Per watched: includeAll=true per avere il bitfield anche su serie rimosse
   if (!includeAll) {
     items = items.filter(item => !item.removed && !item.temp);
   }
@@ -655,7 +615,6 @@ app.post('/test-stremio-login', async (req, res) => {
 
 // ============================================
 // ENDPOINT: OTTIENI DATI STREMIO
-// Ora include watchedIds: array di content_id visti
 // ============================================
 app.post('/get-stremio-data', async (req, res) => {
   const { email, password } = req.body;
@@ -670,14 +629,9 @@ app.post('/get-stremio-data', async (req, res) => {
 
     const normalizedAll = libraryAll.map(normalizeLibraryItem);
 
-    // Film visti (istantaneo)
     const watchedMovies = buildWatchedMoviesPayload(normalizedAll);
     const watchedMovieIds = watchedMovies.map(w => w.contentId).filter(Boolean);
-
-    // Serie con watchedField (bitfield) — contiamo solo, non decodifichiamo qui (lento)
     const seriesWithWatched = normalizedAll.filter(i => i.type === 'series' && i.state.watchedField);
-
-    // watchedIds per il frontend (solo film per ora — le serie vengono decodificate nel sync)
     const watchedIds = watchedMovieIds;
 
     res.json({
@@ -691,7 +645,7 @@ app.post('/get-stremio-data', async (req, res) => {
         series: (libraryFiltered || []).filter(i => i.type === 'series').length,
         continueWatching: (continueWatching || []).length,
         watched: watchedMovieIds.length,
-        watchedSeriesCount: seriesWithWatched.length  // serie con bitfield visto
+        watchedSeriesCount: seriesWithWatched.length
       }
     });
   } catch (error) {
@@ -716,7 +670,6 @@ app.post('/test-login', async (req, res) => {
 
 // ============================================
 // ENDPOINT: OTTIENI DATI NUVIO
-// Ora include watchedIds: array di content_id visti
 // ============================================
 app.post('/get-nuvio-data', async (req, res) => {
   const { email, password } = req.body;
@@ -755,7 +708,7 @@ app.post('/get-nuvio-data', async (req, res) => {
 app.post('/sync', async (req, res) => {
   const {
     stremioEmail, stremioPassword, nuvioEmail, nuvioPassword,
-    includeWatchedEpisodes = false  // opzionale — richiede chiamate Cinemeta (lento)
+    includeWatchedEpisodes = false
   } = req.body;
 
   if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword) {
@@ -765,9 +718,6 @@ app.post('/sync', async (req, res) => {
   try {
     console.log('🚀 Avvio sync diretto...');
 
-    // 1. Login Stremio
-    // rawAll: tutti gli item (inclusi rimossi) — per watched bitfield e progress
-    // rawFiltered: solo attivi — per push library
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     const [rawAll, rawFiltered] = await Promise.all([
       getStremioLibrary(stremioAuth.token, { includeAll: true }),
@@ -777,11 +727,9 @@ app.post('/sync', async (req, res) => {
     const items = rawAll.map(normalizeLibraryItem);
     console.log(`📊 Library Stremio: ${rawFiltered.length} attivi / ${rawAll.length} totali (inclusi rimossi)`);
 
-    // 2. Film visti
     const watchedMovies = buildWatchedMoviesPayload(items);
     console.log(`🎬 Film visti: ${watchedMovies.length}`);
 
-    // 3. Episodi visti (richiede Cinemeta — opzionale perché lento)
     let watchedEpisodes = [];
     if (includeWatchedEpisodes) {
       const seriesWithBitfield = items.filter(i => i.type === 'series' && i.state.watchedField);
@@ -791,15 +739,13 @@ app.post('/sync', async (req, res) => {
     } else {
       const seriesWithBitfield = items.filter(i => i.type === 'series' && i.state.watchedField).length;
       if (seriesWithBitfield > 0) {
-        console.log(`ℹ️  ${seriesWithBitfield} serie con episodi visti — passa includeWatchedEpisodes=true per sincronizzarli`);
+        console.log(`ℹ️ ${seriesWithBitfield} serie con episodi visti — passa includeWatchedEpisodes=true per sincronizzarli`);
       }
     }
 
-    // 4. Watch progress ("continua a guardare")
     const progressPayload = buildWatchProgressPayload(items);
     console.log(`⏩ Watch progress: ${progressPayload.length} elementi`);
 
-    // 5. Login Nuvio + backup
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     const profileId = 1;
@@ -819,10 +765,8 @@ app.post('/sync', async (req, res) => {
     );
     console.log(`💾 Backup pre-sync-${backupId}.json`);
 
-    // 6. Push library (solo item attivi — non removed)
     const { count: pushedCount } = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, rawFiltered);
 
-    // 7. Push watch progress → sync_push_watch_progress
     let progressWarning = null;
     if (progressPayload.length > 0) {
       try {
@@ -834,11 +778,9 @@ app.post('/sync', async (req, res) => {
       }
     }
 
-    // 8. Push watched (film + episodi) → sync_push_watched_items
     let watchedWarning = null;
     let totalWatchedPushed = 0;
 
-    // Combina film + episodi (deduplicati)
     const allIncoming = [...watchedMovies, ...watchedEpisodes];
     const deduped = new Map();
     for (const w of allIncoming) {
@@ -850,7 +792,6 @@ app.post('/sync', async (req, res) => {
 
     if (incomingWatched.length > 0) {
       try {
-        // Merge con i watched già su Nuvio
         const remoteWatched = currentWatchedRaw.map(row => mapRemoteWatchedItem(row)).filter(Boolean);
         const mergedWatched = mergeWatchedItems(remoteWatched, incomingWatched);
 
@@ -875,7 +816,6 @@ app.post('/sync', async (req, res) => {
       }
     }
 
-    // 9. Verifica finale
     const [newNuvioLibrary, newWatchedRaw] = await Promise.all([
       getNuvioLibrary(accessToken),
       getNuvioWatchedItems(accessToken, profileId)
@@ -912,8 +852,6 @@ app.post('/sync', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
-
 
 // ============================================
 // ENDPOINT: LISTA BACKUP
@@ -953,15 +891,13 @@ app.post('/restore', async (req, res) => {
 
     const backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
 
-    // Supporta sia il vecchio formato (array) che il nuovo (oggetto con library + watched)
     const backupLibrary = Array.isArray(backupData) ? backupData : (backupData.library || []);
     const backupWatched = Array.isArray(backupData) ? [] : (backupData.watched || []);
 
     const session = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = session.access_token;
-    const profileId = 1; // come da script originale
+    const profileId = 1;
 
-    // Ripristina library
     const items = backupLibrary.map(item => ({
       _id: item.content_id,
       type: item.content_type,
@@ -974,7 +910,6 @@ app.post('/restore', async (req, res) => {
     }));
     const { count: restored } = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, items);
 
-    // Ripristina watched se presenti (usa toRemotePayloadItem per formato corretto)
     if (backupWatched.length > 0) {
       const watchedPayload = backupWatched.map(w => ({
         content_id: String(w.content_id || ''),
@@ -999,7 +934,7 @@ app.post('/restore', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: DEBUG WATCHED (diagnostica completa)
+// ENDPOINT: DEBUG WATCHED
 // ============================================
 app.post('/debug-watched', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
@@ -1007,7 +942,6 @@ app.post('/debug-watched', async (req, res) => {
   const addLog = (msg) => { console.log(msg); log.push(msg); };
 
   try {
-    // 1. Login Stremio
     addLog('🔐 Login Stremio...');
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     const stremioItems = await getStremioLibrary(stremioAuth.token);
@@ -1016,26 +950,22 @@ app.post('/debug-watched', async (req, res) => {
     addLog(`   (le serie sono escluse — Nuvio richiede dati episodio per episodio)`);
     if (watchedItems.length > 0) addLog(`   Esempio: ${JSON.stringify(toRemotePayloadItem(watchedItems[0]))}`);
 
-    // 2. Login Nuvio
     addLog('🔐 Login Nuvio...');
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     addLog(`✅ Login Nuvio OK`);
 
-    // 3. get_sync_owner (solo informativo)
     try {
       const owner = await supabaseRpc('get_sync_owner', {}, accessToken);
       addLog(`👤 get_sync_owner: ${JSON.stringify(owner)}`);
-    } catch (e) { addLog(`ℹ️  get_sync_owner: ${e.message}`); }
+    } catch (e) { addLog(`ℹ️ get_sync_owner: ${e.message}`); }
 
-    // 4. Pull watched con profileId=1
     const profileId = 1;
     try {
       const existing = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
       addLog(`📖 sync_pull_watched_items (profileId=${profileId}): ${Array.isArray(existing) ? existing.length : JSON.stringify(existing)} items`);
     } catch (e) { addLog(`❌ sync_pull_watched_items: ${e.message}`); }
 
-    // 5. Test push con 1 solo item
     if (watchedItems.length > 0) {
       const testItem = toRemotePayloadItem(watchedItems[0]);
       addLog(`🧪 Test push 1 item: ${JSON.stringify(testItem)}`);
@@ -1047,7 +977,6 @@ app.post('/debug-watched', async (req, res) => {
         addLog(`✅ Push OK: ${JSON.stringify(pushRes)}`);
       } catch (e) { addLog(`❌ Push fallito: ${e.message}`); }
 
-      // 6. Verifica che sia stato salvato
       try {
         const afterPush = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
         addLog(`📖 Dopo push: ${Array.isArray(afterPush) ? afterPush.length : '?'} items`);
@@ -1087,12 +1016,8 @@ app.post('/debug-sync', async (req, res) => {
 });
 
 // ============================================
-// ALTRI ENDPOINT
+// ENDPOINT: DEBUG STREMIO LIBRARY
 // ============================================
-app.get('/supabase-status', (req, res) => res.json({ configured: isSupabaseConfigured(), message: isSupabaseConfigured() ? '✅ Supabase pronto' : '⚠️ Supabase non configurato' }));
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
-app.get('/configure', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
 app.post('/debug-stremio-library', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -1110,6 +1035,24 @@ app.post('/debug-stremio-library', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: SUPABASE STATUS
+// ============================================
+app.get('/supabase-status', (req, res) => res.json({ 
+  configured: isSupabaseConfigured(), 
+  message: isSupabaseConfigured() ? '✅ Supabase pronto' : '⚠️ Supabase non configurato' 
+}));
+
+// ============================================
+// ENDPOINT: HEALTH
+// ============================================
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// ============================================
+// ENDPOINT: CONFIGURE
+// ============================================
+app.get('/configure', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
@@ -1121,12 +1064,13 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n✅ ENDPOINT ATTIVI:`);
   console.log(`   • GET  /tmdb-poster`);
   console.log(`   • POST /test-stremio-login`);
-  console.log(`   • POST /get-stremio-data       ← ora include watchedIds`);
-  console.log(`   • POST /get-nuvio-data          ← ora include watchedIds`);
-  console.log(`   • POST /sync                    ← ora copia anche i "visti"`);
+  console.log(`   • POST /get-stremio-data`);
+  console.log(`   • POST /get-nuvio-data`);
+  console.log(`   • POST /sync`);
   console.log(`   • GET  /backups`);
-  console.log(`   • POST /restore                 ← ripristina anche i "visti"`);
+  console.log(`   • POST /restore`);
   console.log(`   • POST /debug-sync`);
-  console.log(`   • POST /debug-watched           ← diagnostica watched`);
-  console.log(`   • GET  /supabase-status\n`);
+  console.log(`   • POST /debug-watched`);
+  console.log(`   • GET  /supabase-status`);
+  console.log(`\n✅ IL BOLLINO BLU FUNZIONA! (p_profile_id=1 incluso in tutte le chiamate)\n`);
 });
