@@ -893,7 +893,7 @@
         </div>
         <div class="info-step">
           <span class="step-num">4</span>
-          <span>Clicca <strong>SYNC</strong> — backup automatico + trasferimento libreria</span>
+          <span>Clicca <strong>SYNC</strong> — backup automatico + trasferimento solo dei film nuovi</span>
         </div>
         <div class="info-step">
           <span class="step-num">5</span>
@@ -1015,7 +1015,7 @@
       <!-- SYNC BUTTON -->
       <div class="sync-wrap locked" id="syncWrap">
         <button id="syncBtn" class="btn btn-sync" disabled>
-          🚀 SYNC DIRETTO — TRASFERISCI LIBRERIA
+          🚀 SYNC DIRETTO — TRASFERISCI NUOVI FILM
         </button>
       </div>
     </div>
@@ -1029,6 +1029,7 @@
           <small>snapshot automatici prima di ogni sync</small>
         </div>
         <button id="refreshBackupsBtn" class="btn btn-ghost" style="margin-left:auto; padding:6px 14px; font-size:12px;">🔄</button>
+        <button id="debugWatchedBtn" class="btn btn-ghost" style="padding:6px 14px; font-size:12px;" title="Diagnostica problemi watched">🔍 Debug Watched</button>
       </div>
 
       <div class="backup-panel">
@@ -1426,6 +1427,53 @@
     };
 
     document.getElementById('refreshBackupsBtn').addEventListener('click', loadBackups);
+
+    // ─── DEBUG WATCHED ─────────────────────────────────────────────────────────
+    document.getElementById('debugWatchedBtn').addEventListener('click', async () => {
+      if (!stremioAuth || !nuvioAuth) {
+        showResult('❌ Carica prima Stremio e Nuvio per eseguire il debug', 'error');
+        return;
+      }
+      const btn = document.getElementById('debugWatchedBtn');
+      btn.disabled = true; btn.textContent = '⏳ Debug...';
+      showProgress(true, 'Diagnostica watched in corso...', 50);
+      try {
+        const res = await fetch('/debug-watched', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stremioEmail: stremioAuth.email, stremioPassword: stremioAuth.password,
+            nuvioEmail: nuvioAuth.email, nuvioPassword: nuvioAuth.password
+          })
+        });
+        const data = await res.json();
+        showProgress(false);
+
+        // Mostra risultato in un popup
+        const logText = (data.log || []).join('\n');
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+          position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10000;
+          display:flex; align-items:center; justify-content:center; padding:20px;
+        `;
+        modal.innerHTML = `
+          <div style="background:#111; border:1px solid #333; border-radius:16px; padding:24px; max-width:700px; width:100%; max-height:80vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+              <span style="font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:1px; color:#2D9CFF;">🔍 Debug Watched</span>
+              <button onclick="this.closest('div[style]').remove()" style="background:#333; border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer;">✕ Chiudi</button>
+            </div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ccc; white-space:pre-wrap; line-height:1.6;">${logText}</pre>
+            ${!data.success ? `<div style="color:#ff6b6b; margin-top:12px; font-size:13px;">❌ ${data.error}</div>` : ''}
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+      } catch (err) {
+        showProgress(false);
+        showResult('❌ Debug fallito: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = '🔍 Debug Watched';
+      }
+    });
   </script>
 </body>
 </html>
