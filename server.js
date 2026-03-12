@@ -60,7 +60,7 @@ async function supabaseRpc(functionName, payload, accessToken) {
 }
 
 // ============================================
-// FUNZIONI STREMIO API (CORRETTE!)
+// FUNZIONI STREMIO API (CORRETTE! TUTTO POST)
 // ============================================
 const STREMIO_API = 'https://api.strem.io';
 const STREMIO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio/4.4.159';
@@ -103,24 +103,27 @@ async function stremioLogin(email, password) {
 }
 
 // ============================================
-// ENDPOINT CORRETTO PER LA LIBRARY (DAL PCAP!)
+// ENDPOINT LIBRARY - CON POST (COME DAL PCAP!)
 // ============================================
 async function getStremioLibrary(authKey) {
-  console.log(`📚 Richiesta library Stremio...`);
+  console.log(`📚 Richiesta library Stremio con POST...`);
   
   const response = await fetch(`${STREMIO_API}/api/library`, {
-    method: 'GET',
+    method: 'POST',  // <-- IMPORTANTE: POST, non GET!
     headers: {
+      'Content-Type': 'application/json',
       'Authorization': `Bearer ${authKey}`,
       'User-Agent': STREMIO_UA,
       'Accept': 'application/json'
-    }
+    },
+    body: JSON.stringify({}) // Body vuoto ma necessario per POST
   });
 
   const text = await response.text();
   console.log(`📥 Risposta library: ${response.status}`);
   
   if (!response.ok) {
+    console.error('❌ Testo errore:', text.substring(0, 500));
     throw new Error(`Stremio API errore ${response.status}: ${text.substring(0, 500)}`);
   }
 
@@ -132,34 +135,32 @@ async function getStremioLibrary(authKey) {
     throw new Error(`Risposta Stremio non è JSON`);
   }
 
-  // La struttura potrebbe essere diversa, proviamo diversi formati
-  const items = data.items || data.result || data || [];
+  // Stremio restituisce { result: [...] } o direttamente l'array
+  const items = data.result || data.items || data || [];
   console.log(`✅ Libreria Stremio caricata: ${items.length} elementi`);
-  
-  // Log del primo elemento per debug
-  if (items.length > 0) {
-    console.log('📌 Primo elemento:', JSON.stringify(items[0], null, 2).substring(0, 200));
-  }
   
   return items;
 }
 
 // ============================================
-// ENDPOINT PER CONTINUE WATCHING
+// ENDPOINT CONTINUE WATCHING - CON POST
 // ============================================
 async function getStremioContinueWatching(authKey) {
   try {
     const response = await fetch(`${STREMIO_API}/api/continueWatching`, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${authKey}`,
         'User-Agent': STREMIO_UA,
         'Accept': 'application/json'
-      }
+      },
+      body: JSON.stringify({})
     });
     
     if (!response.ok) return [];
     const data = await response.json();
-    return data.items || [];
+    return data.result || data.items || [];
   } catch (error) {
     console.log('⚠️ Continue watching non disponibile');
     return [];
@@ -167,21 +168,24 @@ async function getStremioContinueWatching(authKey) {
 }
 
 // ============================================
-// ENDPOINT PER WATCHED HISTORY
+// ENDPOINT WATCHED HISTORY - CON POST
 // ============================================
 async function getStremioWatchedHistory(authKey) {
   try {
     const response = await fetch(`${STREMIO_API}/api/watched`, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${authKey}`,
         'User-Agent': STREMIO_UA,
         'Accept': 'application/json'
-      }
+      },
+      body: JSON.stringify({})
     });
     
     if (!response.ok) return [];
     const data = await response.json();
-    return data.items || [];
+    return data.result || data.items || [];
   } catch (error) {
     console.log('⚠️ Watched history non disponibile');
     return [];
@@ -488,17 +492,17 @@ app.get('/configure', (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE FINALE!)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE CON POST!)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
   console.log(`   • POST /test-stremio-login - Test login Stremio`);
-  console.log(`   • POST /get-stremio-data - Ottieni library Stremio`);
+  console.log(`   • POST /get-stremio-data - Ottieni library Stremio (con POST!)`);
   console.log(`   • POST /test-login - Test login Nuvio`);
   console.log(`   • POST /get-nuvio-data - Ottieni library Nuvio`);
   console.log(`   • POST /sync - Sync diretto Stremio → Nuvio`);
   console.log(`   • GET /backups - Lista backup`);
   console.log(`   • POST /restore - Ripristina backup`);
-  console.log(`\n✨ Usa /configure per l'interfaccia web!\n`);
+  console.log(`\n✨ Ora TUTTO con POST, come vuole Stremio!\n`);
 });
