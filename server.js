@@ -1575,6 +1575,64 @@ app.post('/test-single-episode', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: CONFRONTA LIBRERIE
+// ============================================
+app.post('/compare-libraries', async (req, res) => {
+  const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+  const log = [];
+  const addLog = (msg) => { console.log(msg); log.push(msg); };
+
+  try {
+    // 1. Stremio
+    addLog('🔐 Login Stremio...');
+    const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+    const rawAll = await getStremioLibrary(stremioAuth.token, { includeAll: false });
+    const stremioItems = rawAll.map(normalizeLibraryItem);
+    const stremioIds = new Set();
+    stremioItems.forEach(item => {
+      const id = extractSupportedContentId(item.id);
+      if (id) stremioIds.add(id);
+    });
+    addLog(`📊 Stremio: ${stremioItems.length} item, ${stremioIds.size} ID unici`);
+
+    // 2. Nuvio
+    addLog('🔐 Login Nuvio...');
+    const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = nuvioSession.access_token;
+    const nuvioLibrary = await getNuvioLibrary(accessToken);
+    const nuvioIds = new Set(nuvioLibrary.map(i => i.content_id));
+    addLog(`📊 Nuvio: ${nuvioLibrary.length} item, ${nuvioIds.size} ID unici`);
+
+    // 3. Confronto
+    const inStremioNotNuvio = [...stremioIds].filter(id => !nuvioIds.has(id));
+    const inNuvioNotStremio = [...nuvioIds].filter(id => !stremioIds.has(id));
+
+    addLog(`\n🔍 DISCREPANZE:`);
+    addLog(`   In Stremio ma non in Nuvio: ${inStremioNotNuvio.length}`);
+    addLog(`   In Nuvio ma non in Stremio: ${inNuvioNotStremio.length}`);
+
+    if (inStremioNotNuvio.length > 0) {
+      addLog(`   Esempi: ${inStremioNotNuvio.slice(0, 5).join(', ')}`);
+    }
+
+    res.json({
+      success: true,
+      log,
+      stats: {
+        stremio: stremioIds.size,
+        nuvio: nuvioIds.size,
+        missingInNuvio: inStremioNotNuvio.length,
+        extraInNuvio: inNuvioNotStremio.length
+      }
+    });
+
+  } catch (error) {
+    addLog(`💥 ERRORE: ${error.message}`);
+    res.json({ success: false, log, error: error.message });
+  }
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
