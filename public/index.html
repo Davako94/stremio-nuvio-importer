@@ -757,6 +757,38 @@
     }
     .page-footer strong { color: var(--text-secondary); }
 
+    /* ─── TMDB BADGE ─── */
+    .tmdb-status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .tmdb-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .tmdb-dot.active { background: var(--accent-green); box-shadow: 0 0 6px rgba(0,229,160,0.6); }
+    .tmdb-dot.error { background: #FF6B6B; }
+    .tmdb-label { font-size: 12px; color: var(--text-secondary); }
+    .tmdb-label strong { color: var(--text-primary); }
+
+    /* poster img loaded state */
+    .poster-img-real {
+      width: 90px;
+      height: 134px;
+      border-radius: 10px;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.3s;
+    }
+    .poster-img-real.loading { opacity: 0; }
+    .poster-img-real.loaded { opacity: 1; }
+
     /* ─── ANIMATIONS ─── */
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(20px); }
@@ -893,7 +925,7 @@
       </div>
     </div>
 
-    <!-- ── PREVIEW ── -->
+    <!-- TMDB è gestito lato server, nessuna UI necessaria -->
     <div id="previewContainer" style="display:none">
 
       <div class="section-header">
@@ -985,13 +1017,29 @@
     <!-- FOOTER -->
     <div class="page-footer">
       <p>🔒 <strong>Le credenziali sono usate solo per questa sessione</strong> — mai memorizzate</p>
-      <p>✨ NON affiliato con <strong>NUVIO </strong></p>
+      <p>✨ Direct Sync via API Stremio ufficiali · Made for <strong>NUVIO community</strong></p>
     </div>
 
   </div><!-- /page -->
 
 
   <script>
+    // ─── TMDB (proxy via server, la chiave è in process.env.TMDB_API_KEY) ──────
+    const posterCache = {};
+
+    async function fetchPosterUrl(title, year, type) {
+      const cacheKey = `${title}|${year}|${type}`;
+      if (cacheKey in posterCache) return posterCache[cacheKey];
+      try {
+        const params = new URLSearchParams({ title, year: year || '', type });
+        const r = await fetch(`/tmdb-poster?${params}`);
+        if (!r.ok) { posterCache[cacheKey] = null; return null; }
+        const d = await r.json();
+        posterCache[cacheKey] = d.url || null;
+        return posterCache[cacheKey];
+      } catch { posterCache[cacheKey] = null; return null; }
+    }
+
     // ─── PALETTE PER POSTER FALLBACK ───────────────────────────────────────────
     const POSTER_PALETTES = [
       ['#1a1a3e','#0d0d2b'],['#1e3a2f','#0a1f18'],['#3a1a2e','#1f0d1a'],
@@ -1011,10 +1059,12 @@
       const isMovie = (item.type || item.content_type) === 'movie';
       const typeIcon = isMovie ? '🎬' : '📺';
       const year = item.year ? String(item.year) : '';
+      const itemType = isMovie ? 'movie' : 'tv';
 
       const card = document.createElement('div');
       card.className = 'poster-card';
 
+      // Build fallback HTML
       card.innerHTML = `
         <div class="poster-fallback" style="--c1:${c1};--c2:${c2}">
           <div class="poster-fallback-bg"></div>
@@ -1031,6 +1081,24 @@
             <div class="poster-progress-fill" style="width:${Math.round(progress)}%"></div>
           </div>` : ''}
       `;
+
+      // Async: replace fallback with real poster via server proxy
+      fetchPosterUrl(item.name, year, itemType).then(url => {
+          if (url) {
+            const fallback = card.querySelector('.poster-fallback');
+            const img = document.createElement('img');
+            img.className = 'poster-img-real loading';
+            img.src = url;
+            img.alt = item.name;
+            img.onload = () => {
+              img.classList.remove('loading');
+              img.classList.add('loaded');
+              if (fallback) fallback.replaceWith(img);
+            };
+            img.onerror = () => {}; // keep fallback
+          }
+        });
+
       return card;
     }
 
