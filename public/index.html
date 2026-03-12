@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stremio → NUVIO Direct Sync</title>
+  <title>Stremio → NUVIO → Import</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1014,8 +1014,12 @@
 
       <!-- SYNC BUTTON -->
       <div class="sync-wrap locked" id="syncWrap">
+        <label style="display:flex; align-items:center; gap:10px; font-size:13px; color:rgba(255,255,255,0.7); margin-bottom:10px; cursor:pointer; user-select:none;">
+          <input type="checkbox" id="includeEpisodesCheck" style="width:16px; height:16px; accent-color:#2D9CFF; cursor:pointer;">
+          <span>📺 Includi episodi visti <em style="opacity:0.6">(più lento — scarica dati da Cinemeta)</em></span>
+        </label>
         <button id="syncBtn" class="btn btn-sync" disabled>
-          🚀 SYNC DIRETTO — TRASFERISCI NUOVI FILM
+          🚀 SYNC DIRETTO — TRASFERISCI LIBRERIA
         </button>
       </div>
     </div>
@@ -1056,7 +1060,7 @@
     <!-- FOOTER -->
     <div class="page-footer">
       <p>🔒 <strong>Le credenziali sono usate solo per questa sessione</strong> — mai memorizzate</p>
-      <p>✨ Direct Sync via API Stremio ufficiali · Made for <strong>NUVIO community</strong></p>
+      <p>✨ Tool NON AFFILIATO con <strong>NUVIO</strong></p>
     </div>
 
   </div><!-- /page -->
@@ -1213,7 +1217,9 @@
           stremioData = data; stremioAuth = { email, password };
           stremioWatchedIds = new Set(data.watchedIds || []);
           // Nota: watchedIds contiene solo FILM (le serie richiedono dati episodio)
-          setStatus('stremioLoginStatus','success',`✅ Caricati ${data.stats.movies + data.stats.series} film/serie · ${data.stats.watched || 0} film visti`);
+          const watchedSeries = data.stats.watchedSeriesCount || 0;
+          const seriesLabel = watchedSeries > 0 ? ` · ${watchedSeries} serie con ep. visti` : '';
+          setStatus('stremioLoginStatus','success',`✅ Caricati ${data.stats.movies + data.stats.series} film/serie · ${data.stats.watched || 0} film visti${seriesLabel}`);
           updatePreviews();
           showResult('✅ Dati Stremio caricati!','success');
         } else { throw new Error(data.error); }
@@ -1388,17 +1394,33 @@
     document.getElementById('syncBtn').addEventListener('click', async () => {
       if (!stremioAuth || !nuvioAuth) { showResult('❌ Carica prima i dati di Stremio e Nuvio','error'); return; }
       const btn = document.getElementById('syncBtn');
-      btn.disabled = true; btn.textContent = '⏳ SYNC IN CORSO...';
-      showProgress(true, 'Avvio sync...', 10);
+      const includeEpisodes = document.getElementById('includeEpisodesCheck').checked;
+      btn.disabled = true;
+      btn.textContent = '⏳ SYNC IN CORSO...';
+      const progressMsg = includeEpisodes
+        ? 'Recupero episodi da Cinemeta (potrebbe richiedere 1-2 min)...'
+        : 'Avvio sync...';
+      showProgress(true, progressMsg, 10);
       try {
         const res = await fetch('/sync', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ stremioEmail: stremioAuth.email, stremioPassword: stremioAuth.password, nuvioEmail: nuvioAuth.email, nuvioPassword: nuvioAuth.password })
+          body: JSON.stringify({
+            stremioEmail: stremioAuth.email,
+            stremioPassword: stremioAuth.password,
+            nuvioEmail: nuvioAuth.email,
+            nuvioPassword: nuvioAuth.password,
+            includeWatchedEpisodes: includeEpisodes
+          })
         });
         const data = await res.json();
         if (data.success) {
           showProgress(false);
-          showResult(data.message,'success');
+          // Mostra warning episodi se presenti e non sincronizzati
+          if (!includeEpisodes && data.stats?.serieConEpisodi > 0) {
+            showResult(`${data.message}\n💡 Hai ${data.stats.serieConEpisodi} serie con episodi visti. Attiva "Includi episodi" per sincronizzarli.`, 'success');
+          } else {
+            showResult(data.message, 'success');
+          }
           document.getElementById('loadNuvioBtn').click();
           loadBackups();
         } else { throw new Error(data.error); }
@@ -1407,7 +1429,7 @@
         showResult('❌ ' + err.message,'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = '🚀 SYNC DIRETTO — TRASFERISCI NUOVI FILM';
+        btn.textContent = '🚀 SYNC DIRETTO — TRASFERISCI LIBRERIA';
       }
     });
 
