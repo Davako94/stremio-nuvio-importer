@@ -217,7 +217,6 @@ async function pushLibraryToSupabase(email, password, items) {
     const contentId = fullId.split(':')[0];
     if (!contentId) return;
     
-    // Se c'è già, aggiorna (ma non perdiamo tempo a confrontare)
     uniqueItems.set(contentId, {
       content_id: contentId,
       content_type: item.type === 'series' ? 'series' : 'movie',
@@ -243,6 +242,41 @@ async function pushLibraryToSupabase(email, password, items) {
   
   return libraryItems.length;
 }
+
+// ============================================
+// ENDPOINT TMDB PER POSTER (DA AGGIUNGERE SU RENDER)
+// ============================================
+app.get('/tmdb-poster', async (req, res) => {
+  const apiKey = process.env.TMDB_API_KEY;
+
+  // Se la chiave non è configurata, rispondi 204 (niente da mostrare)
+  if (!apiKey) return res.status(204).end();
+
+  const { title, year, type } = req.query;
+  if (!title) return res.status(400).json({ error: 'title required' });
+
+  try {
+    const isMovie = type === 'movie';
+    const endpoint = isMovie
+      ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(title)}&year=${year || ''}&language=it-IT`
+      : `https://api.themoviedb.org/3/search/tv?api_key=${apiKey}&query=${encodeURIComponent(title)}&language=it-IT`;
+
+    const response = await fetch(endpoint);
+    const data = await response.json();
+
+    const hit = data.results && data.results[0];
+    const posterPath = hit && hit.poster_path;
+    const url = posterPath ? `https://image.tmdb.org/t/p/w185${posterPath}` : null;
+
+    // Cache lato client: 1 giorno
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.json({ url });
+
+  } catch (err) {
+    console.error('TMDB error:', err.message);
+    res.status(500).json({ url: null });
+  }
+});
 
 // ============================================
 // ENDPOINT: TEST LOGIN STREMIO
@@ -380,8 +414,9 @@ app.post('/sync', async (req, res) => {
     
     // Backup della library Nuvio attuale
     const currentNuvioLibrary = await getNuvioLibrary(accessToken);
+    const backupPath = path.join(backupDir, `pre-sync-${backupId}.json`);
     fs.writeFileSync(
-      path.join(backupDir, `pre-sync-${backupId}.json`),
+      backupPath,
       JSON.stringify(currentNuvioLibrary, null, 2)
     );
     console.log(`💾 Backup creato: pre-sync-${backupId}.json (${currentNuvioLibrary.length} elementi)`);
@@ -397,6 +432,7 @@ app.post('/sync', async (req, res) => {
     res.json({
       success: true,
       backupId: `pre-sync-${backupId}`,
+      backupPath: backupPath,
       stats: {
         stremio: stremioItems.length,
         stremioUnici: pushedCount,
@@ -414,7 +450,7 @@ app.post('/sync', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: LISTA BACKUP
+// ENDPOINT: LISTA BACKUP (FIXATO!)
 // ============================================
 app.get('/backups', (req, res) => {
   const backupsDir = path.join(__dirname, 'backups');
@@ -426,12 +462,18 @@ app.get('/backups', (req, res) => {
   try {
     const files = fs.readdirSync(backupsDir);
     const backups = files
-      .filter(f => f.endsWith('.json'))
-      .map(f => ({
-        id: f.replace('.json', ''),
-        date: new Date(parseInt(f.replace('.json', ''))).toLocaleString()
-      }))
-      .sort((a, b) => b.id - a.id);
+      .filter(f => f.endsWith('.json') && f.startsWith('pre-sync-'))
+      .map(f => {
+        const id = f.replace('.json', '').replace('pre-sync-', '');
+        const stats = fs.statSync(path.join(backupsDir, f));
+        return {
+          id: id,
+          fullName: f,
+          date: new Date(parseInt(id)).toLocaleString(),
+          size: stats.size
+        };
+      })
+      .sort((a, b) => parseInt(b.id) - parseInt(a.id));
 
     res.json({ backups });
   } catch (error) {
@@ -441,7 +483,7 @@ app.get('/backups', (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: RIPRISTINA BACKUP
+// ENDPOINT: RIPRISTINA BACKUP (FIXATO!)
 // ============================================
 app.post('/restore', async (req, res) => {
   const { backupId, nuvioEmail, nuvioPassword } = req.body;
@@ -451,7 +493,14 @@ app.post('/restore', async (req, res) => {
   }
 
   try {
-    const backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
+    // Prova prima con pre-sync-{backupId}.json
+    let backupPath = path.join(__dirname, 'backups', `pre-sync-${backupId}.json`);
+    
+    // Se non esiste, prova con backupId.json (vecchio formato)
+    if (!fs.existsSync(backupPath)) {
+      backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
+    }
+    
     if (!fs.existsSync(backupPath)) {
       return res.status(404).json({ success: false, error: 'Backup non trovato' });
     }
@@ -459,6 +508,11 @@ app.post('/restore', async (req, res) => {
     const backupLibrary = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
     const backupArray = Array.isArray(backupLibrary) ? backupLibrary : [];
 
+    // Login Nuvio
+    const session = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = session.access_token;
+
+    // Prepara items per il push
     const items = backupArray.map(item => ({
       _id: item.content_id,
       type: item.content_type,
@@ -470,6 +524,7 @@ app.post('/restore', async (req, res) => {
       imdbRating: item.imdb_rating?.toString()
     }));
 
+    // Push del backup completo
     const restored = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, items);
 
     res.json({
@@ -574,7 +629,7 @@ app.post('/debug-stremio-library', async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE COPIA TOTALE)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE FINALE)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
@@ -584,6 +639,7 @@ app.listen(PORT, '0.0.0.0', () => {
   }
   
   console.log(`\n✅ ENDPOINT ATTIVI:`);
+  console.log(`   • GET  /tmdb-poster - Recupera poster da TMDB (richiede TMDB_API_KEY)`);
   console.log(`   • POST /test-stremio-login - Test login Stremio`);
   console.log(`   • POST /get-stremio-data - Ottieni library Stremio`);
   console.log(`   • POST /debug-stremio-library - Debug library Stremio`);
@@ -591,9 +647,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • POST /get-nuvio-data - Ottieni library Nuvio`);
   console.log(`   • POST /sync - SYNC TOTALE (sovrascrive Nuvio con Stremio)`);
   console.log(`   • POST /debug-sync - Debug sync (vedi cosa manca)`);
-  console.log(`   • GET /backups - Lista backup`);
-  console.log(`   • POST /restore - Ripristina backup`);
+  console.log(`   • GET /backups - Lista backup (FIXATO!)`);
+  console.log(`   • POST /restore - Ripristina backup (FIXATO!)`);
   console.log(`   • GET /supabase-status - Stato Supabase`);
-  console.log(`\n✨ IMPORTANTE: Ora il sync fa una COPIA TOTALE di Stremio su Nuvio!`);
-  console.log(`   I due servizi avranno ESATTAMENTE la stessa library.\n`);
+  console.log(`\n✨ IMPORTANTE: Ora il backup FUNZiona! Puoi vedere la lista in /backups\n`);
 });
