@@ -80,23 +80,49 @@ async function supabaseRpc(functionName, payload, accessToken) {
 }
 
 // ============================================
-// FUNZIONI STREMIO API
+// FUNZIONI STREMIO API (CON GESTIONE ERRORI MIGLIORATA)
 // ============================================
 const STREMIO_API = 'https://api.strem.io';
 
 async function stremioLogin(email, password) {
   try {
+    console.log(`🔐 Tentativo login Stremio per: ${email}`);
+    
     const response = await fetch(`${STREMIO_API}/api/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'StremioNuvioImporter/1.0'
+      },
       body: JSON.stringify({ email, password })
     });
     
-    const data = await response.json();
-    if (!data || !data.token) {
-      throw new Error('Login fallito: credenziali non valide');
+    const text = await response.text();
+    
+    // Se la risposta è vuota
+    if (!text || text.trim() === '') {
+      throw new Error('Risposta vuota dal server Stremio');
     }
-    return data;
+    
+    // Prova a parsare JSON
+    try {
+      const data = JSON.parse(text);
+      
+      // Verifica che ci sia il token (formato atteso)
+      if (!data || !data.token) {
+        console.log('⚠️ Risposta Stremio senza token:', data);
+        throw new Error('Formato risposta non valido: token mancante');
+      }
+      
+      console.log(`✅ Login Stremio riuscito per: ${email}`);
+      return data;
+      
+    } catch (parseError) {
+      console.error('❌ Errore parsing JSON. Testo ricevuto:', text.substring(0, 200));
+      throw new Error(`Risposta non JSON: ${text.substring(0, 100)}`);
+    }
+    
   } catch (error) {
     console.error('❌ Stremio login error:', error.message);
     throw error;
@@ -109,7 +135,10 @@ async function getStremioLibrary(authToken) {
       headers: { 'Authorization': `Bearer ${authToken}` }
     });
     
-    const data = await response.json();
+    const text = await response.text();
+    if (!text || text.trim() === '') return [];
+    
+    const data = JSON.parse(text);
     return data.items || [];
   } catch (error) {
     console.error('❌ Stremio library error:', error.message);
@@ -123,7 +152,10 @@ async function getStremioContinueWatching(authToken) {
       headers: { 'Authorization': `Bearer ${authToken}` }
     });
     
-    const data = await response.json();
+    const text = await response.text();
+    if (!text || text.trim() === '') return [];
+    
+    const data = JSON.parse(text);
     return data.items || [];
   } catch (error) {
     console.error('❌ Stremio continue watching error:', error.message);
@@ -137,7 +169,10 @@ async function getStremioWatchedHistory(authToken) {
       headers: { 'Authorization': `Bearer ${authToken}` }
     });
     
-    const data = await response.json();
+    const text = await response.text();
+    if (!text || text.trim() === '') return [];
+    
+    const data = JSON.parse(text);
     return data.items || [];
   } catch (error) {
     console.error('❌ Stremio watched history error:', error.message);
@@ -179,6 +214,10 @@ app.post('/test-login', express.json(), async (req, res) => {
 app.post('/get-nuvio-data', express.json(), async (req, res) => {
   const { email, password } = req.body;
   
+  if (!email || !password) {
+    return res.json({ success: false, error: 'Email e password richieste' });
+  }
+  
   try {
     const session = await supabaseLogin(email, password);
     const library = await supabaseRpc('sync_pull_library', {}, session.access_token);
@@ -193,6 +232,7 @@ app.post('/get-nuvio-data', express.json(), async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ Errore get-nuvio-data:', error.message);
     res.json({ success: false, error: error.message });
   }
 });
@@ -224,6 +264,10 @@ app.post('/test-stremio-login', express.json(), async (req, res) => {
 app.post('/get-stremio-data', express.json(), async (req, res) => {
   const { email, password } = req.body;
 
+  if (!email || !password) {
+    return res.json({ success: false, error: 'Email e password richieste' });
+  }
+
   try {
     const auth = await stremioLogin(email, password);
     
@@ -246,6 +290,7 @@ app.post('/get-stremio-data', express.json(), async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ Errore get-stremio-data:', error.message);
     res.json({ success: false, error: error.message });
   }
 });
@@ -264,18 +309,22 @@ async function pushLibraryToSupabase(email, password, items) {
   const uniqueItems = new Map();
   
   items.forEach(item => {
-    const contentId = item.id.split(':')[0];
+    // Gestisci sia item con id che con _id
+    const itemId = item.id || item._id;
+    if (!itemId) return;
+    
+    const contentId = itemId.split(':')[0];
     if (!uniqueItems.has(contentId)) {
       uniqueItems.set(contentId, {
         content_id: contentId,
-        content_type: item.type,
+        content_type: item.type || item.content_type,
         name: item.name || '',
         poster: item.poster || '',
         poster_shape: 'POSTER',
-        background: item.background || '',
+        background: item.background || item.banner || '',
         description: item.description || '',
-        release_info: item.year || '',
-        imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
+        release_info: item.year || item.release_info || '',
+        imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : (item.imdb_rating || null),
         genres: item.genres || [],
         addon_base_url: '',
         added_at: Date.now()
@@ -295,6 +344,14 @@ async function pushLibraryToSupabase(email, password, items) {
 // ============================================
 app.post('/sync', express.json(), async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+
+  // Validazione input
+  if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Tutte le credenziali sono richieste' 
+    });
+  }
 
   try {
     console.log('🚀 Avvio sync diretto...');
@@ -323,12 +380,16 @@ app.post('/sync', express.json(), async (req, res) => {
     // 4. Trova nuovi items
     const existingIds = new Set(currentNuvioLibrary.map(i => i.content_id));
     const newItems = stremioLibrary.filter(item => {
-      const contentId = item.id?.split(':')[0] || item._id?.split(':')[0];
+      const itemId = item.id || item._id;
+      if (!itemId) return false;
+      const contentId = itemId.split(':')[0];
       return !existingIds.has(contentId);
     });
     
     // 5. Push nuovi items
-    const pushedCount = await pushLibraryToSupabase(nuvioEmail, nuvioPassword, newItems);
+    const pushedCount = newItems.length > 0 
+      ? await pushLibraryToSupabase(nuvioEmail, nuvioPassword, newItems)
+      : 0;
 
     res.json({
       success: true,
@@ -338,7 +399,9 @@ app.post('/sync', express.json(), async (req, res) => {
         new: newItems.length,
         pushed: pushedCount
       },
-      message: `✅ Sync completato! Aggiunti ${pushedCount} nuovi film/serie. Backup creato con ID: ${backupId}`
+      message: newItems.length > 0
+        ? `✅ Sync completato! Aggiunti ${pushedCount} nuovi film/serie. Backup creato con ID: ${backupId}`
+        : `✅ Sync completato! Nessun nuovo film da aggiungere. Backup creato con ID: ${backupId}`
     });
 
   } catch (error) {
@@ -352,6 +415,10 @@ app.post('/sync', express.json(), async (req, res) => {
 // ============================================
 app.post('/restore', express.json(), async (req, res) => {
   const { backupId, nuvioEmail, nuvioPassword } = req.body;
+
+  if (!backupId || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ error: 'backupId, email e password richiesti' });
+  }
 
   try {
     const backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
@@ -386,6 +453,7 @@ app.post('/restore', express.json(), async (req, res) => {
     });
 
   } catch (error) {
+    console.error('❌ Errore restore:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -485,10 +553,16 @@ app.post('/convert', upload.fields([
       
       library.push({
         id: originalId,
+        _id: originalId,
         type: item.type,
         name: item.name || '',
         poster: item.poster || '',
+        posterShape: item.posterShape || 'poster',
         year: item.year ? String(item.year) : '',
+        releaseInfo: item.year ? String(item.year) : '',
+        addedToLibraryAt: Date.now(),
+        inLibrary: true,
+        isSaved: true,
         description: item.description || '',
         imdbRating: item.imdbRating || '',
         genres: item.genres || [],
@@ -514,7 +588,11 @@ app.post('/convert', upload.fields([
       appVersion: "1.0.0",
       platform: "android",
       userScope: "local",
-      data: { library }
+      data: { 
+        library,
+        settings: {},
+        addons: []
+      }
     };
 
     fs.unlinkSync(stremioFile.path);
@@ -524,7 +602,11 @@ app.post('/convert', upload.fields([
       success: true,
       data: nuvioBackup,
       cloudPush: cloudPushResult,
-      stats: { total: library.length }
+      stats: { 
+        movies: library.filter(i => i.type === 'movie').length,
+        series: library.filter(i => i.type === 'series').length,
+        total: library.length 
+      }
     });
 
   } catch (error) {
@@ -535,6 +617,39 @@ app.post('/convert', upload.fields([
       });
     }
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// DEBUG: ENDPOINT PER TESTARE STREMIO
+// ============================================
+app.post('/debug-stremio', express.json(), async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    console.log(`🔐 DEBUG - Tentativo login Stremio per: ${email}`);
+    
+    const response = await fetch('https://api.strem.io/api/auth/login', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ email, password })
+    });
+    
+    const text = await response.text();
+    console.log('📦 Risposta grezza:', text.substring(0, 500));
+    
+    res.json({
+      success: true,
+      status: response.status,
+      headers: Object.fromEntries(response.headers),
+      body: text.substring(0, 1000)
+    });
+    
+  } catch (error) {
+    res.json({ success: false, error: error.message });
   }
 });
 
@@ -552,17 +667,20 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`   → Per abilitare, imposta su Render:`);
     console.log(`     SUPABASE_URL=URL_DEL_TUO_PROGETTO`);
     console.log(`     SUPABASE_ANON_KEY=LA_TUA_ANON_KEY`);
+  } else {
+    console.log(`   → URL: ${SUPABASE_URL.substring(0, 30)}...`);
   }
   
   console.log(`\n✅ ENDPOINT ATTIVI:`);
-  console.log(`   • /test-login - Test login Nuvio`);
-  console.log(`   • /get-nuvio-data - Ottieni library Nuvio`);
-  console.log(`   • /test-stremio-login - Test login Stremio`);
-  console.log(`   • /get-stremio-data - Ottieni library Stremio`);
-  console.log(`   • /sync - Sync diretto Stremio → Nuvio`);
-  console.log(`   • /backups - Lista backup disponibili`);
-  console.log(`   • /restore - Ripristina un backup`);
-  console.log(`   • /convert - Conversione backup (legacy)`);
-  console.log(`   • /extract-addons - Estrai addons (legacy)`);
+  console.log(`   • POST /test-login - Test login Nuvio`);
+  console.log(`   • POST /get-nuvio-data - Ottieni library Nuvio`);
+  console.log(`   • POST /test-stremio-login - Test login Stremio`);
+  console.log(`   • POST /get-stremio-data - Ottieni library Stremio`);
+  console.log(`   • POST /sync - Sync diretto Stremio → Nuvio`);
+  console.log(`   • GET /backups - Lista backup disponibili`);
+  console.log(`   • POST /restore - Ripristina un backup`);
+  console.log(`   • POST /convert - Conversione backup (legacy)`);
+  console.log(`   • POST /extract-addons - Estrai addons (legacy)`);
+  console.log(`   • POST /debug-stremio - Debug Stremio API`);
   console.log(`\n✨ NOVITÀ: Sync diretto con login Stremio!\n`);
 });
