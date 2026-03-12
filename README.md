@@ -59,7 +59,7 @@
 
 ## ❓ Domande Frequenti (FAQ)
 
-### ❔ L'addon è gratis?
+### ❔ Il tool è gratis?
 **Sì**, completamente gratuito e sempre lo sarà.
 
 ### ❔ I miei dati sono al sicuro?
