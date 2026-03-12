@@ -87,32 +87,15 @@ async function stremioLogin(email, password) {
     throw new Error(data.error?.message || `HTTP ${response.status}`);
   }
 
-  // La risposta ha struttura { result: { authKey: "..." } }
   const authKey = data?.result?.authKey;
   
   if (!authKey) {
+    console.error('❌ Risposta login:', JSON.stringify(data, null, 2));
     throw new Error('Login fallito: authKey non trovato');
   }
 
   console.log(`✅ Login Stremio OK`);
   return { token: authKey };
-}
-
-// Get User - /api/getUser
-async function getStremioUser(authKey) {
-  const response = await fetch(`${STREMIO_API}/api/getUser`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      authKey: authKey,
-      type: 'GetUser'
-    })
-  });
-
-  const data = await response.json();
-  return data?.result;
 }
 
 // Get Library Items - /api/datastoreGet con collection "libraryItem"
@@ -143,7 +126,12 @@ async function getStremioLibrary(authKey) {
   // Estrai i valori e filtra quelli validi
   const items = rows
     .map(row => row.value)
-    .filter(item => item && item._id && !item.removed && !item.temp);
+    .filter(item => {
+      // Filtra elementi rimossi o temporanei
+      if (item.removed || item.temp) return false;
+      // Deve avere un ID e un tipo valido
+      return item._id && (item.type === 'movie' || item.type === 'series');
+    });
     
   console.log(`✅ Trovati ${items.length} elementi nella library`);
   return items;
@@ -151,20 +139,25 @@ async function getStremioLibrary(authKey) {
 
 // Get Addons - /api/addonCollectionGet
 async function getStremioAddons(authKey) {
-  const response = await fetch(`${STREMIO_API}/api/addonCollectionGet`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      authKey: authKey,
-      type: 'AddonCollectionGet',
-      update: true
-    })
-  });
+  try {
+    const response = await fetch(`${STREMIO_API}/api/addonCollectionGet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        authKey: authKey,
+        type: 'AddonCollectionGet',
+        update: true
+      })
+    });
 
-  const data = await response.json();
-  return data?.result?.addons || [];
+    const data = await response.json();
+    return data?.result?.addons || [];
+  } catch (error) {
+    console.log('⚠️ Addons non disponibili');
+    return [];
+  }
 }
 
 // Get Continue Watching - Stessa API con collection diversa
@@ -268,6 +261,7 @@ app.post('/test-stremio-login', async (req, res) => {
     const auth = await stremioLogin(email, password);
     res.json({ success: true, message: '✅ Login Stremio funzionante!' });
   } catch (error) {
+    console.error('❌ Errore test Stremio:', error.message);
     res.json({ success: false, message: `❌ ${error.message}` });
   }
 });
@@ -322,6 +316,7 @@ app.post('/test-login', async (req, res) => {
     await supabaseLogin(email, password);
     res.json({ success: true, message: '✅ Login Nuvio riuscito!' });
   } catch (error) {
+    console.error('❌ Errore test Nuvio:', error.message);
     res.json({ success: false, message: `❌ ${error.message}` });
   }
 });
@@ -336,16 +331,19 @@ app.post('/get-nuvio-data', async (req, res) => {
     const session = await supabaseLogin(email, password);
     const library = await supabaseRpc('sync_pull_library', {}, session.access_token);
     
+    const libraryArray = Array.isArray(library) ? library : [];
+    
     res.json({
       success: true,
-      library: library || [],
+      library: libraryArray,
       stats: {
-        total: library?.length || 0,
-        movies: library?.filter(i => i.content_type === 'movie').length || 0,
-        series: library?.filter(i => i.content_type === 'series').length || 0
+        total: libraryArray.length,
+        movies: libraryArray.filter(i => i.content_type === 'movie').length,
+        series: libraryArray.filter(i => i.content_type === 'series').length
       }
     });
   } catch (error) {
+    console.error('❌ Errore get-nuvio-data:', error);
     res.json({ success: false, error: error.message });
   }
 });
@@ -355,6 +353,13 @@ app.post('/get-nuvio-data', async (req, res) => {
 // ============================================
 app.post('/sync', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+
+  if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Tutte le credenziali sono richieste' 
+    });
+  }
 
   try {
     console.log('🚀 Avvio sync diretto...');
@@ -442,6 +447,7 @@ app.get('/backups', (req, res) => {
 
     res.json({ backups });
   } catch (error) {
+    console.error('Errore lettura backup:', error);
     res.json({ backups: [] });
   }
 });
@@ -452,10 +458,17 @@ app.get('/backups', (req, res) => {
 app.post('/restore', async (req, res) => {
   const { backupId, nuvioEmail, nuvioPassword } = req.body;
 
+  if (!backupId || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'backupId, email e password richiesti' 
+    });
+  }
+
   try {
     const backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
     if (!fs.existsSync(backupPath)) {
-      return res.status(404).json({ error: 'Backup non trovato' });
+      return res.status(404).json({ success: false, error: 'Backup non trovato' });
     }
 
     const backupLibrary = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
@@ -480,7 +493,42 @@ app.post('/restore', async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Errore restore:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: DEBUG STREMIO LIBRARY
+// ============================================
+app.post('/debug-stremio-library', async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    const auth = await stremioLogin(email, password);
+    
+    const response = await fetch(`${STREMIO_API}/api/datastoreGet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        authKey: auth.token,
+        collection: 'libraryItem',
+        all: true
+      })
+    });
+
+    const data = await response.json();
+    
+    res.json({
+      success: true,
+      raw_response: data,
+      rows_count: data?.result?.rows?.length || 0,
+      first_row: data?.result?.rows?.[0] || null
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
   }
 });
 
@@ -515,17 +563,20 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`🌐 URL: https://stremio-nuvio-importer.onrender.com`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
-  console.log(`\n✅ API Stremio (da stremthru):`);
-  console.log(`   • POST /api/login - Login`);
-  console.log(`   • POST /api/datastoreGet - Library/Continue/Watched`);
-  console.log(`   • POST /api/getUser - User info`);
-  console.log(`   • POST /api/addonCollectionGet - Addons`);
-  console.log(`\n✅ ENDPOINT DEL SERVER:`);
+  
+  if (!isSupabaseConfigured()) {
+    console.log(`   → Imposta SUPABASE_URL e SUPABASE_ANON_KEY su Render`);
+  }
+  
+  console.log(`\n✅ ENDPOINT ATTIVI:`);
   console.log(`   • POST /test-stremio-login - Test login Stremio`);
   console.log(`   • POST /get-stremio-data - Ottieni library Stremio`);
+  console.log(`   • POST /debug-stremio-library - Debug library Stremio`);
   console.log(`   • POST /test-login - Test login Nuvio`);
   console.log(`   • POST /get-nuvio-data - Ottieni library Nuvio`);
-  console.log(`   • POST /sync - Sync diretto`);
+  console.log(`   • POST /sync - Sync diretto Stremio → Nuvio`);
   console.log(`   • GET /backups - Lista backup`);
-  console.log(`   • POST /restore - Ripristina backup\n`);
+  console.log(`   • POST /restore - Ripristina backup`);
+  console.log(`   • GET /supabase-status - Stato Supabase`);
+  console.log(`\n✨ Ora con debug endpoint per analizzare la struttura!\n`);
 });
