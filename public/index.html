@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stremio → NUVIO → Importer</title>
+  <title>Stremio → NUVIO Direct Sync</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -574,6 +574,44 @@
       color: rgba(255,255,255,0.8);
     }
 
+    /* ─── WATCHED BADGE (come in Nuvio app) ─── */
+    .poster-watched-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #2D9CFF;
+      border: 2px solid rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      z-index: 3;
+    }
+    .poster-watched-badge svg {
+      width: 12px;
+      height: 12px;
+      stroke: white;
+      stroke-width: 2.5;
+      fill: none;
+    }
+    /* Shimmer sull'intera card per i visti */
+    .poster-card.watched::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 10px;
+      border: 1.5px solid rgba(45,156,255,0.5);
+      pointer-events: none;
+    }
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.8);
+    }
+
     .poster-progress-bar {
       position: absolute;
       bottom: 0; left: 0; right: 0;
@@ -855,7 +893,7 @@
         </div>
         <div class="info-step">
           <span class="step-num">4</span>
-          <span>Clicca <strong>SYNC</strong> — backup automatico + trasferimento della libreria</span>
+          <span>Clicca <strong>SYNC</strong> — backup automatico + trasferimento libreria</span>
         </div>
         <div class="info-step">
           <span class="step-num">5</span>
@@ -977,7 +1015,7 @@
       <!-- SYNC BUTTON -->
       <div class="sync-wrap locked" id="syncWrap">
         <button id="syncBtn" class="btn btn-sync" disabled>
-          🚀 SYNC DIRETTO
+          🚀 SYNC DIRETTO — TRASFERISCI LIBRERIA
         </button>
       </div>
     </div>
@@ -1017,7 +1055,7 @@
     <!-- FOOTER -->
     <div class="page-footer">
       <p>🔒 <strong>Le credenziali sono usate solo per questa sessione</strong> — mai memorizzate</p>
-      <p>✨ NON AFFILIATO CON <strong>NUVIO</strong></p>
+      <p>✨ Direct Sync via API Stremio ufficiali · Made for <strong>NUVIO community</strong></p>
     </div>
 
   </div><!-- /page -->
@@ -1054,7 +1092,7 @@
       return POSTER_PALETTES[Math.abs(h) % POSTER_PALETTES.length];
     }
 
-    function makePosterCard(item, progress) {
+    function makePosterCard(item, progress, watched = false) {
       const [c1, c2] = getPalette(item.name || '?');
       const isMovie = (item.type || item.content_type) === 'movie';
       const typeIcon = isMovie ? '🎬' : '📺';
@@ -1062,9 +1100,13 @@
       const itemType = isMovie ? 'movie' : 'tv';
 
       const card = document.createElement('div');
-      card.className = 'poster-card';
+      card.className = 'poster-card' + (watched ? ' watched' : '');
 
-      // Build fallback HTML
+      const watchedBadgeHtml = watched ? `
+        <div class="poster-watched-badge" title="Visto">
+          <svg viewBox="0 0 12 12" style="width:12px;height:12px;stroke:white;stroke-width:2.5;fill:none"><polyline points="1.5,6 4.5,9 10.5,3"/></svg>
+        </div>` : '';
+
       card.innerHTML = `
         <div class="poster-fallback" style="--c1:${c1};--c2:${c2}">
           <div class="poster-fallback-bg"></div>
@@ -1073,6 +1115,7 @@
           <span class="poster-fallback-title">${item.name || '?'}</span>
         </div>
         <span class="poster-type-badge">${typeIcon}</span>
+        ${watchedBadgeHtml}
         <div class="poster-overlay">
           <span class="poster-overlay-title">${item.name || '?'}</span>
         </div>
@@ -1084,20 +1127,20 @@
 
       // Async: replace fallback with real poster via server proxy
       fetchPosterUrl(item.name, year, itemType).then(url => {
-          if (url) {
-            const fallback = card.querySelector('.poster-fallback');
-            const img = document.createElement('img');
-            img.className = 'poster-img-real loading';
-            img.src = url;
-            img.alt = item.name;
-            img.onload = () => {
-              img.classList.remove('loading');
-              img.classList.add('loaded');
-              if (fallback) fallback.replaceWith(img);
-            };
-            img.onerror = () => {}; // keep fallback
-          }
-        });
+        if (url) {
+          const fallback = card.querySelector('.poster-fallback');
+          const img = document.createElement('img');
+          img.className = 'poster-img-real loading';
+          img.src = url;
+          img.alt = item.name;
+          img.onload = () => {
+            img.classList.remove('loading');
+            img.classList.add('loaded');
+            if (fallback) fallback.replaceWith(img);
+          };
+          img.onerror = () => {};
+        }
+      });
 
       return card;
     }
@@ -1108,6 +1151,8 @@
     let stremioAuth = null;
     let nuvioAuth = null;
     let backups = [];
+    let stremioWatchedIds = new Set();
+    let nuvioWatchedIds = new Set();
 
     // ─── UTILS ─────────────────────────────────────────────────────────────────
     function showResult(message, type) {
@@ -1165,7 +1210,8 @@
         const data = await res.json();
         if (data.success) {
           stremioData = data; stremioAuth = { email, password };
-          setStatus('stremioLoginStatus','success',`✅ Caricati ${data.stats.movies + data.stats.series} film/serie`);
+          stremioWatchedIds = new Set(data.watchedIds || []);
+          setStatus('stremioLoginStatus','success',`✅ Caricati ${data.stats.movies + data.stats.series} film/serie · ${data.stats.watched || 0} visti`);
           updatePreviews();
           showResult('✅ Dati Stremio caricati!','success');
         } else { throw new Error(data.error); }
@@ -1203,7 +1249,8 @@
         const data = await res.json();
         if (data.success) {
           nuvioData = data; nuvioAuth = { email, password };
-          setStatus('nuvioLoginStatus','success',`✅ Trovati ${data.stats.total} film/serie nel cloud`);
+          nuvioWatchedIds = new Set(data.watchedIds || []);
+          setStatus('nuvioLoginStatus','success',`✅ Trovati ${data.stats.total} film/serie · ${data.stats.watched || 0} visti`);
           updatePreviews(); loadBackups();
           showResult('✅ Dati Nuvio caricati!','success');
         } else { throw new Error(data.error); }
@@ -1248,7 +1295,9 @@
         const rail = document.createElement('div');
         rail.className = 'poster-rail';
         stremioData.library.forEach(item => {
-          rail.appendChild(makePosterCard(item, null));
+          const cid = (item._id || item.id || '').split(':')[0].toLowerCase();
+          const watched = stremioWatchedIds.has(cid);
+          rail.appendChild(makePosterCard(item, null, watched));
         });
         wrap.appendChild(rail);
 
@@ -1262,22 +1311,25 @@
           const cwRail = document.createElement('div');
           cwRail.className = 'poster-rail';
           stremioData.continueWatching.forEach(cw => {
-            cwRail.appendChild(makePosterCard(cw, cw.progress));
+            cwRail.appendChild(makePosterCard(cw, cw.progress, false));
           });
           wrap.appendChild(cwRail);
         }
 
+        const watchedCount = stremioWatchedIds.size;
         document.getElementById('stremioFooter').innerHTML =
-          `<span>${stremioData.stats.movies + stremioData.stats.series} titoli</span><span>scorri →</span>`;
+          `<span>${stremioData.stats.movies + stremioData.stats.series} titoli · ${watchedCount} visti</span><span>scorri →</span>`;
       }
 
       // ── NUVIO ──
       if (nuvioData) {
+        const watchedNuvio = nuvioWatchedIds.size;
         const stats = document.getElementById('nuvioStats');
         stats.innerHTML = `
           <span class="stat-chip">☁️ <strong>${nuvioData.stats.total}</strong></span>
           <span class="stat-chip">🎬 <strong>${nuvioData.stats.movies}</strong></span>
           <span class="stat-chip">📺 <strong>${nuvioData.stats.series}</strong></span>
+          ${watchedNuvio > 0 ? `<span class="stat-chip" style="color:var(--accent-green)">✓ <strong>${watchedNuvio}</strong></span>` : ''}
         `;
 
         const wrap = document.getElementById('nuvioList');
@@ -1287,12 +1339,14 @@
         const rail = document.createElement('div');
         rail.className = 'poster-rail';
         nuvioData.library.forEach(item => {
-          rail.appendChild(makePosterCard(item, null));
+          const cid = (item.content_id || '').toLowerCase();
+          const watched = nuvioWatchedIds.has(cid);
+          rail.appendChild(makePosterCard(item, null, watched));
         });
         wrap.appendChild(rail);
 
         document.getElementById('nuvioFooter').innerHTML =
-          `<span>${nuvioData.stats.total} titoli nel cloud</span><span>scorri →</span>`;
+          `<span>${nuvioData.stats.total} titoli · ${watchedNuvio} visti nel cloud</span><span>scorri →</span>`;
       }
 
       // Abilita sync se entrambi caricati
@@ -1351,7 +1405,7 @@
         showResult('❌ ' + err.message,'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = '🚀 SYNC DIRETTO';
+        btn.textContent = '🚀 SYNC DIRETTO — TRASFERISCI NUOVI FILM';
       }
     });
 
