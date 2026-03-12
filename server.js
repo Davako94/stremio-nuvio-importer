@@ -98,24 +98,19 @@ async function getNuvioWatchedItems(accessToken, profileId = 1) {
 // WATCHED + PROGRESS LOGIC
 // ============================================
 
-// FIX 1: extractSupportedContentId ora dà PRIORITÀ a IMDB e FORZA l'uso dello stesso ID della library
+// FIX DEFINITIVO: extractSupportedContentId USA SOLO IMDB!
 function extractSupportedContentId(value) {
   const text = String(value ?? '').trim();
   if (!text) return '';
 
-  // CERCA PRIMA IMDB - DEVE ESSERE IDENTICO ALLA LIBRARY!
+  // CERCA SOLO IMDB - NIENTE TMDB!
   const imdbMatch = text.match(/tt\d+/i);
   if (imdbMatch) {
     const imdbId = imdbMatch[0].toLowerCase();
     return imdbId;
   }
 
-  // Solo se NON c'è IMDB, usa TMDB (ma questo causerà mismatch con library!)
-  const tmdbMatch = text.match(/tmdb:(\d+)/i);
-  if (tmdbMatch) {
-    return `tmdb:${tmdbMatch[1]}`;
-  }
-
+  // Se non c'è IMDB, restituisci stringa vuota (non usare TMDB)
   return '';
 }
 
@@ -246,14 +241,20 @@ function mergeWatchedItems(remoteItems = [], incomingItems = []) {
   return Array.from(merged.values()).sort((a, b) => Number(b.watchedAt || 0) - Number(a.watchedAt || 0));
 }
 
-// FIX 2 e 5: toRemotePayloadItem ora normalizza content_type e usa extractSupportedContentId
+// FIX: toRemotePayloadItem ora usa extractSupportedContentId e salta item senza IMDB
 function toRemotePayloadItem(item = {}) {
-  // FORZA l'uso di extractSupportedContentId per garantire stesso ID della library
-  const contentId = extractSupportedContentId(item.contentId || item.title);
+  // FORZA l'uso di extractSupportedContentId
+  const contentId = extractSupportedContentId(item.contentId || item.title || '');
+  
+  // Se non c'è contentId, salta questo item
+  if (!contentId) {
+    console.log(`❌ Skipping item senza IMDB: ${item.title}`);
+    return null;
+  }
   
   return {
     content_id: contentId,
-    content_type: item.contentType === 'series' ? 'series' : 'movie', // FORZA 'series' o 'movie'
+    content_type: item.contentType === 'series' ? 'series' : 'movie',
     title: item.title || '',
     season: item.season == null ? null : Number(item.season),
     episode: item.episode == null ? null : Number(item.episode),
@@ -309,7 +310,7 @@ function normalizeLibraryItem(raw) {
   };
 }
 
-// FIX: buildWatchedMoviesPayload ora usa extractSupportedContentId
+// FIX: buildWatchedMoviesPayload ora usa extractSupportedContentId e salta senza IMDB
 function buildWatchedMoviesPayload(items) {
   const payload = [];
   for (const item of items) {
@@ -317,12 +318,15 @@ function buildWatchedMoviesPayload(items) {
     if (item.type !== 'movie') continue;
     if (item.state.timesWatched <= 0 && item.state.flaggedWatched <= 0) continue;
     
-    // FORZA l'estrazione IMDB per matchare library
+    // FORZA estrazione IMDB
     const contentId = extractSupportedContentId(item.id);
-    if (!contentId) continue;
+    if (!contentId) {
+      console.log(`⚠️ Film senza IMDB saltato: ${item.name}`);
+      continue;
+    }
     
     payload.push({
-      contentId,  // <-- Ora sarà tt... non tmdb:...
+      contentId,
       contentType: 'movie',
       title: item.name || contentId,
       season: null,
@@ -457,7 +461,7 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4, onProgress = 
       const v = normalized[i];
       if (v.season == null || v.episode == null) continue;
       
-      // FORZA estrazione IMDB per matchare library
+      // FORZA estrazione IMDB
       const contentId = extractSupportedContentId(item.id);
       if (!contentId) continue;
       
@@ -1016,23 +1020,37 @@ app.post('/sync', async (req, res) => {
 
     if (incomingWatched.length > 0) {
       try {
-        const remoteWatched = currentWatchedRaw.map(row => mapRemoteWatchedItem(row)).filter(Boolean);
-        const mergedWatched = mergeWatchedItems(remoteWatched, incomingWatched);
-
-        if (buildWatchedSignature(remoteWatched) === buildWatchedSignature(mergedWatched)) {
-          console.log('✅ Watched già aggiornati, nessun push necessario');
+        // Filtra gli item senza IMDB prima del merge
+        const validIncoming = incomingWatched.filter(item => item.contentId);
+        
+        if (validIncoming.length === 0) {
+          console.log('⚠️ Nessun item valido con IMDB da pushare');
         } else {
-          const payload = dedupeWatchedItems(mergedWatched).map(item => toRemotePayloadItem(item));
-          console.log(`📤 Push watched: ${payload.length} items (${watchedMovies.length} film + ${watchedEpisodes.length} episodi)`);
-          console.log(`   Esempio: ${JSON.stringify(payload[0])}`);
+          const remoteWatched = currentWatchedRaw.map(row => mapRemoteWatchedItem(row)).filter(Boolean);
+          const mergedWatched = mergeWatchedItems(remoteWatched, validIncoming);
 
-          await supabaseRpc('sync_push_watched_items', {
-            p_profile_id: profileId,
-            p_items: payload
-          }, accessToken);
+          if (buildWatchedSignature(remoteWatched) === buildWatchedSignature(mergedWatched)) {
+            console.log('✅ Watched già aggiornati, nessun push necessario');
+          } else {
+            const payload = dedupeWatchedItems(mergedWatched)
+              .map(item => toRemotePayloadItem(item))
+              .filter(Boolean); // Rimuovi eventuali null
+            
+            if (payload.length > 0) {
+              console.log(`📤 Push watched: ${payload.length} items (${watchedMovies.length} film + ${watchedEpisodes.length} episodi)`);
+              console.log(`   Esempio: ${JSON.stringify(payload[0])}`);
 
-          totalWatchedPushed = payload.length;
-          console.log(`✅ Watched pushati: ${totalWatchedPushed}`);
+              await supabaseRpc('sync_push_watched_items', {
+                p_profile_id: profileId,
+                p_items: payload
+              }, accessToken);
+
+              totalWatchedPushed = payload.length;
+              console.log(`✅ Watched pushati: ${totalWatchedPushed}`);
+            } else {
+              console.log('⚠️ Nessun payload valido dopo il filtraggio');
+            }
+          }
         }
       } catch (err) {
         console.error('❌ Errore push watched:', err.message);
@@ -1146,10 +1164,12 @@ app.post('/restore', async (req, res) => {
         sync_source: "trakt"
       })).filter(w => w.content_id);
 
-      await supabaseRpc('sync_push_watched_items', {
-        p_profile_id: profileId,
-        p_items: watchedPayload
-      }, accessToken);
+      if (watchedPayload.length > 0) {
+        await supabaseRpc('sync_push_watched_items', {
+          p_profile_id: profileId,
+          p_items: watchedPayload
+        }, accessToken);
+      }
     }
 
     res.json({ success: true, message: `✅ Backup ripristinato! ${restored} titoli, ${backupWatched.length} visti.` });
@@ -1174,7 +1194,10 @@ app.post('/debug-watched', async (req, res) => {
     const watchedItems = extractWatchedMoviesFromStremio(stremioItems);
     addLog(`✅ Stremio: ${stremioItems.length} totali, ${watchedItems.length} film visti`);
     addLog(`   (le serie sono escluse — Nuvio richiede dati episodio per episodio)`);
-    if (watchedItems.length > 0) addLog(`   Esempio: ${JSON.stringify(toRemotePayloadItem(watchedItems[0]))}`);
+    if (watchedItems.length > 0) {
+      const payloadItem = toRemotePayloadItem(watchedItems[0]);
+      addLog(`   Esempio: ${JSON.stringify(payloadItem)}`);
+    }
 
     addLog('🔐 Login Nuvio...');
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
@@ -1194,22 +1217,26 @@ app.post('/debug-watched', async (req, res) => {
 
     if (watchedItems.length > 0) {
       const testItem = toRemotePayloadItem(watchedItems[0]);
-      addLog(`🧪 Test push 1 item: ${JSON.stringify(testItem)}`);
-      try {
-        const pushRes = await supabaseRpc('sync_push_watched_items', {
-          p_profile_id: profileId,
-          p_items: [testItem]
-        }, accessToken);
-        addLog(`✅ Push OK: ${JSON.stringify(pushRes)}`);
-      } catch (e) { addLog(`❌ Push fallito: ${e.message}`); }
+      if (testItem) {
+        addLog(`🧪 Test push 1 item: ${JSON.stringify(testItem)}`);
+        try {
+          const pushRes = await supabaseRpc('sync_push_watched_items', {
+            p_profile_id: profileId,
+            p_items: [testItem]
+          }, accessToken);
+          addLog(`✅ Push OK: ${JSON.stringify(pushRes)}`);
+        } catch (e) { addLog(`❌ Push fallito: ${e.message}`); }
 
-      try {
-        const afterPush = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
-        addLog(`📖 Dopo push: ${Array.isArray(afterPush) ? afterPush.length : '?'} items`);
-      } catch (e) { addLog(`❌ Pull dopo push: ${e.message}`); }
+        try {
+          const afterPush = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
+          addLog(`📖 Dopo push: ${Array.isArray(afterPush) ? afterPush.length : '?'} items`);
+        } catch (e) { addLog(`❌ Pull dopo push: ${e.message}`); }
+      } else {
+        addLog(`❌ Impossibile creare payload per l'item (manca IMDB)`);
+      }
     }
 
-    res.json({ success: true, log, watchedItems: watchedItems.slice(0, 5).map(toRemotePayloadItem) });
+    res.json({ success: true, log, watchedItems: watchedItems.slice(0, 5).map(toRemotePayloadItem).filter(Boolean) });
   } catch (error) {
     log.push(`💥 ERRORE FATALE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1481,6 +1508,11 @@ app.post('/test-single-episode', async (req, res) => {
     const profileId = 1;
     
     const contentId = extractSupportedContentId(series.id);
+    if (!contentId) {
+      addLog('❌ Impossibile estrarre IMDB ID dalla serie');
+      return res.json({ success: false, log });
+    }
+    
     const payload = [{
       content_id: contentId,
       content_type: 'series',
@@ -1547,19 +1579,17 @@ app.post('/test-single-episode', async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE COMPLETA - BOLLINO BLU FIXED!)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE DEFINITIVA - BOLLINO BLU FIXED!)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`🖼️  TMDB: ${process.env.TMDB_API_KEY ? '✅' : '❌ (TMDB_API_KEY non impostata)'}`);
   console.log(`\n✅ FIX APPLICATI:`);
-  console.log(`   • extractSupportedContentId: PRIORITÀ a IMDB e FORZATO in tutte le funzioni`);
-  console.log(`   • normalizeContentType: SOLO 'movie' o 'series'`);
-  console.log(`   • toRemotePayloadItem: content_id forzato con extractSupportedContentId`);
-  console.log(`   • buildWatchedMoviesPayload: contentId forzato con extractSupportedContentId`);
-  console.log(`   • buildWatchedEpisodesPayload: contentId forzato con extractSupportedContentId`);
+  console.log(`   • extractSupportedContentId: USA SOLO IMDB (no TMDB!)`);
+  console.log(`   • toRemotePayloadItem: salta item senza IMDB`);
+  console.log(`   • buildWatchedMoviesPayload: usa solo IMDB`);
+  console.log(`   • buildWatchedEpisodesPayload: usa solo IMDB`);
   console.log(`   • extractAllWatchedItems: unisce watchedStatus + watchProgress`);
-  console.log(`   • toTimestamp: fallback a Date.now()`);
-  console.log(`   • CHECK LIBRARY MATCH con messaggi chiari`);
+  console.log(`   • Filtraggio payload per evitare errori`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
   console.log(`   • GET  /tmdb-poster`);
   console.log(`   • POST /test-stremio-login`);
