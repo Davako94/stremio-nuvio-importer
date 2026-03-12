@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
-const zlib = require('zlib'); // Aggiunto per decomprimere i bitfield
+const zlib = require('zlib');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -77,7 +77,7 @@ async function getNuvioProfileId(accessToken) {
     const response = await supabaseRpc('get_sync_owner', {}, accessToken);
     console.log(`👤 get_sync_owner risposta:`, JSON.stringify(response));
   } catch (e) {
-    console.log(`ℹ️  get_sync_owner non disponibile: ${e.message}`);
+    console.log(`ℹ️ get_sync_owner non disponibile: ${e.message}`);
   }
   return 1;
 }
@@ -95,12 +95,9 @@ async function getNuvioWatchedItems(accessToken, profileId = 1) {
 }
 
 // ============================================
-// FUNZIONI PER SERIE TV (EPISODI VISTI - BOLLINO BLU)
+// FUNZIONI PER SERIE TV (EPISODI VISTI)
 // ============================================
 
-/**
- * Estrae season/episode da un videoId Stremio (es. "tt0455275:3:1")
- */
 function parseSeasonEpisode(videoId) {
   if (!videoId) return { season: null, episode: null };
   const parts = String(videoId).split(':');
@@ -113,10 +110,6 @@ function parseSeasonEpisode(videoId) {
   return { season: Math.trunc(season), episode: Math.trunc(episode) };
 }
 
-/**
- * Decodifica il campo watchedField di Stremio (bitfield compresso)
- * Formato: "videoId:anchorLength:bitfieldBase64"
- */
 function parseWatchedField(str) {
   if (!str || typeof str !== 'string') return null;
   const parts = str.split(':');
@@ -129,9 +122,6 @@ function parseWatchedField(str) {
   return { anchorVideo, anchorLength: Math.trunc(anchorLength), bitfield };
 }
 
-/**
- * Decomprime il bitfield (zlib + base64)
- */
 function decodeBitfield(encoded, lengthBits) {
   const compressed = Buffer.from(encoded, 'base64');
   const valuesBuf = zlib.inflateSync(compressed);
@@ -143,9 +133,6 @@ function decodeBitfield(encoded, lengthBits) {
   return { values, length: lengthBits };
 }
 
-/**
- * Ottiene il valore di un bit nel bitfield
- */
 function bitfieldGet(bitfield, idx) {
   const index = Math.floor(idx / 8);
   const bit = idx % 8;
@@ -153,9 +140,6 @@ function bitfieldGet(bitfield, idx) {
   return ((bitfield.values[index] >> bit) & 1) !== 0;
 }
 
-/**
- * Costruisce l'array booleano dei video visti
- */
 function constructWatchedBoolArray(watchedField, videoIds) {
   const anchorIdx = videoIds.indexOf(watchedField.anchorVideo);
   if (anchorIdx === -1) return new Array(videoIds.length).fill(false);
@@ -174,9 +158,6 @@ function constructWatchedBoolArray(watchedField, videoIds) {
   return result;
 }
 
-/**
- * Normalizza un video da Cinemeta
- */
 function normalizeVideo(raw) {
   const season = raw.season ?? (raw.seriesInfo && raw.seriesInfo.season) ?? null;
   const episode = raw.episode ?? (raw.seriesInfo && raw.seriesInfo.episode) ?? null;
@@ -190,9 +171,6 @@ function normalizeVideo(raw) {
   };
 }
 
-/**
- * Ordina i video per stagione/episodio/data
- */
 function sortVideos(videos) {
   return videos.slice().sort((a, b) => {
     const as = a.season ?? -1;
@@ -207,9 +185,6 @@ function sortVideos(videos) {
   });
 }
 
-/**
- * Recupera i video di una serie da Cinemeta
- */
 async function fetchCinemetaVideos(id) {
   try {
     const url = `https://v3-cinemeta.strem.io/meta/series/${encodeURIComponent(id)}.json`;
@@ -224,9 +199,6 @@ async function fetchCinemetaVideos(id) {
   }
 }
 
-/**
- * Costruisce il payload degli episodi visti per tutte le serie
- */
 async function buildWatchedEpisodesPayload(items, concurrency = 4) {
   const seriesItems = items.filter(i => 
     i.type === 'series' && 
@@ -252,7 +224,7 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4) {
           console.log(`   ✓ ${item.name}: ${videos.length} episodi`);
         }
       } catch (e) {
-        // ignora
+        // ignore
       }
     }));
   }
@@ -300,7 +272,7 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4) {
 }
 
 // ============================================
-// FUNZIONI WATCHED (dalla logica dello script)
+// FUNZIONI WATCHED
 // ============================================
 
 function extractSupportedContentId(value) {
@@ -543,7 +515,7 @@ async function getStremioWatchedHistory(authKey) {
 }
 
 // ============================================
-// FUNZIONE PER PUSHARE LIBRARY + EPISODI VISTI SU SUPABASE
+// FUNZIONE PER PUSHARE LIBRARY + EPISODI VISTI
 // ============================================
 async function pushLibraryAndWatchedToSupabase(email, password, stremioItems, options = {}) {
   console.log(`☁️ Push cloud per ${email}...`);
@@ -552,7 +524,6 @@ async function pushLibraryAndWatchedToSupabase(email, password, stremioItems, op
 
   const { includeWatchedEpisodes = true, cinemetaConcurrency = 4 } = options;
 
-  // 1. Library items (film + serie)
   const uniqueItems = new Map();
   stremioItems.forEach(item => {
     const fullId = item._id || item.id || '';
@@ -579,20 +550,16 @@ async function pushLibraryAndWatchedToSupabase(email, password, stremioItems, op
     await supabaseRpc('sync_push_library', { p_items: libraryItems }, accessToken);
   }
 
-  // 2. Episodi visti (bollino blu per le serie)
   let watchedEpisodesCount = 0;
   let watchedMoviesCount = 0;
   
   if (includeWatchedEpisodes) {
     try {
-      // Film visti
       const watchedMovies = extractWatchedMoviesFromStremio(stremioItems);
       watchedMoviesCount = watchedMovies.length;
       
-      // Episodi visti
       const watchedEpisodes = await buildWatchedEpisodesPayload(stremioItems, cinemetaConcurrency);
       
-      // Unisci film ed episodi
       const allWatched = [...watchedMovies, ...watchedEpisodes];
       
       if (allWatched.length > 0) {
@@ -750,7 +717,7 @@ app.post('/get-nuvio-data', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: SYNC DIRETTO (con episodi visti)
+// ENDPOINT: SYNC DIRETTO
 // ============================================
 app.post('/sync', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
@@ -761,14 +728,12 @@ app.post('/sync', async (req, res) => {
   try {
     console.log('🚀 Avvio sync diretto con episodi visti...');
 
-    // 1. Login Stremio + library completa
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
     let stremioItems = await getStremioLibrary(stremioAuth.token);
     stremioItems = stremioItems || [];
     console.log(`📊 Trovati ${stremioItems.length} elementi su Stremio`);
     if (stremioItems.length === 0) throw new Error('La tua libreria Stremio è vuota');
 
-    // 2. Login Nuvio e backup
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     const profileId = 1;
@@ -786,13 +751,11 @@ app.post('/sync', async (req, res) => {
     );
     console.log(`💾 Backup pre-sync-${backupId}.json`);
 
-    // 3. Push library + episodi visti
     const result = await pushLibraryAndWatchedToSupabase(nuvioEmail, nuvioPassword, stremioItems, {
       includeWatchedEpisodes: true,
       cinemetaConcurrency: 4
     });
 
-    // 4. Verifica finale
     const newNuvioLibrary = await getNuvioLibrary(accessToken);
     const newWatchedRaw = await getNuvioWatchedItems(accessToken, profileId);
     const newArray = Array.isArray(newNuvioLibrary) ? newNuvioLibrary : [];
@@ -902,7 +865,7 @@ app.post('/restore', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: DEBUG EPISODI VISTI (NUOVO!)
+// ENDPOINT: DEBUG EPISODI VISTI
 // ============================================
 app.post('/debug-episodes', async (req, res) => {
   const { stremioEmail, stremioPassword } = req.body;
@@ -1071,7 +1034,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • POST /debug-episodes           ← NUOVO: diagnostica episodi visti`);
   console.log(`   • POST /debug-watched`);
   console.log(`   • POST /debug-sync`);
-  • GET  /backups`);
+  console.log(`   • GET  /backups`);
   console.log(`   • POST /restore`);
   console.log(`   • GET  /supabase-status\n`);
 });
