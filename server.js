@@ -1314,6 +1314,151 @@ app.post('/force-badge-sync', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: AUTO SYNC & FIX
+// Rileva e corregge automaticamente discrepanze tra Stremio e Nuvio
+// ============================================
+app.post('/auto-sync-fix', async (req, res) => {
+  const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+  const log = [];
+  const addLog = (msg) => { console.log(msg); log.push(msg); };
+
+  if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ success: false, error: 'Tutte le credenziali sono richieste' });
+  }
+
+  try {
+    addLog('🔍 Avvio sincronizzazione automatica e correzione...');
+
+    // 1. Recupera dati da Stremio
+    addLog('📥 Recupero dati da Stremio...');
+    const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+    const [rawAll, rawFiltered] = await Promise.all([
+      getStremioLibrary(stremioAuth.token, { includeAll: true }),
+      getStremioLibrary(stremioAuth.token, { includeAll: false })
+    ]);
+    const items = rawAll.map(normalizeLibraryItem);
+    const watchedMovies = buildWatchedMoviesPayload(items);
+    const watchedEpisodes = await buildWatchedEpisodesPayload(items, 4);
+    const allWatchedItems = [...watchedMovies, ...watchedEpisodes].map(normalizeWatchedItem).filter(Boolean);
+    addLog(`✅ Stremio: ${rawFiltered.length} attivi, ${watchedMovies.length} film visti, ${watchedEpisodes.length} episodi visti`);
+
+    // 2. Recupera dati da Nuvio
+    addLog('📥 Recupero dati da Nuvio...');
+    const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = nuvioSession.access_token;
+    const identity = await resolveNuvioIdentity(accessToken);
+    const [nuvioLibrary, nuvioWatched] = await Promise.all([
+      getNuvioLibrary(accessToken),
+      getNuvioWatchedItems(accessToken, identity.profileId || 1)
+    ]);
+    addLog(`✅ Nuvio: ${nuvioLibrary.length} titoli in library, ${nuvioWatched.length} visti`);
+
+    // 3. Crea mappe per confronto rapido
+    const stremioWatchedMap = new Map(allWatchedItems.map(item => [watchedKey(item), item]));
+    const nuvioLibraryMap = new Map(nuvioLibrary.map(item => [item.content_id, item]));
+    const nuvioWatchedMap = new Map(nuvioWatched.map(item => [watchedKey(mapRemoteWatchedItem(item)), mapRemoteWatchedItem(item)]));
+
+    // 4. Trova discrepanze
+    const missingInLibrary = [];
+    const missingInWatched = [];
+    const toUpdateInLibrary = [];
+
+    allWatchedItems.forEach(item => {
+      const key = watchedKey(item);
+      // Controlla se è in library
+      if (!nuvioLibraryMap.has(item.contentId)) {
+        missingInLibrary.push(item);
+      } else {
+        // Controlla se ha i campi "visto" valorizzati
+        const libItem = nuvioLibraryMap.get(item.contentId);
+        if (!libItem.times_watched && !libItem.flagged_watched) {
+          toUpdateInLibrary.push({ ...libItem, content_id: item.contentId, times_watched: 1, flagged_watched: 1 });
+        }
+      }
+      // Controlla se è in watched_items
+      if (!nuvioWatchedMap.has(key)) {
+        missingInWatched.push(item);
+      }
+    });
+
+    addLog(`🔍 Discrepanze rilevate:
+      - ${missingInLibrary.length} titoli mancanti in library
+      - ${toUpdateInLibrary.length} titoli in library senza badge
+      - ${missingInWatched.length} titoli mancanti in watched_items`);
+
+    // 5. Correggi library
+    if (missingInLibrary.length > 0 || toUpdateInLibrary.length > 0) {
+      addLog('🛠️ Correzione library...');
+      const itemsToPush = [
+        ...rawAll.filter(item => missingInLibrary.some(m => m.contentId === (item._id || item.id))),
+        ...toUpdateInLibrary.map(item => ({
+          _id: item.content_id,
+          type: item.content_type,
+          name: item.name,
+          timesWatched: 1,
+          flaggedWatched: 1,
+        }))
+      ];
+      if (itemsToPush.length > 0) {
+        const watchedContentIdSet = new Set(allWatchedItems.map(i => i.contentId).filter(Boolean));
+        await pushLibraryToSupabase(nuvioEmail, nuvioPassword, itemsToPush, watchedContentIdSet);
+        addLog(`✅ Aggiunti/aggiornati ${itemsToPush.length} titoli in library.`);
+      }
+    }
+
+    // 6. Correggi watched_items
+    if (missingInWatched.length > 0) {
+      addLog('🛠️ Correzione watched_items...');
+      const payload = missingInWatched.map(item => toRemotePayloadItem(item));
+      const result = await pushWatchedItemsWithFallback(accessToken, identity, payload);
+      if (result.success) {
+        addLog(`✅ Aggiunti ${payload.length} titoli in watched_items.`);
+      } else {
+        addLog(`⚠️ Impossibile aggiungere watched_items: ${result.reason}`);
+      }
+    }
+
+    // 7. Verifica finale
+    const [finalNuvioLibrary, finalNuvioWatched] = await Promise.all([
+      getNuvioLibrary(accessToken),
+      getNuvioWatchedItems(accessToken, identity.profileId || 1)
+    ]);
+    const stillMissing = allWatchedItems.filter(item => !finalNuvioWatched.some(w => watchedKey(mapRemoteWatchedItem(w)) === watchedKey(item)));
+
+    addLog(`📊 Risultato finale:
+      - Library: ${finalNuvioLibrary.length} titoli
+      - Watched: ${finalNuvioWatched.length} titoli
+      - Ancora mancanti: ${stillMissing.length} titoli`);
+
+    if (stillMissing.length > 0) {
+      addLog('⚠️ Alcuni titoli non sono stati sincronizzati correttamente:', stillMissing.map(i => i.title).join(', '));
+    } else {
+      addLog('🎉 Tutti i titoli sono sincronizzati correttamente!');
+    }
+
+    res.json({
+      success: stillMissing.length === 0,
+      log,
+      stats: {
+        stremio: rawFiltered.length,
+        nuvioLibrary: finalNuvioLibrary.length,
+        nuvioWatched: finalNuvioWatched.length,
+        fixedLibrary: missingInLibrary.length + toUpdateInLibrary.length,
+        fixedWatched: missingInWatched.length,
+        stillMissing: stillMissing.length,
+      },
+      message: stillMissing.length === 0
+        ? '✅ Tutti i titoli sono sincronizzati correttamente!'
+        : `✅ Correzioni applicate, ma ${stillMissing.length} titoli non sono stati sincronizzati.`
+    });
+
+  } catch (error) {
+    addLog(`💥 ERRORE: ${error.message}`);
+    res.json({ success: false, log, error: error.message });
+  }
+});
+
+// ============================================
 // ENDPOINT: LISTA BACKUP
 // ============================================
 app.get('/backups', (req, res) => {
@@ -1753,23 +1898,24 @@ app.post('/check-item', async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE BADGE FIX + FALLBACK AGGRESSIVO)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE COMPLETA CON AUTO-SYNC-FIX)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`🖼️  TMDB: ${process.env.TMDB_API_KEY ? '✅' : '❌ (TMDB_API_KEY non impostata)'}`);
   console.log(`\n✅ BUG FIX APPLICATI:`);
-  console.log(`   • FIX #1: resolveNuvioIdentity potenziata (4 RPC + 2 tabelle fallback)`);
+  console.log(`   • FIX #1: resolveNuvioIdentity potenziata (4 RPC + auto-detect)`);
   console.log(`   • FIX #2: getNuvioWatchedItems tenta tutti i candidati profileId`);
   console.log(`   • FIX #3: normalizeWatchedItem — corretto bug '|| true' su traktSynced`);
   console.log(`   • FIX #4: toRemotePayloadItem — aggiunto nuvio_watched, watched, times_watched`);
   console.log(`   • FIX #5: buildWatchedMoviesPayload — rileva watched via progress > 85%`);
   console.log(`   • FIX #6: constructWatchedBoolArray — fallback se anchorVideo non trovato`);
-   console.log(`   • FIX #7: pushLibraryToSupabase — solo item reali, nessuno stub`);
+  console.log(`   • FIX #7: pushLibraryToSupabase — solo item reali, nessuno stub`);
   console.log(`   • FIX #8: pushWatchedItemsWithFallback — 5+ RPC alternativi`);
   console.log(`   • FIX #9: pausa 500ms tra library push e watched push (race condition)`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
-  console.log(`   • POST /force-badge-sync              ← NUOVO: forza badge in ogni modo`);
-  console.log(`   • POST /sync                          ← con fallback badge aggressivo`);
+  console.log(`   • POST /auto-sync-fix                ← NUOVO: rileva e corregge automaticamente discrepanze`);
+  console.log(`   • POST /force-badge-sync             ← forza badge in ogni modo`);
+  console.log(`   • POST /sync                         ← con fallback badge aggressivo`);
   console.log(`   • POST /force-sync-watched`);
   console.log(`   • GET  /backups | POST /restore`);
   console.log(`   • POST /debug-watched | /debug-sync | /debug-episodes-full`);
