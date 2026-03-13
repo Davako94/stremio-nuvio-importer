@@ -35,7 +35,13 @@ const CORS = {
 
 function jsonOk(data) {
   return new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 
+      'Content-Type': 'application/json', 
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      ...CORS 
+    },
   });
 }
 
@@ -48,7 +54,12 @@ function jsonErr(message, status = 500) {
 
 function htmlOk(html) {
   return new Response(html, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: { 
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    },
   });
 }
 
