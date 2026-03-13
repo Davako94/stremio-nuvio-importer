@@ -1,7 +1,23 @@
 name = "stremio-nuvio-importer"
 main = "src/index.js"
-compatibility_date = "2025-09-01"
+compatibility_date = "2025-07-18"
 compatibility_flags = ["nodejs_compat"]
+
+# Permette di importare file .html come stringhe di testo
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
 
 [env.production]
 vars = { ENVIRONMENT = "production" }
+
+# ────────────────────────────────────────────────
+# Segreti da impostare con wrangler secret put:
+#
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_ANON_KEY
+#   wrangler secret put TMDB_API_KEY      (opzionale)
+#
+# NON mettere mai le chiavi in questo file!
+# ────────────────────────────────────────────────

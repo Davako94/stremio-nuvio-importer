@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stremio → NUVIO → Import</title>
+  <title>Stremio → NUVIO Direct Sync</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -371,19 +371,6 @@
     .btn-sync:hover:not(:disabled) {
       box-shadow: 0 12px 50px rgba(0,229,160,0.35);
       transform: translateY(-3px);
-    }
-
-    /* ─── QUICK SYNC BUTTON ─── */
-    .btn-quick-sync {
-      width: 100%;
-      padding: 16px;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
-      color: white;
-      margin-top: 20px;
-      margin-bottom: 10px;
     }
 
     /* ─── STATUS BADGE ─── */
@@ -791,12 +778,6 @@
       border: 1px solid rgba(255,90,90,0.3);
       color: #FF6B6B;
     }
-    #result.info {
-      display: flex;
-      background: rgba(45,156,255,0.08);
-      border: 1px solid rgba(45,156,255,0.3);
-      color: var(--accent-blue);
-    }
 
     /* ─── FOOTER ─── */
     .page-footer {
@@ -871,25 +852,6 @@
       text-transform: uppercase;
       color: var(--accent-green);
       opacity: 0.7;
-    }
-
-    /* Quick sync result box */
-    .quick-sync-result {
-      margin-top: 20px;
-      padding: 16px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    .quick-sync-log-line {
-      color: var(--text-secondary);
-      line-height: 1.6;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      padding: 4px 0;
     }
   </style>
 </head>
@@ -1001,27 +963,6 @@
       </div>
     </div>
 
-    <!-- ── QUICK SYNC BADGE ── -->
-<div class="fade-up">
-  <div class="section-header">
-    <div class="section-icon">⚡</div>
-    <div class="section-label">
-      Sincronizzazione Rapida Badge
-      <small>solo per i titoli visti</small>
-    </div>
-  </div>
-
-  <div class="cred-panel">
-    <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 13px;">
-      Se vuoi sincronizzare <strong>solo i badge "visto"</strong> senza trasferire tutta la library, usa questo pulsante.
-    </p>
-    <button id="quickSyncBtn" class="btn btn-quick-sync">
-      ⚡ Sincronizza Badge Veloce
-    </button>
-    <div id="quickSyncResult" class="quick-sync-result" style="display: none;"></div>
-  </div>
-</div>
-
     <!-- TMDB è gestito lato server, nessuna UI necessaria -->
     <div id="previewContainer" style="display:none">
 
@@ -1092,6 +1033,7 @@
           <small>snapshot automatici prima di ogni sync</small>
         </div>
         <button id="refreshBackupsBtn" class="btn btn-ghost" style="margin-left:auto; padding:6px 14px; font-size:12px;">🔄</button>
+        <button id="debugWatchedBtn" class="btn btn-ghost" style="padding:6px 14px; font-size:12px;" title="Diagnostica problemi watched">🔍 Debug Watched</button>
       </div>
 
       <div class="backup-panel">
@@ -1118,7 +1060,7 @@
     <!-- FOOTER -->
     <div class="page-footer">
       <p>🔒 <strong>Le credenziali sono usate solo per questa sessione</strong> — mai memorizzate</p>
-      <p>✨ Tool NON AFFILIATO con <strong>NUVIO</strong></p>
+      <p>✨ Direct Sync via API Stremio ufficiali · Made for <strong>NUVIO community</strong></p>
     </div>
 
   </div><!-- /page -->
@@ -1509,67 +1451,52 @@
 
     document.getElementById('refreshBackupsBtn').addEventListener('click', loadBackups);
 
-    // ─── QUICK SYNC BADGE ──────────────────────────────────────────────────────
-document.getElementById('quickSyncBtn').addEventListener('click', async () => {
-  const stremioEmail = document.getElementById('stremioEmail').value.trim();
-  const stremioPassword = document.getElementById('stremioPassword').value.trim();
-  const nuvioEmail = document.getElementById('nuvioEmail').value.trim();
-  const nuvioPassword = document.getElementById('nuvioPassword').value.trim();
-
-  if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword) {
-    showResult('❌ Inserisci tutte le credenziali!', 'error');
-    return;
-  }
-
-  const quickResultDiv = document.getElementById('quickSyncResult');
-  quickResultDiv.style.display = 'block';
-  quickResultDiv.innerHTML = '<div class="quick-sync-log-line">🔄 Sincronizzazione in corso... Attendere...</div>';
-
-  try {
-    const response = await fetch('/quick-sync-badge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        stremioEmail,
-        stremioPassword,
-        nuvioEmail,
-        nuvioPassword
-      })
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      let html = '<div class="quick-sync-log-line" style="color: #00E5A0;">✅ Sincronizzazione completata!</div>';
-      html += '<div class="quick-sync-log-line">📊 Statistiche:</div>';
-      if (data.log) {
-        data.log.forEach(line => {
-          html += `<div class="quick-sync-log-line">${line}</div>`;
-        });
-      } else {
-        html += `<div class="quick-sync-log-line">Titoli sincronizzati: ${data.pushed || 0}</div>`;
+    // ─── DEBUG WATCHED ─────────────────────────────────────────────────────────
+    document.getElementById('debugWatchedBtn').addEventListener('click', async () => {
+      if (!stremioAuth || !nuvioAuth) {
+        showResult('❌ Carica prima Stremio e Nuvio per eseguire il debug', 'error');
+        return;
       }
-      quickResultDiv.innerHTML = html;
-      showResult('✅ Sincronizzazione badge completata!', 'success');
-    } else {
-      quickResultDiv.innerHTML = `
-        <div class="quick-sync-log-line" style="color: #FF6B6B;">❌ Errore durante la sincronizzazione</div>
-        <div class="quick-sync-log-line">${data.error || 'Errore sconosciuto'}</div>
-        ${data.log ? data.log.map(l => `<div class="quick-sync-log-line">${l}</div>`).join('') : ''}
-      `;
-      showResult('❌ Errore durante la sincronizzazione badge', 'error');
-    }
-  } catch (error) {
-    quickResultDiv.innerHTML = `
-      <div class="quick-sync-log-line" style="color: #FF6B6B;">💥 Errore di rete:</div>
-      <div class="quick-sync-log-line">${error.message}</div>
-    `;
-    showResult('❌ Errore di connessione', 'error');
-  }
-});
+      const btn = document.getElementById('debugWatchedBtn');
+      btn.disabled = true; btn.textContent = '⏳ Debug...';
+      showProgress(true, 'Diagnostica watched in corso...', 50);
+      try {
+        const res = await fetch('/debug-watched', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stremioEmail: stremioAuth.email, stremioPassword: stremioAuth.password,
+            nuvioEmail: nuvioAuth.email, nuvioPassword: nuvioAuth.password
+          })
+        });
+        const data = await res.json();
+        showProgress(false);
 
-    // Esponi la funzione globalmente per il form esterno
-    window.quickSyncBadge = quickSyncBadge;
+        // Mostra risultato in un popup
+        const logText = (data.log || []).join('\n');
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+          position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10000;
+          display:flex; align-items:center; justify-content:center; padding:20px;
+        `;
+        modal.innerHTML = `
+          <div style="background:#111; border:1px solid #333; border-radius:16px; padding:24px; max-width:700px; width:100%; max-height:80vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+              <span style="font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:1px; color:#2D9CFF;">🔍 Debug Watched</span>
+              <button onclick="this.closest('div[style]').remove()" style="background:#333; border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer;">✕ Chiudi</button>
+            </div>
+            <pre style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ccc; white-space:pre-wrap; line-height:1.6;">${logText}</pre>
+            ${!data.success ? `<div style="color:#ff6b6b; margin-top:12px; font-size:13px;">❌ ${data.error}</div>` : ''}
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+      } catch (err) {
+        showProgress(false);
+        showResult('❌ Debug fallito: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = '🔍 Debug Watched';
+      }
+    });
   </script>
 </body>
 </html>
