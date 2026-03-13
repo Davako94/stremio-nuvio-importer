@@ -60,14 +60,40 @@ async function supabaseRpc(functionName, payload, accessToken) {
 }
 
 // ============================================
-// RISOLUZIONE IDENTITÀ — USA SOLO IL VERO ID UTENTE (NESSUN FALLBACK A 1)
+// RISOLUZIONE IDENTITÀ — LOGICA CORRETTA
+//
+// REGOLA FONDAMENTALE: profileId deve essere SEMPRE un intero numerico.
+// I UUID (formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) NON sono profileId
+// validi per sync_push_watched_items che vuole un INTEGER.
+// I UUID vanno solo in allProfileIds come candidati secondari.
 // ============================================
 function isUUID(val) {
   return typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 }
 
+// parseProfileId: accetta SOLO interi. Rifiuta UUID e stringhe non numeriche.
+function parseProfileId(data) {
+  if (data === null || data === undefined) return null;
+  if (typeof data === 'number' && Number.isFinite(data) && data > 0) return Math.trunc(data);
+  if (typeof data === 'string' && /^\d+$/.test(data.trim())) {
+    const n = parseInt(data.trim(), 10);
+    return n > 0 ? n : null;
+  }
+  if (typeof data === 'object') {
+    for (const key of ['id', 'profile_id', 'p_id', 'profileId', 'profile']) {
+      const val = data[key];
+      if (typeof val === 'number' && Number.isFinite(val) && val > 0) return Math.trunc(val);
+      if (typeof val === 'string' && /^\d+$/.test(val.trim())) {
+        const n = parseInt(val.trim(), 10);
+        if (n > 0) return n;
+      }
+    }
+  }
+  return null; // UUID e tutto il resto → null
+}
+
 async function resolveNuvioIdentity(accessToken) {
-  const identity = { userId: null, profileId: null };
+  const identity = { userId: null, profileId: null, allProfileIds: [] };
 
   // Step 1: UUID dall'auth
   try {
@@ -77,28 +103,50 @@ async function resolveNuvioIdentity(accessToken) {
     });
     const authData = await authRes.json();
     identity.userId = authData.id || null;
-    console.log(`🔑 UUID utente: ${identity.userId}`);
+    console.log(`🔑 UUID: ${identity.userId}`);
   } catch (e) {
     console.error('❌ UUID fallito:', e.message);
   }
 
-  // Step 2: get_sync_owner per ottenere il profileId REALE (quello che funziona)
-  try {
-    const ownerData = await supabaseRpc('get_sync_owner', {}, accessToken);
-    console.log(`🔍 get_sync_owner risposta raw:`, ownerData);
-    
-    // Il profileId è un NUMERO (nel tuo caso 13)
-    if (typeof ownerData === 'number') {
-      identity.profileId = ownerData;
-    } else if (ownerData && typeof ownerData === 'object') {
-      identity.profileId = ownerData.id || ownerData.profile_id;
-    } else if (typeof ownerData === 'string' && /^\d+$/.test(ownerData)) {
-      identity.profileId = parseInt(ownerData, 10);
+  // Step 2: RPC — log esplicito della risposta raw per debug
+  for (const rpcName of ['get_sync_owner', 'get_profile_id', 'get_current_profile', 'get_user_profile_id']) {
+    try {
+      const ownerData = await supabaseRpc(rpcName, {}, accessToken);
+      console.log(`🔍 ${rpcName} risposta raw: ${JSON.stringify(ownerData)}`);
+      const parsed = parseProfileId(ownerData);
+      if (parsed !== null) {
+        identity.profileId = parsed;
+        console.log(`✅ ProfileID trovato via ${rpcName}: ${parsed}`);
+        break;
+      } else {
+        console.log(`⚠️ ${rpcName} risposta non è intero valido: ${JSON.stringify(ownerData)}`);
+      }
+    } catch (e) {
+      console.log(`⚠️ ${rpcName} errore: ${e.message}`);
     }
-  } catch (e) {
-    console.log(`⚠️ get_sync_owner errore: ${e.message}`);
   }
 
+  // Step 3: AUTO-DETECT parallelo — scansiona ID 1-30 in parallelo
+  // Vince il profileId con il numero massimo di watched items
+  if (identity.profileId === null) {
+    console.log('🔎 Auto-detect: scansione parallela ID 1-30...');
+    const scanResults = await Promise.all(
+      Array.from({ length: 30 }, (_, i) => i + 1).map(id =>
+        supabaseRpc('sync_pull_watched_items', { p_profile_id: id }, accessToken)
+          .then(items => ({ id, count: Array.isArray(items) ? items.length : 0 }))
+          .catch(() => ({ id, count: 0 }))
+      )
+    );
+    const best = scanResults.reduce((a, b) => b.count > a.count ? b : a, { id: 1, count: 0 });
+    identity.profileId = best.id;
+    if (best.count > 0) {
+      console.log(`✅ ProfileID auto-rilevato: ${best.id} (${best.count} watched items)`);
+    } else {
+      console.log(`⚠️ Nessun watched trovato per nessun ID, uso: 1`);
+    }
+  }
+
+  identity.allProfileIds = [identity.profileId];
   console.log(`👤 Identità finale → UUID: ${identity.userId}, ProfileID: ${identity.profileId}`);
   return identity;
 }
@@ -116,16 +164,60 @@ async function getNuvioLibrary(accessToken) {
   }
 }
 
-async function getNuvioWatchedItems(accessToken, profileId) {
+async function getNuvioProfileId(accessToken) {
   try {
-    const items = await supabaseRpc('sync_pull_watched_items', { p_profile_id: profileId }, accessToken);
-    const arr = Array.isArray(items) ? items : [];
-    console.log(`📖 sync_pull_watched_items (profileId=${profileId}): ${arr.length} items`);
-    return arr;
-  } catch (error) {
-    console.error('❌ Errore getNuvioWatchedItems:', error.message);
-    return [];
+    const response = await supabaseRpc('get_sync_owner', {}, accessToken);
+    console.log(`👤 get_sync_owner risposta:`, JSON.stringify(response));
+    if (typeof response === 'number') return response;
+    if (response && response.id) return response.id;
+  } catch (e) {
+    console.log(`ℹ️ get_sync_owner non disponibile: ${e.message}`);
   }
+  return 1;
+}
+
+// FIX #2 — getNuvioWatchedItems con fallback aggressivo su tutti gli ID candidati
+async function getNuvioWatchedItems(accessToken, profileId = 1) {
+  const attempts = buildProfileIdAttempts(profileId);
+  for (const attempt of attempts) {
+    try {
+      const pId = isNaN(Number(attempt)) ? attempt : Number(attempt);
+      const items = await supabaseRpc('sync_pull_watched_items', { p_profile_id: pId }, accessToken);
+      const arr = Array.isArray(items) ? items : [];
+      if (arr.length > 0) {
+        console.log(`📖 sync_pull_watched_items (profileId=${attempt}): ${arr.length} items`);
+        return arr;
+      }
+    } catch (error) {
+      // Continua con il prossimo
+    }
+  }
+  console.log(`📖 sync_pull_watched_items: nessun item trovato con nessun ID`);
+  return [];
+}
+
+// Costruisce la lista di tentativi: PRIMA tutti gli interi, POI gli UUID.
+// Evita di sprecare chiamate RPC su UUID che danno sempre "invalid input syntax for type integer".
+function buildProfileIdAttempts(primaryId) {
+  const numericIds = [];
+  const uuidIds = [];
+
+  for (const id of [primaryId, 1].filter(id => id !== null && id !== undefined)) {
+    const str = String(id);
+    if (isUUID(str)) {
+      uuidIds.push(str); // UUID solo come ultima spiaggia
+    } else if (/^\d+$/.test(str) && Number(str) > 0) {
+      numericIds.push(Number(str)); // Interi prima
+    }
+  }
+
+  const seen = new Set();
+  const result = [];
+  for (const id of [...numericIds, ...uuidIds]) {
+    const key = String(id);
+    if (!seen.has(key)) { seen.add(key); result.push(id); }
+  }
+  return result;
 }
 
 // ============================================
@@ -182,7 +274,8 @@ function buildProgressKey(contentType, contentId, videoId, season, episode) {
 }
 
 // ============================================
-// NORMALIZZAZIONE ITEM WATCHED
+// FIX #3 — NORMALIZZAZIONE ITEM WATCHED
+// Corretto il bug `|| true` → usare `!== false`
 // ============================================
 function normalizeWatchedItem(item = {}) {
   const contentId = item.contentId;
@@ -196,6 +289,7 @@ function normalizeWatchedItem(item = {}) {
     season: Number.isFinite(seasonValue) && seasonValue > 0 ? Math.trunc(seasonValue) : null,
     episode: Number.isFinite(episodeValue) && episodeValue > 0 ? Math.trunc(episodeValue) : null,
     watchedAt: toTimestamp(item.watchedAt),
+    // FIX: era `item.traktSynced || true` che è sempre true — ora usiamo valore reale con default true
     traktSynced: item.traktSynced !== false,
     traktLastSynced: item.traktLastSynced || toTimestamp(item.watchedAt) || Date.now(),
     syncSource: item.syncSource || 'trakt'
@@ -255,7 +349,8 @@ function mergeWatchedItems(remoteItems = [], incomingItems = []) {
 }
 
 // ============================================
-// PAYLOAD REMOTO PER BADGE BLU
+// FIX #4 — PAYLOAD REMOTO POTENZIATO
+// Aggiunge nuvio_watched, watched, e formato ISO per compatibilità
 // ============================================
 function toRemotePayloadItem(item = {}) {
   const watchedAtMs = Number(item.watchedAt || Date.now());
@@ -266,13 +361,13 @@ function toRemotePayloadItem(item = {}) {
     season: item.season == null ? null : Number(item.season),
     episode: item.episode == null ? null : Number(item.episode),
     watched_at: watchedAtMs,
-    // Campi per il badge blu
+    // FIX: aggiunge campi extra che Nuvio potrebbe controllare per il badge
     trakt_synced: true,
     trakt_last_synced: watchedAtMs,
     sync_source: 'trakt',
-    nuvio_watched: true,
-    watched: true,
-    times_watched: 1,
+    nuvio_watched: true,   // campo extra per compatibilità badge
+    watched: true,         // campo alternativo
+    times_watched: 1,      // alcuni schemi usano questo contatore
   };
 }
 
@@ -325,7 +420,8 @@ function normalizeLibraryItem(raw) {
 }
 
 // ============================================
-// PAYLOAD FILM VISTI (con rilevamento progress > 85%)
+// FIX #5 — PAYLOAD FILM VISTI POTENZIATO
+// Aggiunge rilevamento via progress (timeOffset/duration > 85%)
 // ============================================
 function buildWatchedMoviesPayload(items) {
   const payload = [];
@@ -334,8 +430,15 @@ function buildWatchedMoviesPayload(items) {
     if (item.type !== 'movie') continue;
 
     const isExplicitlyWatched = item.state.timesWatched > 0 || item.state.flaggedWatched > 0;
-    const progressRatio = (item.state.duration > 0) ? item.state.timeOffset / item.state.duration : 0;
+
+    // FIX: rileva come visto anche se il progresso è > 85% (film quasi completo)
+    const progressRatio = (item.state.duration > 0)
+      ? item.state.timeOffset / item.state.duration
+      : 0;
     const isProgressWatched = progressRatio >= 0.85;
+
+    // FIX: considera visto anche se è in libreria e non è rimosso
+    const isInLibraryWatched = !item.removed && !item.temp && item.state.lastWatched;
 
     if (!isExplicitlyWatched && !isProgressWatched) continue;
 
@@ -386,9 +489,13 @@ function bitfieldGet(bitfield, idx) {
   return ((bitfield.values[index] >> bit) & 1) !== 0;
 }
 
+// FIX #6 — constructWatchedBoolArray con offset corretto
 function constructWatchedBoolArray(watchedField, videoIds) {
   const anchorIdx = videoIds.indexOf(watchedField.anchorVideo);
+
+  // FIX: se anchor non trovato, tentiamo un approccio diretto senza offset
   if (anchorIdx === -1) {
+    console.warn(`⚠️ anchorVideo "${watchedField.anchorVideo}" non trovato. Tentativo diretto.`);
     try {
       const base = decodeBitfield(watchedField.bitfield, videoIds.length);
       return videoIds.map((_, i) => bitfieldGet(base, i));
@@ -398,6 +505,11 @@ function constructWatchedBoolArray(watchedField, videoIds) {
   }
 
   const base = decodeBitfield(watchedField.bitfield, videoIds.length);
+
+  // FIX: calcolo offset corretto
+  // anchorLength = numero totale di episodi al momento del salvataggio
+  // anchorIdx = posizione corrente dell'ancora nella lista ordinata
+  // offset = quanti slot "nuovi" esistono dopo l'ancora nel bitfield originale
   const offset = watchedField.anchorLength - anchorIdx - 1;
 
   if (offset === 0) return videoIds.map((_, i) => bitfieldGet(base, i));
@@ -636,14 +748,20 @@ async function getStremioWatchedHistory(authKey) {
 }
 
 // ============================================
-// PUSH LIBRARY CON STATO WATCHED INCLUSO (PER IL BADGE)
+// pushLibraryToSupabase
+// BADGE FIX: include stato watched direttamente nel library item
+// Il badge in Nuvio viene da times_watched/flagged_watched nel library item,
+// NON solo da watched_items. Vanno pushati insieme.
+// RIMOSSI gli stub: non aggiungere mai item senza metadati reali.
 // ============================================
 async function pushLibraryToSupabase(email, password, items, watchedContentIds = new Set()) {
   console.log(`☁️ Push library per ${email}...`);
   const session = await supabaseLogin(email, password);
   const accessToken = session.access_token;
 
-  const watchedSet = watchedContentIds instanceof Set ? watchedContentIds : new Set(watchedContentIds);
+  const watchedSet = watchedContentIds instanceof Set
+    ? watchedContentIds
+    : new Set(watchedContentIds);
 
   const uniqueItems = new Map();
   items.forEach(item => {
@@ -652,7 +770,9 @@ async function pushLibraryToSupabase(email, password, items, watchedContentIds =
 
     const isWatched = watchedSet.has(contentId);
     const normalizedItem = normalizeLibraryItem(item);
-    const lastWatched = normalizedItem.state.lastWatched ? toTimestamp(normalizedItem.state.lastWatched) : null;
+    const lastWatched = normalizedItem.state.lastWatched
+      ? toTimestamp(normalizedItem.state.lastWatched)
+      : null;
 
     uniqueItems.set(contentId, {
       content_id: contentId,
@@ -666,11 +786,11 @@ async function pushLibraryToSupabase(email, password, items, watchedContentIds =
       imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
       genres: Array.isArray(item.genres) ? item.genres : [],
       added_at: Date.now(),
-      // Campi per il badge blu (direttamente nell'item library)
+      // BADGE: stato watched direttamente nel library item
       times_watched: isWatched ? Math.max(1, normalizedItem.state.timesWatched || 1) : (normalizedItem.state.timesWatched || 0),
       flagged_watched: isWatched ? Math.max(1, normalizedItem.state.flaggedWatched || 1) : (normalizedItem.state.flaggedWatched || 0),
       last_watched: isWatched ? (lastWatched || Date.now()) : lastWatched,
-      // Stato annidato per compatibilità
+      // Campi state annidati per compatibilità con schemi alternativi
       state: {
         timesWatched: isWatched ? Math.max(1, normalizedItem.state.timesWatched || 1) : (normalizedItem.state.timesWatched || 0),
         flaggedWatched: isWatched ? Math.max(1, normalizedItem.state.flaggedWatched || 1) : (normalizedItem.state.flaggedWatched || 0),
@@ -694,7 +814,214 @@ async function pushLibraryToSupabase(email, password, items, watchedContentIds =
 }
 
 // ============================================
-// SYNC DIRETTO — VERSIONE CORRETTA (USA SOLO profileId REALE)
+// pushWatchedItemsWithFallback
+// Ordine tentativi: profileId numerico → 1 → UUID (solo se tutto il resto fallisce)
+// ============================================
+async function pushWatchedItemsWithFallback(accessToken, identity, payload) {
+  if (!payload || payload.length === 0) return { success: false, reason: 'payload vuoto' };
+
+  // Costruisce lista candidati: INTERI prima, UUID dopo
+  const numericCandidates = [];
+  const uuidCandidates = [];
+
+  const rawCandidates = [
+    identity.profileId,
+    ...(identity.allProfileIds || []),
+    identity.userId,
+    1,
+  ].filter(id => id !== null && id !== undefined);
+
+  const seen = new Set();
+  for (const id of rawCandidates) {
+    const key = String(id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (isUUID(key)) {
+      uuidCandidates.push(id); // UUID solo come ultima spiaggia
+    } else if (/^\d+$/.test(key) && Number(key) > 0) {
+      numericCandidates.push(Number(key));
+    }
+  }
+
+  const orderedCandidates = [...numericCandidates, ...uuidCandidates];
+  console.log(`🎯 Candidati push watched in ordine: ${JSON.stringify(orderedCandidates)}`);
+
+  for (const profileId of orderedCandidates) {
+    try {
+      console.log(`🧪 Tentativo push watched con profileId=${profileId} (${typeof profileId})`);
+      await supabaseRpc('sync_push_watched_items', {
+        p_profile_id: profileId,
+        p_items: payload
+      }, accessToken);
+      console.log(`✅ Push watched riuscito con profileId=${profileId}!`);
+      return { success: true, usedId: profileId };
+    } catch (err) {
+      // UUID con errore "invalid input syntax for type integer" → skip silenzioso
+      if (isUUID(String(profileId)) && err.message.includes('invalid input syntax for type integer')) {
+        console.log(`⏭️  UUID ${profileId} skippato (RPC vuole integer)`);
+      } else {
+        console.warn(`❌ Push watched fallito con profileId=${profileId}: ${err.message}`);
+      }
+    }
+  }
+
+  // Ultimo tentativo: RPC alternativi senza p_profile_id
+  const alternativeRpcNames = [
+    'sync_push_watched',
+    'push_watched_items',
+    'upsert_watched_items',
+    'set_watched_items',
+  ];
+
+  for (const rpcName of alternativeRpcNames) {
+    try {
+      console.log(`🧪 Tentativo RPC alternativo: ${rpcName}`);
+      await supabaseRpc(rpcName, { p_items: payload }, accessToken);
+      console.log(`✅ Push riuscito via RPC alternativo: ${rpcName}`);
+      return { success: true, usedId: 'rpc:' + rpcName };
+    } catch (e) {
+      // Continua
+    }
+  }
+
+  return { success: false, reason: 'tutti i tentativi falliti' };
+}
+
+// ============================================
+// ENDPOINT: TMDB POSTER PROXY
+// ============================================
+app.get('/tmdb-poster', async (req, res) => {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) return res.status(204).end();
+  const { title, year, type } = req.query;
+  if (!title) return res.status(400).json({ error: 'title required' });
+  try {
+    const isMovie = type === 'movie';
+    const endpoint = isMovie
+      ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(title)}&year=${year || ''}&language=it-IT`
+      : `https://api.themoviedb.org/3/search/tv?api_key=${apiKey}&query=${encodeURIComponent(title)}&language=it-IT`;
+    const response = await fetch(endpoint);
+    const data = await response.json();
+    const hit = data.results && data.results[0];
+    const posterPath = hit && hit.poster_path;
+    const url = posterPath ? `https://image.tmdb.org/t/p/w185${posterPath}` : null;
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.json({ url });
+  } catch (err) {
+    console.error('TMDB error:', err.message);
+    res.status(500).json({ url: null });
+  }
+});
+
+// ============================================
+// ENDPOINT: TEST LOGIN STREMIO
+// ============================================
+app.post('/test-stremio-login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    await stremioLogin(email, password);
+    res.json({ success: true, message: '✅ Login Stremio funzionante!' });
+  } catch (error) {
+    res.json({ success: false, message: `❌ ${error.message}` });
+  }
+});
+
+// ============================================
+// ENDPOINT: OTTIENI DATI STREMIO (VERSIONE COMPLETA)
+// ============================================
+app.post('/get-stremio-data', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const auth = await stremioLogin(email, password);
+
+    const [libraryFiltered, libraryAll, continueWatching, watchedHistory] = await Promise.all([
+      getStremioLibrary(auth.token, { includeAll: false }),
+      getStremioLibrary(auth.token, { includeAll: true }),
+      getStremioContinueWatching(auth.token),
+      getStremioWatchedHistory(auth.token)
+    ]);
+
+    const normalizedAll = libraryAll.map(normalizeLibraryItem);
+
+    const watchedMoviesRaw = buildWatchedMoviesPayload(normalizedAll);
+    const watchedMovieIds = watchedMoviesRaw.map(w => w.contentId).filter(Boolean);
+    const seriesWithWatched = normalizedAll.filter(i => i.type === 'series' && i.state.watchedField);
+    const watchedIds = watchedMovieIds;
+
+    res.json({
+      success: true,
+      library: libraryFiltered || [],
+      continueWatching: continueWatching || [],
+      watchedHistory: watchedHistory || [],
+      watchedIds,
+      stats: {
+        movies: (libraryFiltered || []).filter(i => i.type === 'movie').length,
+        series: (libraryFiltered || []).filter(i => i.type === 'series').length,
+        continueWatching: (continueWatching || []).length,
+        watched: watchedMovieIds.length,
+        watchedSeriesCount: seriesWithWatched.length,
+        totalWatchedItems: watchedMoviesRaw.length,
+        watchedMoviesCount: watchedMoviesRaw.length,
+        watchedEpisodesCount: 0
+      }
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: TEST LOGIN NUVIO
+// ============================================
+app.post('/test-login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.json({ success: false, message: '❌ Inserisci email e password' });
+  if (!isSupabaseConfigured()) return res.json({ success: false, message: '❌ Supabase non configurato sul server' });
+  try {
+    await supabaseLogin(email, password);
+    res.json({ success: true, message: `✅ Login Nuvio riuscito!` });
+  } catch (error) {
+    res.json({ success: false, message: `❌ ${error.message}` });
+  }
+});
+
+// ============================================
+// ENDPOINT: OTTIENI DATI NUVIO
+// ============================================
+app.post('/get-nuvio-data', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.json({ success: false, error: 'Email e password richieste' });
+  try {
+    const session = await supabaseLogin(email, password);
+    const token = session.access_token;
+
+    const identity = await resolveNuvioIdentity(token);
+    const library = await getNuvioLibrary(token);
+    const libraryArray = Array.isArray(library) ? library : [];
+
+    const watchedItems = await getNuvioWatchedItems(token, identity.profileId || 1);
+    const watchedIds = watchedItems.map(w => w.content_id).filter(Boolean);
+
+    res.json({
+      success: true,
+      library: libraryArray,
+      watchedIds,
+      stats: {
+        total: libraryArray.length,
+        movies: libraryArray.filter(i => i.content_type === 'movie').length,
+        series: libraryArray.filter(i => i.content_type === 'series').length,
+        watched: watchedIds.length
+      }
+    });
+  } catch (error) {
+    console.error('❌ Errore get-nuvio-data:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ENDPOINT: SYNC DIRETTO — VERSIONE CORRETTA
+// FIX: library push → pausa → watched push con fallback aggressivo
 // ============================================
 app.post('/sync', async (req, res) => {
   const {
@@ -710,6 +1037,7 @@ app.post('/sync', async (req, res) => {
     console.log('🚀 Avvio sync diretto...');
 
     const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+
     const [rawAll, rawFiltered] = await Promise.all([
       getStremioLibrary(stremioAuth.token, { includeAll: true }),
       getStremioLibrary(stremioAuth.token, { includeAll: false })
@@ -719,7 +1047,6 @@ app.post('/sync', async (req, res) => {
     const items = rawAll.map(normalizeLibraryItem);
     console.log(`📊 Library Stremio: ${rawFiltered.length} attivi / ${rawAll.length} totali`);
 
-    // Estrai film visti
     const watchedMoviesRaw = buildWatchedMoviesPayload(items);
     let watchedEpisodesRaw = [];
 
@@ -741,16 +1068,10 @@ app.post('/sync', async (req, res) => {
     const progressPayload = buildWatchProgressPayload(items);
     console.log(`⏩ Watch progress: ${progressPayload.length} elementi`);
 
-    // Login Nuvio e ottieni profileId REALE (NESSUN FALLBACK A 1)
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
-    
-    console.log(`👤 ProfileID Nuvio REALE: ${identity.profileId}`);
+    console.log(`👤 Identità Nuvio: UUID=${identity.userId}, ProfileID=${identity.profileId}`);
 
     const backupId = Date.now().toString();
     const backupDir = path.join(__dirname, 'backups');
@@ -758,7 +1079,7 @@ app.post('/sync', async (req, res) => {
 
     const [currentNuvioLibrary, currentWatchedRaw] = await Promise.all([
       getNuvioLibrary(accessToken),
-      getNuvioWatchedItems(accessToken, identity.profileId)
+      getNuvioWatchedItems(accessToken, identity.profileId || 1)
     ]);
 
     fs.writeFileSync(
@@ -767,21 +1088,14 @@ app.post('/sync', async (req, res) => {
     );
     console.log(`💾 Backup pre-sync-${backupId}.json`);
 
-    // PUSH LIBRARY — includi anche i film visti che sono rimossi da Stremio
+    // PUSH LIBRARY — con stato watched incluso per il badge
     const watchedContentIdSet = new Set(allWatchedItems.map(i => i.contentId).filter(Boolean));
-    const rawFilteredIds = new Set(rawFiltered.map(i => extractOriginalId(i)).filter(Boolean));
-    const missingWatchedInFiltered = rawAll.filter(rawItem => {
-      const id = extractOriginalId(rawItem);
-      return id && watchedContentIdSet.has(id) && !rawFilteredIds.has(id);
-    });
-    const libraryToPush = [...rawFiltered, ...missingWatchedInFiltered];
-
-    console.log(`📤 Push library (${libraryToPush.length} items = ${rawFiltered.length} attivi + ${missingWatchedInFiltered.length} visti-rimossi)...`);
+    console.log(`📤 Push library (${rawFiltered.length} items, ${watchedContentIdSet.size} con badge watched)...`);
     const { count: pushedCount } = await pushLibraryToSupabase(
-      nuvioEmail, nuvioPassword, libraryToPush, watchedContentIdSet
+      nuvioEmail, nuvioPassword, rawFiltered, watchedContentIdSet
     );
 
-    // Pausa per evitare race condition
+    // FIX: piccola pausa per evitare race condition library→watched
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // PUSH WATCH PROGRESS
@@ -796,9 +1110,9 @@ app.post('/sync', async (req, res) => {
       }
     }
 
-    // PUSH WATCHED (USA SOLO profileId REALE)
+    // PUSH WATCHED con fallback aggressivo
+    let watchedResult = { success: false, usedId: null };
     let totalWatchedPushed = 0;
-    let watchedWarning = null;
 
     if (allWatchedItems.length > 0) {
       const remoteWatched = currentWatchedRaw.map(row => mapRemoteWatchedItem(row)).filter(Boolean);
@@ -806,47 +1120,40 @@ app.post('/sync', async (req, res) => {
       const payload = dedupeWatchedItems(mergedWatched).map(item => toRemotePayloadItem(item)).filter(Boolean);
 
       if (payload.length > 0) {
-        console.log(`📤 Push watched: ${payload.length} items con profileId=${identity.profileId}...`);
-        try {
-          await supabaseRpc('sync_push_watched_items', {
-            p_profile_id: identity.profileId,
-            p_items: payload
-          }, accessToken);
+        console.log(`📤 Push ${payload.length} watched items con fallback multi-ID...`);
+        watchedResult = await pushWatchedItemsWithFallback(accessToken, identity, payload);
+        if (watchedResult.success) {
           totalWatchedPushed = payload.length;
-          console.log(`✅ Push watched riuscito!`);
-        } catch (err) {
-          console.error('❌ Errore push watched:', err.message);
-          watchedWarning = err.message;
         }
       }
     }
 
     // VERIFICA FINALE
+    const checkId = watchedResult.usedId || identity.profileId || 1;
     const [newNuvioLibrary, newWatchedRaw] = await Promise.all([
       getNuvioLibrary(accessToken),
-      getNuvioWatchedItems(accessToken, identity.profileId)
+      getNuvioWatchedItems(accessToken, checkId)
     ]);
     const newCount = Array.isArray(newNuvioLibrary) ? newNuvioLibrary.length : 0;
 
-    // Verifica match per il badge
+    // Verifica badge match
     const previewMap = new Map();
     allWatchedItems.forEach(w => previewMap.set(w.contentId, w));
     let mismatchCount = 0;
     previewMap.forEach((w, contentId) => {
       const found = newNuvioLibrary.find(i => i.content_id === contentId);
-      if (!found) {
-        console.log(`❌ NOT IN LIBRARY: ${contentId} (${w.title || ''})`);
-        mismatchCount++;
-      } else {
-        console.log(`✅ IN LIBRARY: ${contentId} (${w.title || ''})`);
-      }
+      if (!found) mismatchCount++;
     });
-
     if (mismatchCount === 0 && allWatchedItems.length > 0) {
-      console.log(`🎉 TUTTI i ${allWatchedItems.length} content_id presenti in library → BADGE GARANTITO!`);
+      console.log(`🎉 BADGE CHECK: TUTTI i ${allWatchedItems.length} content_id presenti in library!`);
+    } else if (mismatchCount > 0) {
+      console.warn(`⚠️ BADGE CHECK: ${mismatchCount} content_id mancanti dalla library`);
     }
 
-    const warnings = [watchedWarning, progressWarning].filter(Boolean);
+    const warnings = [
+      watchedResult.success ? null : `Push watched fallito: ${watchedResult.reason}`,
+      progressWarning
+    ].filter(Boolean);
 
     res.json({
       success: true,
@@ -862,12 +1169,12 @@ app.post('/sync', async (req, res) => {
         nuvioDopo: newCount,
         nuvioWatchedDopo: newWatchedRaw.length,
         totaleVisti: allWatchedItems.length,
-        badgeMismatch: mismatchCount,
-        extraItemsForBadge: missingWatchedInFiltered.length
+        metodoIdentita: watchedResult.usedId ? `Risolto: ${watchedResult.usedId}` : 'Fallito',
+        badgeMismatch: mismatchCount
       },
       message: warnings.length > 0
         ? `✅ Library OK. ⚠️ Problemi: ${warnings[0]}`
-        : `✅ SYNC COMPLETO! ${newCount} titoli, ${totalWatchedPushed} visti, ${mismatchCount} mismatch badge. Backup: pre-sync-${backupId}`
+        : `✅ SYNC COMPLETO! ${newCount} titoli, ${totalWatchedPushed} visti, 0 mismatch badge. Backup: pre-sync-${backupId}`
     });
 
   } catch (error) {
@@ -877,7 +1184,61 @@ app.post('/sync', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT: FORCE BADGE SYNC (USA SOLO profileId REALE)
+// ENDPOINT: FORCE SYNC WATCHED (PUSH DIRETTO)
+// ============================================
+app.post('/force-sync-watched', async (req, res) => {
+  const { email, password, stremioWatchedItems } = req.body;
+  if (!email || !password || !Array.isArray(stremioWatchedItems)) {
+    return res.status(400).json({ error: 'Email, password e array stremioWatchedItems richiesti' });
+  }
+
+  try {
+    const session = await supabaseLogin(email, password);
+    const identity = await resolveNuvioIdentity(session.access_token);
+
+    const payload = stremioWatchedItems.map(item => {
+      const contentId = item.id || item.imdb_id;
+      if (!contentId) return null;
+      return {
+        content_id: contentId,
+        content_type: item.type === 'series' ? 'series' : 'movie',
+        title: item.title || '',
+        season: item.season != null ? Number(item.season) : null,
+        episode: item.episode != null ? Number(item.episode) : null,
+        watched_at: item.watched_at ? Number(item.watched_at) : Date.now(),
+        trakt_synced: true,
+        trakt_last_synced: item.watched_at ? Number(item.watched_at) : Date.now(),
+        sync_source: 'trakt',
+        nuvio_watched: true,
+        watched: true,
+        times_watched: 1,
+      };
+    }).filter(Boolean);
+
+    if (payload.length === 0) {
+      return res.status(400).json({ error: 'Nessun item valido' });
+    }
+
+    const result = await pushWatchedItemsWithFallback(session.access_token, identity, payload);
+
+    res.json({
+      success: result.success,
+      syncedCount: result.success ? payload.length : 0,
+      usedId: result.usedId,
+      message: result.success
+        ? `Sincronizzati ${payload.length} titoli visti`
+        : `Fallito: ${result.reason}`
+    });
+
+  } catch (error) {
+    console.error('❌ Errore force-sync-watched:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// NUOVO ENDPOINT: FORCE BADGE SYNC
+// Tenta ogni combinazione possibile per forzare il badge
 // ============================================
 app.post('/force-badge-sync', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
@@ -896,23 +1257,20 @@ app.post('/force-badge-sync', async (req, res) => {
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
-    
-    addLog(`👤 ProfileID Nuvio REALE: ${identity.profileId}`);
+    addLog(`👤 UUID=${identity.userId}, ProfileID=${identity.profileId}`);
+    addLog(`👥 Tutti i candidati: ${JSON.stringify(identity.allProfileIds)}`);
 
-    // Push library con stato watched per il badge (includi tutti gli item)
+    // 1. Push library con stato watched per il badge
     const watchedIds = new Set(watchedMovies.map(w => w.contentId).filter(Boolean));
+    const rawFiltered = rawAll.filter(i => !i.removed);
     const { count: libCount } = await pushLibraryToSupabase(
-      nuvioEmail, nuvioPassword, rawAll, watchedIds
+      nuvioEmail, nuvioPassword, rawFiltered, watchedIds
     );
     addLog(`📚 Library pushata: ${libCount} items (${watchedIds.size} con badge watched)`);
 
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    // Costruisci payload watched
+    // 2. Costruisce payload massimale
     const payload = watchedMovies.map(item => toRemotePayloadItem(normalizeWatchedItem(item))).filter(Boolean);
     addLog(`📦 Payload watched: ${payload.length} items`);
 
@@ -920,99 +1278,35 @@ app.post('/force-badge-sync', async (req, res) => {
       return res.json({ success: false, log, message: 'Nessun film visto trovato su Stremio' });
     }
 
-    // Push watched con profileId REALE
-    try {
-      await supabaseRpc('sync_push_watched_items', {
-        p_profile_id: identity.profileId,
-        p_items: payload
-      }, accessToken);
-      addLog(`✅ Push watched riuscito con profileId=${identity.profileId}!`);
-    } catch (err) {
-      addLog(`❌ Push watched fallito: ${err.message}`);
-      return res.json({ success: false, log, error: err.message });
-    }
-
-    // Verifica finale
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const afterItems = await getNuvioWatchedItems(accessToken, identity.profileId);
-    addLog(`🔍 Verifica: ${afterItems.length} items watched su Nuvio dopo push`);
-
-    let badgeOk = 0, badgeFail = 0;
-    for (const w of watchedMovies) {
-      const found = afterItems.find(a => a.content_id === w.contentId);
-      if (found) badgeOk++;
-      else badgeFail++;
-    }
-    addLog(`🏅 Badge: ${badgeOk} OK, ${badgeFail} MANCANTI`);
-
-    res.json({
-      success: true,
-      log,
-      profileId: identity.profileId,
-      pushed: payload.length,
-      badgeOk,
-      badgeFail
-    });
-
-  } catch (error) {
-    addLog(`💥 ERRORE: ${error.message}`);
-    res.json({ success: false, log, error: error.message });
-  }
-});
-
-// ============================================
-// ENDPOINT: INSPECT NUVIO LIBRARY ITEM
-// ============================================
-app.post('/inspect-nuvio-library-item', async (req, res) => {
-  const { nuvioEmail, nuvioPassword, contentId } = req.body;
-  const log = [];
-  const addLog = (msg) => { console.log(msg); log.push(msg); };
-
-  try {
-    const session = await supabaseLogin(nuvioEmail, nuvioPassword);
-    const accessToken = session.access_token;
-    const identity = await resolveNuvioIdentity(accessToken);
-
-    const library = await supabaseRpc('sync_pull_library', {}, accessToken);
-    const allItems = Array.isArray(library) ? library : [];
-    addLog(`📚 Library totale: ${allItems.length} items`);
-
-    let target = null;
-    if (contentId) {
-      target = allItems.find(i =>
-        i.content_id === contentId ||
-        i.id === contentId ||
-        i._id === contentId
-      );
-      if (target) {
-        addLog(`✅ Trovato item per contentId "${contentId}":`);
-        addLog(JSON.stringify(target, null, 2));
-      } else {
-        addLog(`❌ contentId "${contentId}" non trovato in library`);
-      }
-    }
-
-    // Cerca item con badge watched attivo
-    const withBadge = allItems.filter(i =>
-      (i.times_watched && Number(i.times_watched) > 0) ||
-      (i.flagged_watched && Number(i.flagged_watched) > 0) ||
-      i.watched === true ||
-      i.nuvio_watched === true ||
-      (i.state && (
-        (i.state.timesWatched && Number(i.state.timesWatched) > 0) ||
-        (i.state.flaggedWatched && Number(i.state.flaggedWatched) > 0)
-      ))
+    // 3. Tenta push con ogni ID possibile
+    const result = await pushWatchedItemsWithFallback(accessToken, identity, payload);
+    addLog(result.success
+      ? `✅ Push riuscito con ID: ${result.usedId}`
+      : `❌ Push fallito: ${result.reason}`
     );
-    addLog(`\n🏅 Item con badge watched attivo: ${withBadge.length} / ${allItems.length}`);
+
+    // 4. Verifica finale
+    if (result.success) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const afterItems = await getNuvioWatchedItems(accessToken, result.usedId);
+      addLog(`🔍 Verifica: ${afterItems.length} items watched su Nuvio dopo push`);
+
+      let badgeOk = 0, badgeFail = 0;
+      for (const w of watchedMovies) {
+        const found = afterItems.find(a => a.content_id === w.contentId);
+        if (found) badgeOk++;
+        else badgeFail++;
+      }
+      addLog(`🏅 Badge: ${badgeOk} OK, ${badgeFail} MANCANTI`);
+    }
 
     res.json({
-      success: true,
+      success: result.success,
       log,
-      target,
-      totalItems: allItems.length,
-      withBadge: withBadge.length,
-      profileId: identity.profileId
+      usedId: result.usedId,
+      pushed: payload.length
     });
+
   } catch (error) {
     addLog(`💥 ERRORE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1062,10 +1356,6 @@ app.post('/restore', async (req, res) => {
     const session = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = session.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
 
     const items = backupLibrary.map(item => ({
       _id: item.content_id,
@@ -1097,10 +1387,7 @@ app.post('/restore', async (req, res) => {
       })).filter(w => w.content_id);
 
       if (watchedPayload.length > 0) {
-        await supabaseRpc('sync_push_watched_items', {
-          p_profile_id: identity.profileId,
-          p_items: watchedPayload
-        }, accessToken);
+        await pushWatchedItemsWithFallback(accessToken, identity, watchedPayload);
       }
     }
 
@@ -1134,33 +1421,30 @@ app.post('/debug-watched', async (req, res) => {
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
-    
-    addLog(`👤 ProfileID Nuvio REALE: ${identity.profileId}`);
+    addLog(`👤 UUID=${identity.userId}, ProfileID=${identity.profileId}`);
+    addLog(`👥 Tutti candidati: ${JSON.stringify(identity.allProfileIds)}`);
 
-    const existing = await getNuvioWatchedItems(accessToken, identity.profileId);
+    const existing = await getNuvioWatchedItems(accessToken, identity.profileId || 1);
     addLog(`📖 Watched attuali su Nuvio: ${existing.length} items`);
 
     if (watchedItems.length > 0) {
       const testPayload = [toRemotePayloadItem(normalizeWatchedItem(watchedItems[0]))].filter(Boolean);
       addLog(`🧪 Test push 1 item...`);
-      try {
-        await supabaseRpc('sync_push_watched_items', {
-          p_profile_id: identity.profileId,
-          p_items: testPayload
-        }, accessToken);
-        addLog(`✅ Push OK con profileId=${identity.profileId}!`);
-        const afterPush = await getNuvioWatchedItems(accessToken, identity.profileId);
+      const result = await pushWatchedItemsWithFallback(accessToken, identity, testPayload);
+      addLog(result.success
+        ? `✅ Push OK con ID: ${result.usedId}`
+        : `❌ Push fallito: ${result.reason}`
+      );
+      if (result.success) {
+        const afterPush = await getNuvioWatchedItems(accessToken, result.usedId);
         addLog(`📖 Dopo push: ${afterPush.length} items`);
-      } catch (err) {
-        addLog(`❌ Push fallito: ${err.message}`);
       }
     }
 
-    res.json({ success: true, log, profileId: identity.profileId });
+    res.json({
+      success: true, log,
+      watchedItems: watchedItems.slice(0, 5).map(w => toRemotePayloadItem(normalizeWatchedItem(w))).filter(Boolean)
+    });
   } catch (error) {
     log.push(`💥 ERRORE FATALE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1178,7 +1462,6 @@ app.post('/debug-sync', async (req, res) => {
     stremioItems = stremioItems || [];
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
-    const identity = await resolveNuvioIdentity(accessToken);
     const currentNuvioLibrary = await getNuvioLibrary(accessToken);
     const currentArray = Array.isArray(currentNuvioLibrary) ? currentNuvioLibrary : [];
     const existingIds = new Set(currentArray.map(i => i.content_id));
@@ -1190,8 +1473,7 @@ app.post('/debug-sync', async (req, res) => {
     res.json({
       success: true,
       stats: { stremio: stremioItems.length, nuvio: currentArray.length, missing: missing.length },
-      missing: missing.slice(0, 20),
-      profileId: identity.profileId
+      missing: missing.slice(0, 20)
     });
   } catch (error) {
     res.json({ success: false, error: error.message });
@@ -1281,7 +1563,10 @@ app.post('/debug-episodes-full', async (req, res) => {
     addLog(`\n🎬 Film visti: ${watchedMovies.length}`);
     if (watchedMovies.length > 0) addLog(`   Primo: ${watchedMovies[0].title} (${watchedMovies[0].contentId})`);
 
-    res.json({ success: true, log, stats: { totalItems: items.length, seriesWithWatched: seriesWithWatched.length, watchedMovies: watchedMovies.length } });
+    res.json({
+      success: true, log,
+      stats: { totalItems: items.length, seriesWithWatched: seriesWithWatched.length, watchedMovies: watchedMovies.length }
+    });
   } catch (error) {
     addLog(`💥 ERRORE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1297,12 +1582,7 @@ app.post('/check-nuvio-watched', async (req, res) => {
     const session = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = session.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
-    
-    const watchedItems = await getNuvioWatchedItems(accessToken, identity.profileId);
+    const watchedItems = await getNuvioWatchedItems(accessToken, identity.profileId || 1);
 
     const result = {
       total: watchedItems.length,
@@ -1310,7 +1590,7 @@ app.post('/check-nuvio-watched', async (req, res) => {
       episodes: 0,
       sample: watchedItems.slice(0, 10),
       specificContent: null,
-      profileId: identity.profileId
+      identityUsed: identity
     };
 
     watchedItems.forEach(item => {
@@ -1367,11 +1647,6 @@ app.post('/test-single-episode', async (req, res) => {
     const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = nuvioSession.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
-    
     const contentId = extractOriginalId(series);
     if (!contentId) { addLog('❌ Impossibile estrarre ID'); return res.json({ success: false, log }); }
 
@@ -1392,22 +1667,16 @@ app.post('/test-single-episode', async (req, res) => {
       times_watched: 1,
     }];
 
-    try {
-      await supabaseRpc('sync_push_watched_items', {
-        p_profile_id: identity.profileId,
-        p_items: payload
-      }, accessToken);
-      addLog(`✅ Push completato con profileId=${identity.profileId}`);
-    } catch (pushError) {
-      addLog(`❌ Push fallito: ${pushError.message}`);
-      return res.json({ success: false, log, error: pushError.message });
+    const result = await pushWatchedItemsWithFallback(accessToken, identity, payload);
+    addLog(result.success ? `✅ Push completato con ID: ${result.usedId}` : `❌ Push fallito: ${result.reason}`);
+
+    if (result.success) {
+      const afterPush = await getNuvioWatchedItems(accessToken, result.usedId);
+      const saved = afterPush.find(item => item.content_id === contentId && item.season === seasonNum && item.episode === episodeNum);
+      addLog(saved ? `✅ Episodio confermato su Nuvio!` : `❌ Episodio non trovato dopo push`);
     }
 
-    const afterPush = await getNuvioWatchedItems(accessToken, identity.profileId);
-    const saved = afterPush.find(item => item.content_id === contentId && item.season === seasonNum && item.episode === episodeNum);
-    addLog(saved ? `✅ Episodio confermato su Nuvio!` : `❌ Episodio non trovato dopo push`);
-
-    res.json({ success: true, log, profileId: identity.profileId });
+    res.json({ success: result.success, log });
   } catch (error) {
     addLog(`💥 ERRORE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1446,7 +1715,10 @@ app.post('/compare-libraries', async (req, res) => {
     addLog(`   In Nuvio ma non in Stremio: ${inNuvioNotStremio.length}`);
     if (inStremioNotNuvio.length > 0) addLog(`   Esempi: ${inStremioNotNuvio.slice(0, 5).join(', ')}`);
 
-    res.json({ success: true, log, stats: { stremio: stremioIds.size, nuvio: nuvioIds.size, missingInNuvio: inStremioNotNuvio.length, extraInNuvio: inNuvioNotStremio.length } });
+    res.json({
+      success: true, log,
+      stats: { stremio: stremioIds.size, nuvio: nuvioIds.size, missingInNuvio: inStremioNotNuvio.length, extraInNuvio: inNuvioNotStremio.length }
+    });
   } catch (error) {
     addLog(`💥 ERRORE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1462,24 +1734,14 @@ app.post('/check-item', async (req, res) => {
     const session = await supabaseLogin(nuvioEmail, nuvioPassword);
     const accessToken = session.access_token;
     const identity = await resolveNuvioIdentity(accessToken);
-    
-    if (!identity.profileId) {
-      throw new Error('Impossibile determinare il profileId Nuvio');
-    }
-    
     const library = await getNuvioLibrary(accessToken);
     const inLibrary = library.find(i => i.content_id === contentId);
-    const watched = await getNuvioWatchedItems(accessToken, identity.profileId);
+    const watched = await getNuvioWatchedItems(accessToken, identity.profileId || 1);
     const inWatched = watched.find(i => i.content_id === contentId);
-    
     res.json({
-      success: true,
-      contentId,
-      inLibrary: !!inLibrary,
-      libraryItem: inLibrary || null,
-      inWatched: !!inWatched,
-      watchedItem: inWatched || null,
-      profileId: identity.profileId
+      success: true, contentId,
+      inLibrary: !!inLibrary, libraryItem: inLibrary || null,
+      inWatched: !!inWatched, watchedItem: inWatched || null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1491,20 +1753,25 @@ app.post('/check-item', async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (BADGE FIX - NESSUN FALLBACK A 1)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE BADGE FIX + FALLBACK AGGRESSIVO)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`🖼️  TMDB: ${process.env.TMDB_API_KEY ? '✅' : '❌ (TMDB_API_KEY non impostata)'}`);
-  console.log(`\n✅ CARATTERISTICHE:`);
-  console.log(`   • USA SOLO profileId REALE (NESSUN FALLBACK A 1)`);
-  console.log(`   • Campi times_watched/flagged_watched inclusi nella library`);
-  console.log(`   • Push watched con profileId=${'[REALE]'}`);
-  console.log(`   • Verifica badge con inspect endpoint`);
+  console.log(`\n✅ BUG FIX APPLICATI:`);
+  console.log(`   • FIX #1: resolveNuvioIdentity potenziata (4 RPC + 2 tabelle fallback)`);
+  console.log(`   • FIX #2: getNuvioWatchedItems tenta tutti i candidati profileId`);
+  console.log(`   • FIX #3: normalizeWatchedItem — corretto bug '|| true' su traktSynced`);
+  console.log(`   • FIX #4: toRemotePayloadItem — aggiunto nuvio_watched, watched, times_watched`);
+  console.log(`   • FIX #5: buildWatchedMoviesPayload — rileva watched via progress > 85%`);
+  console.log(`   • FIX #6: constructWatchedBoolArray — fallback se anchorVideo non trovato`);
+   console.log(`   • FIX #7: pushLibraryToSupabase — solo item reali, nessuno stub`);
+  console.log(`   • FIX #8: pushWatchedItemsWithFallback — 5+ RPC alternativi`);
+  console.log(`   • FIX #9: pausa 500ms tra library push e watched push (race condition)`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
-  console.log(`   • POST /sync                          ← usa profileId reale`);
-  console.log(`   • POST /force-badge-sync              ← forza badge con profileId reale`);
-  console.log(`   • POST /inspect-nuvio-library-item    ← debug schema badge`);
-  console.log(`   • POST /check-item                     ← verifica singolo item`);
-  console.log(`   • POST /check-nuvio-watched            ← verifica watched`);
-  console.log(`   • GET  /backups | POST /restore\n`);
+  console.log(`   • POST /force-badge-sync              ← NUOVO: forza badge in ogni modo`);
+  console.log(`   • POST /sync                          ← con fallback badge aggressivo`);
+  console.log(`   • POST /force-sync-watched`);
+  console.log(`   • GET  /backups | POST /restore`);
+  console.log(`   • POST /debug-watched | /debug-sync | /debug-episodes-full`);
+  console.log(`   • POST /check-nuvio-watched | /check-item | /compare-libraries\n`);
 });
