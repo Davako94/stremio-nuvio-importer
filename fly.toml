@@ -18,3 +18,6 @@ primary_region = 'fra'
   memory = '1gb'
   cpus = 1
   memory_mb = 1024
+
+[build]
+  builder = 'heroku/buildpacks:20'
