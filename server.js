@@ -777,13 +777,36 @@ app.post('/get-nuvio-data', async (req, res) => {
   if (!email || !password) return res.json({ success: false, error: 'Email e password richieste' });
   try {
     const session = await supabaseLogin(email, password);
-    const profileId = await getNuvioProfileId(session.access_token);
-    const [library, watchedItems] = await Promise.all([
-      getNuvioLibrary(session.access_token),
-      getNuvioWatchedItems(session.access_token, profileId)
-    ]);
-
+    const token = session.access_token;
+    
+    // Usiamo l'identità avanzata per trovare tutti i tuoi possibili ID
+    const identity = await resolveNuvioIdentity(token);
+    const library = await getNuvioLibrary(token);
     const libraryArray = Array.isArray(library) ? library : [];
+
+    let watchedItems = [];
+    
+    // Fallback: Cerchiamo i "visti" in tutti i possibili ID associati a te
+    const attempts = [
+      { id: identity.profileId, desc: "ProfileID Numerico" },
+      { id: identity.userId,    desc: "UUID Supabase" },
+      { id: String(identity.profileId), desc: "ProfileID come Stringa" },
+      { id: 1, desc: "ID 1 (Legacy)" }
+    ].filter(a => a.id !== null && a.id !== undefined);
+
+    for (const attempt of attempts) {
+      try {
+        const items = await getNuvioWatchedItems(token, attempt.id);
+        if (Array.isArray(items) && items.length > 0) {
+          watchedItems = items;
+          console.log(`✅ Elementi visti trovati con ${attempt.desc} (${attempt.id})! Totale: ${watchedItems.length}`);
+          break; // Trovati! Interrompiamo la ricerca
+        }
+      } catch (e) {
+        // Ignoriamo e passiamo al prossimo ID
+      }
+    }
+
     const watchedIds = watchedItems.map(w => w.content_id).filter(Boolean);
 
     res.json({
@@ -802,6 +825,7 @@ app.post('/get-nuvio-data', async (req, res) => {
     res.json({ success: false, error: error.message });
   }
 });
+
 
 // ============================================
 // ENDPOINT: SYNC DIRETTO (VERSIONE CON FALLBACK ID)
