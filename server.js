@@ -852,7 +852,7 @@ app.post('/sync', async (req, res) => {
       }
     }
 
-    // PUSH WATCHED (film + episodi) - VERSIONE FORZATA (Stremio = fonte di verità)
+    // PUSH WATCHED (film + episodi) - FORZA TOTALE (Stremio = fonte di verità)
     let watchedWarning = null;
     let totalWatchedPushed = 0;
 
@@ -861,8 +861,8 @@ app.post('/sync', async (req, res) => {
         const remoteWatched = currentWatchedRaw.map(row => mapRemoteWatchedItem(row)).filter(Boolean);
         const mergedWatched = mergeWatchedItems(remoteWatched, allWatchedItems);
 
-        // ✅ FORZATO: ignoriamo il controllo signature e pushiamo SEMPRE da Stremio
-        console.log(`📤 FORZA PUSH watched: ${allWatchedItems.length} items da Stremio (125 film + episodi)`);
+        // 🔥 FORZA PUSH: ignoriamo completamente il controllo signature
+        console.log(`📤 FORZA PUSH watched: ${allWatchedItems.length} items da Stremio`);
 
         const payload = dedupeWatchedItems(mergedWatched)
           .map(item => toRemotePayloadItem(item))
