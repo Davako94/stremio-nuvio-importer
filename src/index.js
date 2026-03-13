@@ -1,7 +1,7 @@
 /**
  * Stremio → NUVIO Sync — Cloudflare Workers
  * Zero dipendenze: niente Express, fs, path, zlib, Buffer.
- * Tutto usa le Web API native del runtime Workers.
+ * Ottimizzato per piano gratuito (limite 50 subrequests).
  *
  * Segreti da impostare con:
  *   wrangler secret put SUPABASE_URL
@@ -12,11 +12,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // HTML — inline (Workers non ha filesystem)
 // ─────────────────────────────────────────────────────────────────────────────
-// L'HTML viene importato come stringa dal file adjacente tramite bundler,
-// oppure puoi incollarlo direttamente qui sotto come template literal.
-// Con wrangler, usa: import HTML from '../public/index.html';
-// e aggiungi in wrangler.toml: [rules] [[rules]] type = "Text" globs = ["**/*.html"]
 import HTML from '../public/index.html';
+
+// Cache per Cinemeta (riduce subrequests)
+const cinemetaCache = new Map();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILS RISPOSTA
@@ -432,7 +431,6 @@ function base64ToUint8Array(b64) {
 }
 
 async function inflateBytes(compressed) {
-  // Prova prima 'deflate' (zlib header), poi 'deflate-raw'
   for (const format of ['deflate', 'deflate-raw']) {
     try {
       const ds = new DecompressionStream(format);
@@ -524,21 +522,37 @@ function sortVideos(videos) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CINEMETA CON CACHE (riduce subrequests)
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function fetchCinemetaVideos(id) {
+  // Controlla cache
+  if (cinemetaCache.has(id)) {
+    console.log(`📦 Cache hit per ${id}`);
+    return cinemetaCache.get(id);
+  }
+  
   try {
     const r = await fetch(`https://v3-cinemeta.strem.io/meta/series/${encodeURIComponent(id)}.json`, {
       headers: { 'User-Agent': 'NuvioSync/1.0' },
     });
     if (!r.ok) return null;
     const data = await r.json();
-    if (!Array.isArray(data?.meta?.videos)) return null;
-    return data.meta.videos;
+    const videos = Array.isArray(data?.meta?.videos) ? data.meta.videos : null;
+    
+    // Salva in cache
+    if (videos) cinemetaCache.set(id, videos);
+    
+    return videos;
   } catch { return null; }
 }
 
-async function mapSeriesVideos(seriesItems, concurrency = 4) {
-  const queue = [...seriesItems];
+async function mapSeriesVideos(seriesItems, concurrency = 2, maxSeries = 10) {
+  const limited = seriesItems.slice(0, maxSeries);
+  const queue = [...limited];
   const results = new Map();
+  
   async function worker() {
     while (queue.length > 0) {
       const item = queue.shift();
@@ -547,18 +561,21 @@ async function mapSeriesVideos(seriesItems, concurrency = 4) {
       if (Array.isArray(videos) && videos.length > 0) results.set(item.id, videos);
     }
   }
+  
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   return results;
 }
 
-async function buildWatchedEpisodesPayload(items, concurrency = 4) {
+async function buildWatchedEpisodesPayload(items, concurrency = 2, maxSeries = 10) {
   const seriesItems = items.filter(i => i.type === 'series' && i.state.watchedField);
   if (seriesItems.length === 0) return [];
-
-  const videosMap = await mapSeriesVideos(seriesItems, concurrency);
+  
+  console.log(`📺 Serie con watchedField: ${seriesItems.length}, ne processo massimo ${maxSeries}`);
+  
+  const videosMap = await mapSeriesVideos(seriesItems, concurrency, maxSeries);
   const payload = [];
 
-  for (const item of seriesItems) {
+  for (const item of seriesItems.slice(0, maxSeries)) {
     const rawVideos = videosMap.get(item.id);
     if (!rawVideos?.length) continue;
     const normalized = sortVideos(rawVideos.map(normalizeVideo)).filter(v => v.id);
@@ -577,6 +594,11 @@ async function buildWatchedEpisodesPayload(items, concurrency = 4) {
       payload.push({ contentId, contentType: 'series', title: item.name || contentId, season: v.season, episode: v.episode, watchedAt });
     }
   }
+  
+  if (seriesItems.length > maxSeries) {
+    console.log(`⚠️ Saltate ${seriesItems.length - maxSeries} serie per rispettare limite subrequests`);
+  }
+  
   return payload;
 }
 
@@ -659,17 +681,23 @@ async function getStremioWatchedHistory(authKey) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUSH LIBRARY TO NUVIO — VERSIONE CORRETTA CON CAMPO STATE
+// PUSH LIBRARY TO NUVIO — CON OTTIMIZZAZIONE (accetta library esistente)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = new Set()) {
+async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = new Set(), existingLibrary = null) {
   let existingMap = new Map();
-  try {
-    const existing = await getNuvioLibrary(sb, accessToken);
-    existingMap = new Map(existing.map(i => [i.content_id, i]));
-    console.log(`📦 Trovati ${existing.length} titoli esistenti su Nuvio`);
-  } catch (err) {
-    console.warn(`⚠️ Impossibile recuperare library esistente: ${err.message}`);
+  
+  if (existingLibrary) {
+    existingMap = new Map(existingLibrary.map(i => [i.content_id, i]));
+    console.log(`📦 Usata library esistente fornita (${existingLibrary.length} titoli)`);
+  } else {
+    try {
+      const existing = await getNuvioLibrary(sb, accessToken);
+      existingMap = new Map(existing.map(i => [i.content_id, i]));
+      console.log(`📦 Recuperati ${existing.length} titoli esistenti su Nuvio`);
+    } catch (err) {
+      console.warn(`⚠️ Impossibile recuperare library esistente: ${err.message}`);
+    }
   }
 
   const watchedSet = watchedContentIds instanceof Set ? watchedContentIds : new Set(watchedContentIds);
@@ -683,12 +711,10 @@ async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = ne
     const isWatched = watchedSet.has(contentId);
     const ex = existingMap.get(contentId);
     
-    // Calcola timestamp appropriato
     const lastWatchedTimestamp = isWatched 
       ? toTimestamp(norm.state.lastWatched || Date.now())
       : (ex?.last_watched || null);
 
-    // Valori per i campi watched
     const timesWatched = isWatched 
       ? Math.max(1, ex?.times_watched || 0, norm.state.timesWatched || 1)
       : (ex?.times_watched || 0);
@@ -697,7 +723,6 @@ async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = ne
       ? Math.max(1, ex?.flagged_watched || 0, norm.state.flaggedWatched || 1)
       : (ex?.flagged_watched || 0);
 
-    // FORMATO ESATTO che Nuvio si aspetta per il badge
     const libraryItem = {
       content_id: contentId,
       content_type: item.type === 'series' ? 'series' : 'movie',
@@ -710,13 +735,9 @@ async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = ne
       imdb_rating: item.imdbRating ? parseFloat(item.imdbRating) : null,
       genres: Array.isArray(item.genres) ? item.genres : [],
       added_at: Date.now(),
-      
-      // Campi per il badge (a livello radice)
       times_watched: timesWatched,
       flagged_watched: flaggedWatched,
       last_watched: lastWatchedTimestamp,
-      
-      // STATO ANNIDATO (FONDAMENTALE!)
       state: {
         timesWatched: timesWatched,
         flaggedWatched: flaggedWatched,
@@ -727,7 +748,6 @@ async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = ne
       }
     };
 
-    // Se esisteva già, preserva altri metadati
     if (ex) {
       libraryItem.poster = libraryItem.poster || ex.poster;
       libraryItem.background = libraryItem.background || ex.background;
@@ -749,40 +769,25 @@ async function pushLibraryToNuvio(sb, accessToken, items, watchedContentIds = ne
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUSH WATCHED CON FALLBACK
+// PUSH WATCHED CON FALLBACK OTTIMIZZATO
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function pushWatchedWithFallback(sb, accessToken, identity, payload) {
   if (!payload?.length) return { success: false, reason: 'payload vuoto' };
 
-  const candidates = [identity.profileId, ...(identity.allProfileIds || []), 1]
-    .filter(id => id != null)
-    .reduce((acc, id) => {
-      const k = String(id);
-      if (!acc.seen.has(k) && /^\d+$/.test(k) && Number(k) > 0) {
-        acc.seen.add(k);
-        acc.list.push(Number(k));
-      }
-      return acc;
-    }, { seen: new Set(), list: [] }).list;
-
-  for (const profileId of candidates) {
+  // Prova SOLO con profileId (riduce subrequests)
+  try {
+    await sb.rpc('sync_push_watched_items', { p_profile_id: identity.profileId, p_items: payload }, accessToken);
+    return { success: true, usedId: identity.profileId };
+  } catch (err) {
+    // Se fallisce, prova con 1
     try {
-      await sb.rpc('sync_push_watched_items', { p_profile_id: profileId, p_items: payload }, accessToken);
-      return { success: true, usedId: profileId };
-    } catch (err) {
-      if (err.message?.includes('invalid input syntax')) continue;
+      await sb.rpc('sync_push_watched_items', { p_profile_id: 1, p_items: payload }, accessToken);
+      return { success: true, usedId: 1 };
+    } catch (err2) {
+      return { success: false, reason: 'push fallito con tutti i tentativi' };
     }
   }
-
-  for (const fn of ['sync_push_watched', 'push_watched_items', 'upsert_watched_items']) {
-    try {
-      await sb.rpc(fn, { p_items: payload }, accessToken);
-      return { success: true, usedId: 'rpc:' + fn };
-    } catch {}
-  }
-
-  return { success: false, reason: 'tutti i tentativi falliti' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -799,11 +804,9 @@ async function handleDebugItem(request, env, body) {
     const session = await sb.login(nuvioEmail, nuvioPassword);
     const token = session.access_token;
     
-    // Pull library
     const library = await getNuvioLibrary(sb, token);
     const item = library.find(i => i.content_id === contentId);
     
-    // Pull watched
     const identity = await resolveNuvioIdentity(sb, token);
     const watched = await getNuvioWatchedItems(sb, token, identity.profileId || 1);
     const watchedItem = watched.find(w => w.content_id === contentId);
@@ -852,7 +855,7 @@ export default {
       return jsonOk({ configured: sb.isConfigured(), message: sb.isConfigured() ? '✅ Supabase pronto' : '⚠️ Supabase non configurato' });
     }
 
-    // ── Backups (Workers non ha disco — lista sempre vuota) ──────────────────
+    // ── Backups (Workers non ha disco) ───────────────────────────────────────
     if (method === 'GET' && path === '/backups') {
       return jsonOk({ backups: [], note: 'Backup su disco non disponibili in Workers. Usa /sync per fare un backup manuale.' });
     }
@@ -992,8 +995,8 @@ export default {
         
         let watchedEpisodesRaw = [];
         if (includeWatchedEpisodes) {
-          console.log(`📺 Recupero episodi visti da Cinemeta...`);
-          watchedEpisodesRaw = await buildWatchedEpisodesPayload(items, 6);
+          console.log(`📺 Recupero episodi visti da Cinemeta (max 10 serie)...`);
+          watchedEpisodesRaw = await buildWatchedEpisodesPayload(items, 2, 10); // concurrency=2, maxSeries=10
           console.log(`📺 Episodi visti: ${watchedEpisodesRaw.length}`);
         }
 
@@ -1015,10 +1018,10 @@ export default {
         ]);
         console.log(`📦 Nuvio attuale: ${currentLib.length} titoli, ${currentWatchedRaw.length} visti`);
 
-        // Push library
+        // Push library - PASSA currentLib per evitare una chiamata extra
         const watchedIdSet = new Set(allWatched.map(i => i.contentId).filter(Boolean));
         console.log(`📤 Push library (${rawFiltered.length} items, ${watchedIdSet.size} con badge watched)...`);
-        const { count: pushedCount } = await pushLibraryToNuvio(sb, accessToken, rawFiltered, watchedIdSet);
+        const { count: pushedCount } = await pushLibraryToNuvio(sb, accessToken, rawFiltered, watchedIdSet, currentLib);
 
         // Pausa per evitare race condition
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -1043,7 +1046,7 @@ export default {
           const merged = mergeWatchedItems(remote, allWatched);
           const payload = dedupeWatchedItems(merged).map(toRemotePayloadItem).filter(Boolean);
           if (payload.length > 0) {
-            console.log(`📤 Push ${payload.length} watched items con fallback multi-ID...`);
+            console.log(`📤 Push ${payload.length} watched items...`);
             watchedResult = await pushWatchedWithFallback(sb, accessToken, identity, payload);
             if (watchedResult.success) {
               totalWatchedPushed = payload.length;
@@ -1105,7 +1108,7 @@ export default {
         const lib = await getStremioLibrary(stremioAuth.token, { includeAll: true });
         const items = lib.map(normalizeLibraryItem);
         const watchedMovies = buildWatchedMoviesPayload(items);
-        const watchedEpisodes = await buildWatchedEpisodesPayload(items, 4);
+        const watchedEpisodes = await buildWatchedEpisodesPayload(items, 2, 10);
         const allWatched = [...watchedMovies, ...watchedEpisodes].map(normalizeWatchedItem).filter(Boolean);
         L(`✅ Stremio: ${lib.length} titoli, ${allWatched.length} visti`);
 
@@ -1116,7 +1119,8 @@ export default {
         L(`👤 UUID=${identity.userId}, ProfileID=${identity.profileId}`);
 
         const watchedIds = new Set(allWatched.map(w => w.contentId).filter(Boolean));
-        const { count } = await pushLibraryToNuvio(sb, accessToken, lib.filter(i => !i.removed), watchedIds);
+        const currentLib = await getNuvioLibrary(sb, accessToken);
+        const { count } = await pushLibraryToNuvio(sb, accessToken, lib.filter(i => !i.removed), watchedIds, currentLib);
         L(`✅ Library pushata: ${count} titoli (${watchedIds.size} con badge)`);
 
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -1289,7 +1293,7 @@ export default {
       return handleDebugItem(request, env, body);
     }
 
-    // ── Restore (stub — no disco in Workers) ─────────────────────────────────
+    // ── Restore (stub) ───────────────────────────────────────────────────────
     if (path === '/restore') {
       return jsonOk({ success: false, error: 'Il restore da file non è disponibile in Cloudflare Workers (nessun disco). Usa /sync per re-sincronizzare.' });
     }
