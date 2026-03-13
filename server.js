@@ -748,7 +748,7 @@ async function getStremioWatchedHistory(authKey) {
 }
 
 // ============================================
-// pushLibraryToSupabase
+// pushLibraryToSupabase (MODIFICATA con existingLibraryMap)
 // BADGE FIX: include stato watched direttamente nel library item
 // Il badge in Nuvio viene da times_watched/flagged_watched nel library item,
 // NON solo da watched_items. Vanno pushati insieme.
@@ -758,6 +758,16 @@ async function pushLibraryToSupabase(email, password, items, watchedContentIds =
   console.log(`☁️ Push library per ${email}...`);
   const session = await supabaseLogin(email, password);
   const accessToken = session.access_token;
+
+  // 🔁 Recupera la library esistente per preservare i badge
+  let existingLibraryMap = new Map();
+  try {
+    const existingLibrary = await getNuvioLibrary(accessToken);
+    existingLibraryMap = new Map(existingLibrary.map(item => [item.content_id, item]));
+    console.log(`📦 Trovati ${existingLibrary.length} titoli esistenti su Nuvio`);
+  } catch (err) {
+    console.warn(`⚠️ Impossibile recuperare library esistente: ${err.message}`);
+  }
 
   const watchedSet = watchedContentIds instanceof Set
     ? watchedContentIds
@@ -774,6 +784,20 @@ async function pushLibraryToSupabase(email, password, items, watchedContentIds =
       ? toTimestamp(normalizedItem.state.lastWatched)
       : null;
 
+    // Se il titolo esiste già in Nuvio, preserviamo i valori esistenti
+    const existingItem = existingLibraryMap.get(contentId);
+
+    // Calcola i nuovi valori per i badge, prendendo il massimo tra esistente e nuovo
+    const newTimesWatched = isWatched
+      ? Math.max(1, existingItem?.times_watched || 0, normalizedItem.state.timesWatched || 1)
+      : (existingItem?.times_watched || 0);
+    const newFlaggedWatched = isWatched
+      ? Math.max(1, existingItem?.flagged_watched || 0, normalizedItem.state.flaggedWatched || 1)
+      : (existingItem?.flagged_watched || 0);
+    const newLastWatched = isWatched
+      ? (lastWatched || Date.now())
+      : (existingItem?.last_watched || null);
+
     uniqueItems.set(contentId, {
       content_id: contentId,
       content_type: item.type === 'series' ? 'series' : 'movie',
@@ -787,14 +811,14 @@ async function pushLibraryToSupabase(email, password, items, watchedContentIds =
       genres: Array.isArray(item.genres) ? item.genres : [],
       added_at: Date.now(),
       // BADGE: stato watched direttamente nel library item
-      times_watched: isWatched ? Math.max(1, normalizedItem.state.timesWatched || 1) : (normalizedItem.state.timesWatched || 0),
-      flagged_watched: isWatched ? Math.max(1, normalizedItem.state.flaggedWatched || 1) : (normalizedItem.state.flaggedWatched || 0),
-      last_watched: isWatched ? (lastWatched || Date.now()) : lastWatched,
+      times_watched: newTimesWatched,
+      flagged_watched: newFlaggedWatched,
+      last_watched: newLastWatched,
       // Campi state annidati per compatibilità con schemi alternativi
       state: {
-        timesWatched: isWatched ? Math.max(1, normalizedItem.state.timesWatched || 1) : (normalizedItem.state.timesWatched || 0),
-        flaggedWatched: isWatched ? Math.max(1, normalizedItem.state.flaggedWatched || 1) : (normalizedItem.state.flaggedWatched || 0),
-        lastWatched: isWatched ? (lastWatched || Date.now()) : lastWatched,
+        timesWatched: newTimesWatched,
+        flaggedWatched: newFlaggedWatched,
+        lastWatched: newLastWatched,
         timeOffset: normalizedItem.state.timeOffset || 0,
         duration: normalizedItem.state.duration || 0,
         videoId: normalizedItem.state.videoId || null,
@@ -1989,7 +2013,9 @@ app.post('/quick-sync-badge', async (req, res) => {
   }
 });
 
+// ============================================
 // Nuovo endpoint: /force-all-badges
+// ============================================
 app.post('/force-all-badges', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
   const log = [];
