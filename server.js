@@ -60,13 +60,42 @@ async function supabaseRpc(functionName, payload, accessToken) {
 }
 
 // ============================================
-// FIX #1 — RISOLUZIONE IDENTITÀ POTENZIATA
-// Tenta tutti i possibili RPC per trovare il profileId
+// RISOLUZIONE IDENTITÀ — LOGICA CORRETTA
+//
+// REGOLA FONDAMENTALE: profileId deve essere SEMPRE un intero numerico.
+// I UUID (formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) NON sono profileId
+// validi per sync_push_watched_items che vuole un INTEGER.
+// I UUID vanno solo in allProfileIds come candidati secondari.
 // ============================================
-async function resolveNuvioIdentity(accessToken) {
-  const identity = { userId: null, profileId: null, allProfileIds: [] };
+function isUUID(val) {
+  return typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+}
 
-  // Step 1: recupera UUID dall'auth
+// parseProfileId: accetta SOLO interi. Rifiuta UUID e stringhe non numeriche.
+function parseProfileId(data) {
+  if (data === null || data === undefined) return null;
+  if (typeof data === 'number' && Number.isFinite(data) && data > 0) return Math.trunc(data);
+  if (typeof data === 'string' && /^\d+$/.test(data.trim())) {
+    const n = parseInt(data.trim(), 10);
+    return n > 0 ? n : null;
+  }
+  if (typeof data === 'object') {
+    for (const key of ['id', 'profile_id', 'p_id', 'profileId', 'profile']) {
+      const val = data[key];
+      if (typeof val === 'number' && Number.isFinite(val) && val > 0) return Math.trunc(val);
+      if (typeof val === 'string' && /^\d+$/.test(val.trim())) {
+        const n = parseInt(val.trim(), 10);
+        if (n > 0) return n;
+      }
+    }
+  }
+  return null; // UUID e tutto il resto → null
+}
+
+async function resolveNuvioIdentity(accessToken) {
+  const identity = { userId: null, profileId: null, allProfileIds: [], extraUUIDs: [] };
+
+  // Step 1: recupera UUID utente dall'auth
   try {
     const authRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: 'GET',
@@ -78,7 +107,8 @@ async function resolveNuvioIdentity(accessToken) {
     console.error('❌ Impossibile ottenere UUID:', e.message);
   }
 
-  // Step 2: tenta vari RPC per trovare profileId numerico
+  // Step 2: tenta RPC che restituiscono un intero numerico
+  // NOTA: get_sync_owner è l'RPC corretto di Nuvio → restituisce il numero intero
   const rpcAttempts = [
     'get_sync_owner',
     'get_profile_id',
@@ -89,78 +119,69 @@ async function resolveNuvioIdentity(accessToken) {
   for (const rpcName of rpcAttempts) {
     try {
       const ownerData = await supabaseRpc(rpcName, {}, accessToken);
-      const parsed = parseProfileId(ownerData);
+      const parsed = parseProfileId(ownerData); // rifiuta UUID automaticamente
       if (parsed !== null) {
         identity.profileId = parsed;
-        console.log(`✅ ProfileID trovato via ${rpcName}: ${parsed}`);
+        console.log(`✅ ProfileID numerico trovato via ${rpcName}: ${parsed}`);
         break;
       }
     } catch (e) {
-      // Continua con il prossimo
+      // Continua con il prossimo RPC
     }
   }
 
-  // Step 3: tenta di leggere la tabella profiles direttamente
+  // Step 3: tabella profiles — cerca solo colonne numeriche (numeric_id, profile_num, ecc.)
+  // NON usare il campo `id` se è un UUID. Cerca campi `numeric_id` o `profile_id` integer.
   if (identity.profileId === null && identity.userId) {
-    try {
-      const profileRes = await supabaseRequest(
-        `/rest/v1/profiles?user_id=eq.${identity.userId}&select=id&limit=5`,
-        { authToken: accessToken }
-      );
-      if (Array.isArray(profileRes) && profileRes.length > 0) {
-        identity.profileId = profileRes[0].id;
-        identity.allProfileIds = profileRes.map(p => p.id);
-        console.log(`✅ ProfileID trovato via tabella profiles: ${identity.profileId}`);
+    for (const tableName of ['profiles', 'nuvio_profiles', 'user_profiles']) {
+      try {
+        const profileRes = await supabaseRequest(
+          `/rest/v1/${tableName}?user_id=eq.${identity.userId}&select=id,numeric_id,profile_id,profile_num&limit=10`,
+          { authToken: accessToken }
+        );
+        if (Array.isArray(profileRes) && profileRes.length > 0) {
+          for (const row of profileRes) {
+            // Salva UUID per candidati secondari
+            if (isUUID(String(row.id || ''))) {
+              identity.extraUUIDs.push(row.id);
+            }
+            // Cerca un intero nelle colonne numeriche
+            const numericId = parseProfileId(row.numeric_id) ||
+                              parseProfileId(row.profile_id) ||
+                              parseProfileId(row.profile_num) ||
+                              // Usa row.id solo se è un intero, MAI se è UUID
+                              (!isUUID(String(row.id || '')) ? parseProfileId(row.id) : null);
+            if (numericId !== null) {
+              identity.profileId = numericId;
+              console.log(`✅ ProfileID numerico trovato via tabella ${tableName}: ${numericId}`);
+              break;
+            }
+          }
+          if (identity.profileId !== null) break;
+          console.log(`ℹ️ Tabella ${tableName}: trovati solo UUID, non usabili come profileId intero`);
+        }
+      } catch (e) {
+        // Tabella non accessibile
       }
-    } catch (e) {
-      // Tabella non accessibile direttamente
     }
   }
 
-  // Step 4: tenta di leggere la tabella nuvio_profiles
-  if (identity.profileId === null && identity.userId) {
-    try {
-      const profileRes = await supabaseRequest(
-        `/rest/v1/nuvio_profiles?user_id=eq.${identity.userId}&select=id&limit=5`,
-        { authToken: accessToken }
-      );
-      if (Array.isArray(profileRes) && profileRes.length > 0) {
-        identity.profileId = profileRes[0].id;
-        identity.allProfileIds = profileRes.map(p => p.id);
-        console.log(`✅ ProfileID trovato via tabella nuvio_profiles: ${identity.profileId}`);
-      }
-    } catch (e) {
-      // Tabella non accessibile
-    }
-  }
+  // Step 4: costruisce allProfileIds — SOLO interi + UUID come fallback finale
+  // Ordine: profileId numerico > 1 > UUID utente (come ultima spiaggia)
+  const numericCandidates = [identity.profileId, 1].filter(id => id !== null && typeof id === 'number');
+  const uuidCandidates = [...new Set([...identity.extraUUIDs, identity.userId].filter(Boolean))];
 
-  // Popola allProfileIds con tutti i tentativi possibili
-  const candidateIds = [
-    identity.profileId,
-    identity.userId,
-    identity.profileId ? String(identity.profileId) : null,
-    1,
-    '1',
-  ].filter(id => id !== null && id !== undefined);
+  // IMPORTANTE: UUID vengono messi in coda — verranno tentati solo se tutti gli interi falliscono
+  identity.allProfileIds = [
+    ...new Set([...numericCandidates.map(String)].filter(Boolean))
+  ].map(s => (/^\d+$/.test(s) ? parseInt(s, 10) : s));
 
-  identity.allProfileIds = [...new Set([...identity.allProfileIds, ...candidateIds])];
+  // UUID aggiunti separatamente alla fine
+  identity.allProfileIds.push(...uuidCandidates.filter(u => !identity.allProfileIds.includes(u)));
 
   console.log(`👤 Identità risolta → UUID: ${identity.userId}, ProfileID: ${identity.profileId}`);
+  console.log(`👥 Candidati in ordine: ${JSON.stringify(identity.allProfileIds)}`);
   return identity;
-}
-
-function parseProfileId(data) {
-  if (data === null || data === undefined) return null;
-  if (typeof data === 'number' && Number.isFinite(data)) return data;
-  if (typeof data === 'string' && /^\d+$/.test(data.trim())) return parseInt(data.trim(), 10);
-  if (typeof data === 'object') {
-    for (const key of ['id', 'profile_id', 'p_id', 'profileId', 'profile']) {
-      const val = data[key];
-      if (typeof val === 'number' && Number.isFinite(val)) return val;
-      if (typeof val === 'string' && /^\d+$/.test(val.trim())) return parseInt(val.trim(), 10);
-    }
-  }
-  return null;
 }
 
 // ============================================
@@ -208,16 +229,28 @@ async function getNuvioWatchedItems(accessToken, profileId = 1) {
   return [];
 }
 
+// Costruisce la lista di tentativi: PRIMA tutti gli interi, POI gli UUID.
+// Evita di sprecare chiamate RPC su UUID che danno sempre "invalid input syntax for type integer".
 function buildProfileIdAttempts(primaryId) {
-  const ids = [];
-  if (primaryId !== null && primaryId !== undefined) {
-    ids.push(primaryId);
-    if (!isNaN(Number(primaryId))) ids.push(Number(primaryId));
-    ids.push(String(primaryId));
+  const numericIds = [];
+  const uuidIds = [];
+
+  for (const id of [primaryId, 1].filter(id => id !== null && id !== undefined)) {
+    const str = String(id);
+    if (isUUID(str)) {
+      uuidIds.push(str); // UUID solo come ultima spiaggia
+    } else if (/^\d+$/.test(str) && Number(str) > 0) {
+      numericIds.push(Number(str)); // Interi prima
+    }
   }
-  ids.push(1, '1');
-  // Deduplica mantenendo l'ordine
-  return [...new Map(ids.map(id => [String(id), id])).values()];
+
+  const seen = new Set();
+  const result = [];
+  for (const id of [...numericIds, ...uuidIds]) {
+    const key = String(id);
+    if (!seen.has(key)) { seen.add(key); result.push(id); }
+  }
+  return result;
 }
 
 // ============================================
@@ -810,38 +843,58 @@ async function pushLibraryToSupabase(email, password, items, extraWatchedIds = [
 }
 
 // ============================================
-// FIX #8 — pushWatchedItemsWithFallback
-// Tenta push con tutti i possibili profile_id E tutti i possibili formati
+// pushWatchedItemsWithFallback
+// Ordine tentativi: profileId numerico → 1 → UUID (solo se tutto il resto fallisce)
 // ============================================
 async function pushWatchedItemsWithFallback(accessToken, identity, payload) {
   if (!payload || payload.length === 0) return { success: false, reason: 'payload vuoto' };
 
-  const attempts = buildProfileIdAttempts(identity.profileId || 1);
+  // Costruisce lista candidati: INTERI prima, UUID dopo
+  const numericCandidates = [];
+  const uuidCandidates = [];
 
-  // Aggiungi UUID come candidato se disponibile
-  if (identity.userId) {
-    attempts.push(identity.userId);
-    attempts.push(...(identity.allProfileIds || []));
+  const rawCandidates = [
+    identity.profileId,
+    ...(identity.allProfileIds || []),
+    identity.userId,
+    1,
+  ].filter(id => id !== null && id !== undefined);
+
+  const seen = new Set();
+  for (const id of rawCandidates) {
+    const key = String(id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (isUUID(key)) {
+      uuidCandidates.push(id); // UUID solo come ultima spiaggia
+    } else if (/^\d+$/.test(key) && Number(key) > 0) {
+      numericCandidates.push(Number(key));
+    }
   }
 
-  const uniqueAttempts = [...new Map(attempts.map(id => [String(id), id])).values()];
+  const orderedCandidates = [...numericCandidates, ...uuidCandidates];
+  console.log(`🎯 Candidati push watched in ordine: ${JSON.stringify(orderedCandidates)}`);
 
-  for (const profileId of uniqueAttempts) {
+  for (const profileId of orderedCandidates) {
     try {
       console.log(`🧪 Tentativo push watched con profileId=${profileId} (${typeof profileId})`);
-      const pId = isNaN(Number(profileId)) ? profileId : Number(profileId);
       await supabaseRpc('sync_push_watched_items', {
-        p_profile_id: pId,
+        p_profile_id: profileId,
         p_items: payload
       }, accessToken);
       console.log(`✅ Push watched riuscito con profileId=${profileId}!`);
       return { success: true, usedId: profileId };
     } catch (err) {
-      console.warn(`❌ Push watched fallito con profileId=${profileId}: ${err.message}`);
+      // UUID con errore "invalid input syntax for type integer" → skip silenzioso
+      if (isUUID(String(profileId)) && err.message.includes('invalid input syntax for type integer')) {
+        console.log(`⏭️  UUID ${profileId} skippato (RPC vuole integer)`);
+      } else {
+        console.warn(`❌ Push watched fallito con profileId=${profileId}: ${err.message}`);
+      }
     }
   }
 
-  // FIX: ultimo tentativo — prova RPC alternativo senza profile_id
+  // Ultimo tentativo: RPC alternativi senza p_profile_id
   const alternativeRpcNames = [
     'sync_push_watched',
     'push_watched_items',
