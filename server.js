@@ -846,24 +846,26 @@ async function pushWatchedItemsWithFallback(accessToken, identity, payload) {
   const orderedCandidates = [...numericCandidates, ...uuidCandidates];
   console.log(`🎯 Candidati push watched in ordine: ${JSON.stringify(orderedCandidates)}`);
 
-  for (const profileId of orderedCandidates) {
-    try {
-      console.log(`🧪 Tentativo push watched con profileId=${profileId} (${typeof profileId})`);
-      await supabaseRpc('sync_push_watched_items', {
-        p_profile_id: profileId,
-        p_items: payload
-      }, accessToken);
-      console.log(`✅ Push watched riuscito con profileId=${profileId}!`);
-      return { success: true, usedId: profileId };
-    } catch (err) {
-      // UUID con errore "invalid input syntax for type integer" → skip silenzioso
-      if (isUUID(String(profileId)) && err.message.includes('invalid input syntax for type integer')) {
-        console.log(`⏭️  UUID ${profileId} skippato (RPC vuole integer)`);
-      } else {
-        console.warn(`❌ Push watched fallito con profileId=${profileId}: ${err.message}`);
-      }
+  // In pushWatchedItemsWithFallback, dopo il loop dei profileId:
+for (const profileId of orderedCandidates) {
+  try {
+    console.log(`🧪 Tentativo push watched con profileId=${profileId} (${typeof profileId})`);
+    await supabaseRpc('sync_push_watched_items', {
+      p_profile_id: profileId,
+      p_items: payload
+    }, accessToken);
+    console.log(`✅ Push watched riuscito con profileId=${profileId}!`);
+    // Non ritornare subito, continua con gli altri profileId per massimizzare le possibilità
+  } catch (err) {
+    if (isUUID(String(profileId)) && err.message.includes('invalid input syntax for type integer')) {
+      console.log(`⏭️  UUID ${profileId} skippato (RPC vuole integer)`);
+    } else {
+      console.warn(`❌ Push watched fallito con profileId=${profileId}: ${err.message}`);
     }
   }
+}
+
+// Dopo il loop, tenta anche gli RPC alternativi
 
   // Ultimo tentativo: RPC alternativi senza p_profile_id
   const alternativeRpcNames = [
