@@ -1,15 +1,26 @@
 {
   "name": "stremio-nuvio-importer",
   "version": "1.0.0",
-  "description": "Converti backup Stremio in formato NUVIO",
-  "main": "server.js",
+  "description": "Converti backup Stremio in formato NUVIO e sincronizza con cloud",
+  "type": "module",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node server.js"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "start": "node src/index.js",
+    "build": "echo 'No build step required'"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "cors": "^2.8.5",
-    "@supabase/supabase-js": "^2.39.0"
-  }
+    "zlib": "^1.0.5"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "keywords": ["stremio", "nuvio", "sync", "cloudflare", "workers"],
+  "author": "",
+  "license": "MIT"
 }
