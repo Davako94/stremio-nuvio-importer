@@ -852,7 +852,7 @@ app.post('/sync', async (req, res) => {
       }
     }
 
-    // PUSH WATCHED (film + episodi)
+    // PUSH WATCHED (film + episodi) - VERSIONE FORZATA (Stremio = fonte di verità)
     let watchedWarning = null;
     let totalWatchedPushed = 0;
 
@@ -861,27 +861,26 @@ app.post('/sync', async (req, res) => {
         const remoteWatched = currentWatchedRaw.map(row => mapRemoteWatchedItem(row)).filter(Boolean);
         const mergedWatched = mergeWatchedItems(remoteWatched, allWatchedItems);
 
-        if (buildWatchedSignature(remoteWatched) === buildWatchedSignature(mergedWatched)) {
-          console.log('✅ Watched già aggiornati, nessun push necessario');
+        // ✅ FORZATO: ignoriamo il controllo signature e pushiamo SEMPRE da Stremio
+        console.log(`📤 FORZA PUSH watched: ${allWatchedItems.length} items da Stremio (125 film + episodi)`);
+
+        const payload = dedupeWatchedItems(mergedWatched)
+          .map(item => toRemotePayloadItem(item))
+          .filter(Boolean);
+        
+        if (payload.length > 0) {
+          console.log(`📤 Push watched: \( {payload.length} items ( \){watchedMovies.length} film + ${watchedEpisodes.length} episodi)`);
+          console.log(`   Esempio: ${JSON.stringify(payload[0])}`);
+
+          await supabaseRpc('sync_push_watched_items', {
+            p_profile_id: profileId,
+            p_items: payload
+          }, accessToken);
+
+          totalWatchedPushed = payload.length;
+          console.log(`✅ Watched pushati FORZATI: ${totalWatchedPushed}`);
         } else {
-          const payload = dedupeWatchedItems(mergedWatched)
-            .map(item => toRemotePayloadItem(item))
-            .filter(Boolean);
-          
-          if (payload.length > 0) {
-            console.log(`📤 Push watched: ${payload.length} items (${watchedMovies.length} film + ${watchedEpisodes.length} episodi)`);
-            console.log(`   Esempio: ${JSON.stringify(payload[0])}`);
-
-            await supabaseRpc('sync_push_watched_items', {
-              p_profile_id: profileId,
-              p_items: payload
-            }, accessToken);
-
-            totalWatchedPushed = payload.length;
-            console.log(`✅ Watched pushati: ${totalWatchedPushed}`);
-          } else {
-            console.log('⚠️ Nessun payload valido dopo il filtraggio');
-          }
+          console.log('⚠️ Nessun payload valido dopo il filtraggio');
         }
       } catch (err) {
         console.error('❌ Errore push watched:', err.message);
