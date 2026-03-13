@@ -437,9 +437,6 @@ function buildWatchedMoviesPayload(items) {
       : 0;
     const isProgressWatched = progressRatio >= 0.85;
 
-    // FIX: considera visto anche se è in libreria e non è rimosso
-    const isInLibraryWatched = !item.removed && !item.temp && item.state.lastWatched;
-
     if (!isExplicitlyWatched && !isProgressWatched) continue;
 
     const contentId = extractOriginalId(item);
@@ -507,9 +504,6 @@ function constructWatchedBoolArray(watchedField, videoIds) {
   const base = decodeBitfield(watchedField.bitfield, videoIds.length);
 
   // FIX: calcolo offset corretto
-  // anchorLength = numero totale di episodi al momento del salvataggio
-  // anchorIdx = posizione corrente dell'ancora nella lista ordinata
-  // offset = quanti slot "nuovi" esistono dopo l'ancora nel bitfield originale
   const offset = watchedField.anchorLength - anchorIdx - 1;
 
   if (offset === 0) return videoIds.map((_, i) => bitfieldGet(base, i));
@@ -1021,6 +1015,7 @@ app.post('/get-nuvio-data', async (req, res) => {
 
 // ============================================
 // ENDPOINT: SYNC DIRETTO — VERSIONE CORRETTA
+// FIX BADGE: include nella library anche i film visti rimossi da Stremio
 // FIX: library push → pausa → watched push con fallback aggressivo
 // ============================================
 app.post('/sync', async (req, res) => {
@@ -1089,10 +1084,20 @@ app.post('/sync', async (req, res) => {
     console.log(`💾 Backup pre-sync-${backupId}.json`);
 
     // PUSH LIBRARY — con stato watched incluso per il badge
+    // FIX BADGE CRITICO: include anche i film visti che rawFiltered esclude (rimossi da Stremio).
+    // Senza una entry in library, Nuvio non può mai mostrare il badge, indipendentemente
+    // da cosa c'è in watched_items.
     const watchedContentIdSet = new Set(allWatchedItems.map(i => i.contentId).filter(Boolean));
-    console.log(`📤 Push library (${rawFiltered.length} items, ${watchedContentIdSet.size} con badge watched)...`);
+    const rawFilteredIds = new Set(rawFiltered.map(i => extractOriginalId(i)).filter(Boolean));
+    const missingWatchedInFiltered = rawAll.filter(rawItem => {
+      const id = extractOriginalId(rawItem);
+      return id && watchedContentIdSet.has(id) && !rawFilteredIds.has(id);
+    });
+    const libraryToPush = [...rawFiltered, ...missingWatchedInFiltered];
+
+    console.log(`📤 Push library (${libraryToPush.length} items = ${rawFiltered.length} attivi + ${missingWatchedInFiltered.length} visti-rimossi, ${watchedContentIdSet.size} con badge watched)...`);
     const { count: pushedCount } = await pushLibraryToSupabase(
-      nuvioEmail, nuvioPassword, rawFiltered, watchedContentIdSet
+      nuvioEmail, nuvioPassword, libraryToPush, watchedContentIdSet
     );
 
     // FIX: piccola pausa per evitare race condition library→watched
@@ -1170,11 +1175,12 @@ app.post('/sync', async (req, res) => {
         nuvioWatchedDopo: newWatchedRaw.length,
         totaleVisti: allWatchedItems.length,
         metodoIdentita: watchedResult.usedId ? `Risolto: ${watchedResult.usedId}` : 'Fallito',
-        badgeMismatch: mismatchCount
+        badgeMismatch: mismatchCount,
+        extraItemsForBadge: missingWatchedInFiltered.length
       },
       message: warnings.length > 0
         ? `✅ Library OK. ⚠️ Problemi: ${warnings[0]}`
-        : `✅ SYNC COMPLETO! ${newCount} titoli, ${totalWatchedPushed} visti, 0 mismatch badge. Backup: pre-sync-${backupId}`
+        : `✅ SYNC COMPLETO! ${newCount} titoli, ${totalWatchedPushed} visti, ${mismatchCount} mismatch badge. Backup: pre-sync-${backupId}`
     });
 
   } catch (error) {
@@ -1260,11 +1266,11 @@ app.post('/force-badge-sync', async (req, res) => {
     addLog(`👤 UUID=${identity.userId}, ProfileID=${identity.profileId}`);
     addLog(`👥 Tutti i candidati: ${JSON.stringify(identity.allProfileIds)}`);
 
-    // 1. Push library con stato watched per il badge
+    // 1. Push library con stato watched per il badge (includi tutti, anche rimossi se visti)
     const watchedIds = new Set(watchedMovies.map(w => w.contentId).filter(Boolean));
-    const rawFiltered = rawAll.filter(i => !i.removed);
+    // Includi tutti gli item, non solo quelli non rimossi, per garantire il badge
     const { count: libCount } = await pushLibraryToSupabase(
-      nuvioEmail, nuvioPassword, rawFiltered, watchedIds
+      nuvioEmail, nuvioPassword, rawAll, watchedIds
     );
     addLog(`📚 Library pushata: ${libCount} items (${watchedIds.size} con badge watched)`);
 
@@ -1307,6 +1313,112 @@ app.post('/force-badge-sync', async (req, res) => {
       pushed: payload.length
     });
 
+  } catch (error) {
+    addLog(`💥 ERRORE: ${error.message}`);
+    res.json({ success: false, log, error: error.message });
+  }
+});
+
+// ============================================
+// NUOVO ENDPOINT: ISPEZIONA LIBRARY NUVIO (debug badge)
+// Mostra il raw di un item dalla library per capire quale campo
+// comanda il badge "watched" nell'app Nuvio
+// ============================================
+app.post('/inspect-nuvio-library-item', async (req, res) => {
+  const { nuvioEmail, nuvioPassword, contentId } = req.body;
+  const log = [];
+  const addLog = (msg) => { console.log(msg); log.push(msg); };
+
+  try {
+    const session = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = session.access_token;
+
+    // Pull library raw senza normalizzare
+    const library = await supabaseRpc('sync_pull_library', {}, accessToken);
+    const allItems = Array.isArray(library) ? library : [];
+    addLog(`📚 Library totale: ${allItems.length} items`);
+
+    // Trova l'item specifico se richiesto
+    let target = null;
+    if (contentId) {
+      target = allItems.find(i =>
+        i.content_id === contentId ||
+        i.id === contentId ||
+        i._id === contentId
+      );
+      if (target) {
+        addLog(`✅ Trovato item per contentId "${contentId}":`);
+        addLog(JSON.stringify(target, null, 2));
+      } else {
+        addLog(`❌ contentId "${contentId}" non trovato in library`);
+      }
+    }
+
+    // Mostra struttura primi 3 item raw
+    addLog('\n📋 Struttura primi 3 item (raw completo):');
+    allItems.slice(0, 3).forEach((item, i) => {
+      addLog(`\nItem ${i + 1}: ${JSON.stringify(item)}`);
+    });
+
+    // Identifica campi "watched-related" nello schema
+    if (allItems.length > 0) {
+      const sample = allItems[0];
+      const allKeys = Object.keys(sample);
+      const watchedFields = allKeys.filter(k =>
+        k.toLowerCase().includes('watch') ||
+        k.toLowerCase().includes('seen') ||
+        k.toLowerCase().includes('times') ||
+        k.toLowerCase().includes('flagged') ||
+        k.toLowerCase().includes('badge') ||
+        k.toLowerCase().includes('viewed') ||
+        k.toLowerCase().includes('progress')
+      );
+      addLog(`\n🔍 Campi "watched-related" trovati: ${JSON.stringify(watchedFields)}`);
+      addLog(`🔍 Tutti i campi del primo item: ${JSON.stringify(allKeys)}`);
+
+      // Mostra i valori di questi campi per il primo item
+      if (watchedFields.length > 0) {
+        const watchedValues = {};
+        watchedFields.forEach(k => { watchedValues[k] = sample[k]; });
+        addLog(`🔍 Valori watched-fields nel primo item: ${JSON.stringify(watchedValues)}`);
+      }
+    }
+
+    // Cerca item con badge watched attivo (qualsiasi campo)
+    const withBadge = allItems.filter(i =>
+      (i.times_watched && Number(i.times_watched) > 0) ||
+      (i.flagged_watched && Number(i.flagged_watched) > 0) ||
+      i.watched === true ||
+      i.nuvio_watched === true ||
+      (i.state && (
+        (i.state.timesWatched && Number(i.state.timesWatched) > 0) ||
+        (i.state.flaggedWatched && Number(i.state.flaggedWatched) > 0)
+      ))
+    );
+    addLog(`\n🏅 Item con badge watched attivo: ${withBadge.length} / ${allItems.length}`);
+    if (withBadge.length > 0) {
+      addLog(`Esempio item CON badge: ${JSON.stringify(withBadge[0])}`);
+    }
+
+    // Cerca un item senza badge per confronto
+    const withoutBadge = allItems.find(i =>
+      !((i.times_watched && Number(i.times_watched) > 0) ||
+        (i.flagged_watched && Number(i.flagged_watched) > 0) ||
+        i.watched === true ||
+        i.nuvio_watched === true)
+    );
+    if (withoutBadge) {
+      addLog(`Esempio item SENZA badge: ${JSON.stringify(withoutBadge)}`);
+    }
+
+    res.json({
+      success: true,
+      log,
+      target,
+      totalItems: allItems.length,
+      withBadge: withBadge.length,
+      schemaKeys: allItems.length > 0 ? Object.keys(allItems[0]) : []
+    });
   } catch (error) {
     addLog(`💥 ERRORE: ${error.message}`);
     res.json({ success: false, log, error: error.message });
@@ -1753,22 +1865,25 @@ app.post('/check-item', async (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE BADGE FIX + FALLBACK AGGRESSIVO)`);
+  console.log(`\n🚀 Stremio → NUVIO Importer (VERSIONE BADGE FIX v2 + INSPECT)`);
   console.log(`📦 Server avviato su porta ${PORT}`);
   console.log(`☁️  Supabase: ${isSupabaseConfigured() ? '✅' : '❌'}`);
   console.log(`🖼️  TMDB: ${process.env.TMDB_API_KEY ? '✅' : '❌ (TMDB_API_KEY non impostata)'}`);
   console.log(`\n✅ BUG FIX APPLICATI:`);
-  console.log(`   • FIX #1: resolveNuvioIdentity potenziata (4 RPC + 2 tabelle fallback)`);
+  console.log(`   • FIX #1: resolveNuvioIdentity potenziata (4 RPC + auto-detect)`);
   console.log(`   • FIX #2: getNuvioWatchedItems tenta tutti i candidati profileId`);
   console.log(`   • FIX #3: normalizeWatchedItem — corretto bug '|| true' su traktSynced`);
   console.log(`   • FIX #4: toRemotePayloadItem — aggiunto nuvio_watched, watched, times_watched`);
   console.log(`   • FIX #5: buildWatchedMoviesPayload — rileva watched via progress > 85%`);
   console.log(`   • FIX #6: constructWatchedBoolArray — fallback se anchorVideo non trovato`);
-   console.log(`   • FIX #7: pushLibraryToSupabase — solo item reali, nessuno stub`);
+  console.log(`   • FIX #7: pushLibraryToSupabase — solo item reali, nessuno stub`);
   console.log(`   • FIX #8: pushWatchedItemsWithFallback — 5+ RPC alternativi`);
   console.log(`   • FIX #9: pausa 500ms tra library push e watched push (race condition)`);
+  console.log(`   • FIX #10: /sync include nella library i film visti rimossi da Stremio`);
+  console.log(`   • FIX #11: /force-badge-sync usa rawAll (non rawFiltered) per library`);
   console.log(`\n✅ ENDPOINT ATTIVI:`);
-  console.log(`   • POST /force-badge-sync              ← NUOVO: forza badge in ogni modo`);
+  console.log(`   • POST /inspect-nuvio-library-item    ← NUOVO: debug schema badge`);
+  console.log(`   • POST /force-badge-sync              ← forza badge in ogni modo`);
   console.log(`   • POST /sync                          ← con fallback badge aggressivo`);
   console.log(`   • POST /force-sync-watched`);
   console.log(`   • GET  /backups | POST /restore`);
