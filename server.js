@@ -1894,6 +1894,100 @@ app.post('/check-item', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: QUICK SYNC BADGE (Metodo Rapido)
+// Sincronizza i badge "visto" da Stremio a Nuvio in un'unica chiamata.
+// ============================================
+app.post('/quick-sync-badge', async (req, res) => {
+  const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+  const log = [];
+  const addLog = (msg) => { console.log(msg); log.push(msg); };
+
+  if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword) {
+    return res.status(400).json({ success: false, error: 'Tutte le credenziali sono richieste' });
+  }
+
+  try {
+    addLog('🔥 Avvio Quick Sync Badge...');
+
+    // 1. Login a Stremio e recupera i film visti
+    addLog('🔐 Login a Stremio...');
+    const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+    const stremioLibrary = await getStremioLibrary(stremioAuth.token, { includeAll: true });
+    const stremioItems = stremioLibrary.map(normalizeLibraryItem);
+    const watchedMovies = buildWatchedMoviesPayload(stremioItems);
+    const watchedEpisodes = await buildWatchedEpisodesPayload(stremioItems, 4);
+    const allWatchedItems = [...watchedMovies, ...watchedEpisodes].map(normalizeWatchedItem).filter(Boolean);
+
+    addLog(`✅ Stremio: ${stremioLibrary.length} titoli totali, ${allWatchedItems.length} visti`);
+
+    // 2. Login a Nuvio e recupera l'identità
+    addLog('🔐 Login a Nuvio...');
+    const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = nuvioSession.access_token;
+    const identity = await resolveNuvioIdentity(accessToken);
+    addLog(`👤 Identità Nuvio: UUID=${identity.userId}, ProfileID=${identity.profileId}`);
+
+    // 3. Pusha la libreria con lo stato "visto" incluso
+    addLog('📚 Push library con badge "visto"...');
+    const watchedIds = new Set(allWatchedItems.map(w => w.contentId).filter(Boolean));
+    const { count: libCount } = await pushLibraryToSupabase(
+      nuvioEmail, nuvioPassword, stremioLibrary.filter(i => !i.removed), watchedIds
+    );
+    addLog(`✅ Library pushata: ${libCount} titoli (${watchedIds.size} con badge)`);
+
+    // 4. Attendi 1 secondo per evitare race condition
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // 5. Pusha i watched items con fallback aggressivo
+    addLog('🎬 Push watched items con fallback...');
+    const payload = allWatchedItems.map(item => toRemotePayloadItem(item)).filter(Boolean);
+    const result = await pushWatchedItemsWithFallback(accessToken, identity, payload);
+
+    if (result.success) {
+      addLog(`✅ Watched items pushati con profileId=${result.usedId}`);
+    } else {
+      addLog(`❌ Push watched fallito: ${result.reason}`);
+      return res.json({ success: false, log, error: result.reason });
+    }
+
+    // 6. Verifica il risultato
+    addLog('🔍 Verifica finale...');
+    const finalWatched = await getNuvioWatchedItems(accessToken, result.usedId);
+    const finalLibrary = await getNuvioLibrary(accessToken);
+
+    const successCount = allWatchedItems.filter(item =>
+      finalWatched.some(w => w.content_id === item.contentId)
+    ).length;
+
+    addLog(`📊 Risultato:
+      - Titoli visti su Stremio: ${allWatchedItems.length}
+      - Titoli visti su Nuvio dopo sync: ${finalWatched.length}
+      - Successi: ${successCount}
+      - Mancanti: ${allWatchedItems.length - successCount}`);
+
+    res.json({
+      success: true,
+      log,
+      stats: {
+        stremioTotal: stremioLibrary.length,
+        stremioWatched: allWatchedItems.length,
+        nuvioLibrary: finalLibrary.length,
+        nuvioWatched: finalWatched.length,
+        successCount,
+        missingCount: allWatchedItems.length - successCount,
+      },
+      message: successCount === allWatchedItems.length
+        ? '🎉 Tutti i badge sono stati sincronizzati!'
+        : `✅ ${successCount}/${allWatchedItems.length} badge sincronizzati. ${allWatchedItems.length - successCount} mancanti.`
+    });
+
+  } catch (error) {
+    addLog(`💥 ERRORE: ${error.message}`);
+    res.json({ success: false, log, error: error.message });
+  }
+});
+
+// ============================================
 // AVVIO SERVER
 // ============================================
 const PORT = process.env.PORT || 7000;
