@@ -1987,6 +1987,74 @@ app.post('/quick-sync-badge', async (req, res) => {
   }
 });
 
+// Nuovo endpoint: /force-all-badges
+app.post('/force-all-badges', async (req, res) => {
+  const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword } = req.body;
+  const log = [];
+
+  try {
+    // 1. Login e recupera dati da Stremio
+    const stremioAuth = await stremioLogin(stremioEmail, stremioPassword);
+    const stremioLibrary = await getStremioLibrary(stremioAuth.token, { includeAll: true });
+    const stremioItems = stremioLibrary.map(normalizeLibraryItem);
+    const watchedMovies = buildWatchedMoviesPayload(stremioItems);
+    const watchedIds = new Set(watchedMovies.map(w => w.contentId).filter(Boolean));
+    log.push(`✅ Stremio: ${stremioLibrary.length} titoli, ${watchedIds.size} visti`);
+
+    // 2. Login a Nuvio e recupera identità
+    const nuvioSession = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const accessToken = nuvioSession.access_token;
+    const identity = await resolveNuvioIdentity(accessToken);
+    log.push(`👤 Nuvio: UUID=${identity.userId}, ProfileID=${identity.profileId}`);
+
+    // 3. Recupera la library esistente
+    const existingLibrary = await getNuvioLibrary(accessToken);
+    const existingLibraryMap = new Map(existingLibrary.map(item => [item.content_id, item]));
+
+    // 4. Pusha la library con i badge aggiornati
+    const libraryItems = stremioLibrary.filter(i => !i.removed).map(item => {
+      const contentId = extractOriginalId(item);
+      if (!contentId) return null;
+
+      const isWatched = watchedIds.has(contentId);
+      const existingItem = existingLibraryMap.get(contentId);
+      return {
+        content_id: contentId,
+        content_type: item.type === 'series' ? 'series' : 'movie',
+        name: item.name || '',
+        // ...
+        times_watched: isWatched ? Math.max(1, existingItem?.times_watched || 0) : (existingItem?.times_watched || 0),
+        flagged_watched: isWatched ? Math.max(1, existingItem?.flagged_watched || 0) : (existingItem?.flagged_watched || 0),
+        last_watched: isWatched ? Date.now() : (existingItem?.last_watched || null),
+      };
+    }).filter(Boolean);
+
+    await supabaseRpc('sync_push_library', { p_items: libraryItems }, accessToken);
+    log.push(`✅ Library pushata: ${libraryItems.length} titoli`);
+
+    // 5. Pusha i watched_items con TUTTI i profileId candidati
+    const payload = watchedMovies.map(item => toRemotePayloadItem(item)).filter(Boolean);
+    for (const profileId of identity.allProfileIds) {
+      try {
+        await supabaseRpc('sync_push_watched_items', { p_profile_id: profileId, p_items: payload }, accessToken);
+        log.push(`✅ Watched items pushati con profileId=${profileId}`);
+      } catch (err) {
+        log.push(`❌ Errore con profileId=${profileId}: ${err.message}`);
+      }
+    }
+
+    // 6. Verifica il risultato
+    const finalWatched = await getNuvioWatchedItems(accessToken, identity.profileId);
+    const successCount = payload.filter(item => finalWatched.some(w => w.content_id === item.content_id)).length;
+    log.push(`📊 Risultato: ${successCount}/${payload.length} badge sincronizzati`);
+
+    res.json({ success: true, log, stats: { total: payload.length, success: successCount } });
+  } catch (error) {
+    log.push(`💥 ERRORE: ${error.message}`);
+    res.json({ success: false, log, error: error.message });
+  }
+});
+
 // ============================================
 // AVVIO SERVER
 // ============================================
