@@ -6,7 +6,7 @@
   <p><i>Plug & Play • Nessuna configurazione richiesta</i></p>
 
   <p>
-    <a href="https://stremio-nuvio-importer.onrender.com/configure"><strong>🌐 Apri l'Importer</strong></a> •
+    <a href="https://www.stremio-nuvio-importer.it/"><strong>🌐 Apri l'Importer</strong></a> •
   </p>
 </div>
 
@@ -53,7 +53,7 @@
 | 🎬 **Film** | Tutti i film presenti nella tua libreria Stremio |
 | 📺 **Serie TV** | Tutte le serie TV |
 | ⏱️ **Progressi** | Il punto esatto in cui ti eri fermato *(opzionale, se presenti nel backup)* |
-| ✅ **Visti** | I film e le serie che avevi già segnato come visti *(opzionale)* |
+| ✅ **Visti** | I film e le serie che avevi già segnato come visti *IN SVILUPPO* |
 
 ---
 
@@ -71,31 +71,25 @@
 ### ❔ Il mio backup di Stremio contiene anche canali YouTube, eventi sportivi o canali TV. Vengono importati?
 Per ora l'addon importa solo **film e serie TV**, che sono la stragrande maggioranza della libreria. Gli altri tipi di contenuti potrebbero essere supportati in futuro.
 
-### ❔ Dopo l'importazione, i film si vedono su tutti i miei dispositivi?
-**Certo!** NUVIO sincronizza automaticamente la libreria su tutti i dispositivi dove hai effettuato l'accesso (telefono, tablet, TV, web). Una volta importati, i tuoi film sono ovunque.
+### ❔ Dopo l'importazione, i film e serie si vedono su tutti i miei dispositivi?
+**Certo!** NUVIO sincronizza automaticamente la libreria su tutti i dispositivi dove hai effettuato l'accesso (telefono, tablet, TV, web). Una volta importati, i tuoi film e serie sono ovunque.
 
 ### ❔ L'addon funziona se non ho ancora aperto NUVIO?
-No, devi aver aperto NUVIO almeno una volta su quel dispositivo. È così che l'addon ti riconosce e sa su quale account importare i film.
+Sí, il tool esegue la sincronizzazione tramite "sync cloud", non hai bisogno di tenere l app aperta.
 
-### ❔ Il servizio è sempre attivo?
-L'addon è ospitato su un servizio gratuito. Se non viene usato per un po', può mettersi in "pausa" e riattivarsi in 20-30 secondi al primo accesso. Dopo quel piccolo attimo, tutto funziona normalmente.
+riattivarsi in 20-30 secondi al primo accesso. Dopo quel piccolo attimo, tutto funziona normalmente.
 
 ---
 
 ## 🛠️ Supporto
 
-- **Hai un problema con l'importazione?** Apri una segnalazione su [GitHub]
+- **Hai un problema con l'importazione**
+- Apri una segnalazione su [GitHub]
 - **Vuoi contribuire allo sviluppo?** Benvenuto! Il progetto è aperto a tutti
 
 ---
 
-Un ringraziamento a [Tap](https://github.com/tapframe) per il sostegno. Il tool NON È UN AFFILIATO DI [NUVIO](https://nuvioapp.space/)
-
-<div align="center">
-  <p>Made with ❤️ per la community di NUVIO</p>
-  <p>
-    <a href="https://stremio-nuvio-importer.onrender.com">🌐 Importer</a> •
+Un ringraziamento a [Tap](https://github.com/tapframe) ,Gianluca e a Bestia per il sostegno e aiuto. Il tool NON È UN AFFILIATO DI [NUVIO](https://nuvioapp.space/)
 
   </p>
 </div>
-
