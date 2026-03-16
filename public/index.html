@@ -858,56 +858,85 @@ body {
   background: var(--bg2); margin-left: 8px; flex-shrink: 0;
 }
 
+
+
 /* ═══════════════════════════════════════
-   ADDON DRAWER
+   ADDON OVERLAY
 ═══════════════════════════════════════ */
-.addon-drawer {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  z-index: 500;
+.addon-overlay {
+  position: fixed; inset: 0; z-index: 800;
+  background: rgba(0,0,0,.8);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+.addon-overlay.open { display: flex; }
+.addon-modal {
   background: var(--bg0);
-  border-top: 1px solid var(--brd2);
+  border: 1px solid var(--brd2);
   border-radius: 20px 20px 0 0;
-  box-shadow: 0 -8px 40px rgba(0,0,0,.5);
-  max-height: 85vh;
+  width: 100%; max-width: 700px;
+  max-height: 88vh;
   display: flex; flex-direction: column;
-  transform: translateY(calc(100% - 52px));
-  transition: transform .35s cubic-bezier(.4,0,.2,1);
+  animation: slideUp .3s cubic-bezier(.4,0,.2,1);
 }
-.addon-drawer.open {
-  transform: translateY(0);
-}
-.addon-drawer-handle {
+.addon-modal-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--brd);
   flex-shrink: 0;
-  padding: 12px 20px 8px;
-  display: flex; align-items: center; justify-content: space-between;
-  cursor: pointer; user-select: none;
-  -webkit-tap-highlight-color: transparent;
 }
-.addon-drawer-pill {
-  width: 36px; height: 4px;
-  background: var(--brd2); border-radius: 2px;
-  position: absolute; left: 50%; transform: translateX(-50%);
-  top: 10px;
-}
-.addon-drawer-title {
-  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
-  display: flex; align-items: center; gap: 8px;
-}
-.addon-drawer-body {
-  flex: 1; overflow-y: auto; padding: 0 16px 24px;
+.addon-modal-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px 18px 32px;
   -webkit-overflow-scrolling: touch;
 }
-.addon-drawer-overlay {
-  position: fixed; inset: 0; z-index: 499;
-  background: rgba(0,0,0,.75);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  opacity: 0; pointer-events: none;
-  transition: opacity .3s;
+
+/* ═══════════════════════════════════════
+   SYNC OVERLAY
+═══════════════════════════════════════ */
+.sync-overlay {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0,0,0,.85);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 20px;
 }
-.addon-drawer-overlay.show {
-  opacity: 1; pointer-events: auto;
+.sync-overlay.open { display: flex; }
+.sync-box {
+  background: var(--bg1); border: 1px solid var(--brd2);
+  border-radius: var(--r); width: 100%; max-width: 480px;
+  padding: 24px; animation: slideUp .3s cubic-bezier(.4,0,.2,1);
+  max-height: 80vh; display: flex; flex-direction: column;
+}
+.sync-box-title {
+  font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+}
+.sync-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--brd2); border-top-color: var(--blue);
+  border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.sync-log-area {
+  flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; line-height: 1.7; color: var(--txt2);
+  background: var(--bg3); border: 1px solid var(--brd);
+  border-radius: var(--r3); padding: 12px; margin-bottom: 16px;
+  min-height: 200px; max-height: 50vh;
+}
+.sync-log-line { margin: 0; }
+.sync-log-line.ok { color: #2ecc71; }
+.sync-log-line.err { color: #ff5c5c; }
+.sync-done-btn {
+  width: 100%; padding: 12px; border-radius: var(--r2);
+  background: rgba(46,204,113,.15); border: 1px solid rgba(46,204,113,.35);
+  color: #2ecc71; font-size: 14px; font-weight: 700;
+  cursor: pointer; display: none;
 }
 
 /* ═══════════════════════════════════════
@@ -1257,6 +1286,13 @@ body {
     </div>
   </div>
 
+  <!-- Quick Sync Bar -->
+  <div class="fade-in" style="margin-bottom:8px">
+    <button id="syncBtnQuick" class="btn-sync" style="width:100%;justify-content:center" disabled>
+      🚀 SYNC Completo → Nuvio
+    </button>
+  </div>
+
   <!-- Toolbar -->
   <div class="toolbar fade-in">
     <div class="searchbar-wrap">
@@ -1346,6 +1382,59 @@ body {
     </div>
   </div>
 
+
+  <!-- ADDON TRIGGER -->
+  <div id="addonSection" style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--brd);margin-top:8px">
+    <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700" id="addonTitle">🔌 Addon</div>
+    <button id="loadAddonsBtn" class="btn-sm" style="background:rgba(59,158,255,.1);border:1px solid rgba(59,158,255,.3);color:var(--blue);padding:8px 16px;font-size:13px">
+      📥 Carica Addon
+    </button>
+  </div>
+
+  <!-- ADDON OVERLAY -->
+  <div class="addon-overlay" id="addonOverlay">
+    <div class="addon-modal">
+
+      <div class="addon-modal-header">
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700">🔌 Addon</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="pushAddonsBtn" class="btn-primary btn-nu" style="display:none;padding:8px 16px;font-size:13px" disabled>
+            ⏫️ Sync Addons
+          </button>
+          <button onclick="closeAddonSection()" style="background:rgba(255,70,70,.12);border:1px solid rgba(255,70,70,.35);color:#ff5050;border-radius:8px;width:36px;height:36px;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+        </div>
+      </div>
+
+      <div class="addon-modal-body">
+        <div id="addonsLayout">
+      <!-- NUVIO -->
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase">
+            ☁️ Nuvio <span id="addonCountNu" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
+          </div>
+          <button id="addAddonBtn" style="background:rgba(59,158,255,.12);border:1px solid rgba(59,158,255,.35);color:var(--blue);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">
+            + Aggiungi
+          </button>
+        </div>
+        <div id="nuvioAddonsList"></div>
+      </div>
+
+      <div style="height:1px;background:var(--brd);margin:4px 0 20px"></div>
+
+      <!-- STREMIO -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;color:var(--txt2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
+          🎬 Stremio <span id="addonCountSt" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
+        </div>
+        <div id="stremioAddonsList"></div>
+      </div>
+
+          <div id="addonPushInfo" style="font-size:12px;color:var(--txt2);padding:4px 0 8px">—</div>
+        </div><!-- /addonsLayout -->
+      </div><!-- /addon-modal-body -->
+    </div><!-- /addon-modal -->
+  </div><!-- /addon-overlay -->
 
   <footer class="footer">
     <div>❤️ Thanks: <strong>Tap, Gianluca, Bestia</strong></div>
@@ -1740,9 +1829,11 @@ function updateAll() {
   // Sync buttons
   if (stremioData && nuvioData) {
     document.getElementById('syncBtn').disabled = false;
+    const q = document.getElementById('syncBtnQuick'); if (q) q.disabled = false;
 
   } else {
     document.getElementById('syncBtn').disabled = true;
+    const q2 = document.getElementById('syncBtnQuick'); if (q2) q2.disabled = true;
   }
 }
 
@@ -1925,31 +2016,87 @@ document.getElementById('loadNuvioBtn').addEventListener('click', async () => {
 // ══════════════════════════════════════════════════════
 // SYNC
 // ══════════════════════════════════════════════════════
-document.getElementById('syncBtn').addEventListener('click', async () => {
+function openSyncOverlay() {
+  const overlay = document.getElementById('syncOverlay');
+  const log = document.getElementById('syncLogArea');
+  const spinner = document.getElementById('syncSpinner');
+  const doneBtn = document.getElementById('syncDoneBtn');
+  if (!overlay) return;
+  log.innerHTML = '';
+  spinner.style.display = 'block';
+  doneBtn.style.display = 'none';
+  overlay.classList.add('open');
+}
+function syncLog(msg, type='') {
+  const log = document.getElementById('syncLogArea');
+  if (!log) return;
+  const p = document.createElement('p');
+  p.className = 'sync-log-line' + (type ? ' '+type : '');
+  p.textContent = msg;
+  log.appendChild(p);
+  log.scrollTop = log.scrollHeight;
+}
+function closeSyncOverlay() {
+  document.getElementById('syncOverlay')?.classList.remove('open');
+}
+
+async function doSync() {
   if (!stremioAuth || !nuvioAuth) { toast('Carica prima Stremio e Nuvio', 'warning'); return; }
   if (!confirm('🚀 SYNC COMPLETO\n\nCancella tutto su Nuvio e reimporta da Stremio.\nIncluso: libreria, episodi visti, CW.\n\nContinuare?')) return;
-  const btn = document.getElementById('syncBtn');
-  const includeRemoved  = document.getElementById('includeRemovedCheckSync').checked;
-  btn.disabled = true; btn.textContent = '⏳ SYNC IN CORSO…';
-  showProgress(true, '🚀 Sync in corso…', 20);
+
+  openSyncOverlay();
+  syncLog('🔐 Login Stremio e Nuvio…');
+
+  const includeRemoved = document.getElementById('includeRemovedCheckSync')?.checked;
+  const syncBtn = document.getElementById('syncBtn');
+  const syncBtnQ = document.getElementById('syncBtnQuick');
+  if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = '⏳ Sync…'; }
+  if (syncBtnQ) { syncBtnQ.disabled = true; syncBtnQ.textContent = '⏳ Sync…'; }
+
   try {
-    const r = await fetch('/sync', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      stremioEmail: stremioAuth.email, stremioPassword: stremioAuth.password,
-      nuvioEmail:   nuvioAuth.email,   nuvioPassword:   nuvioAuth.password,
-      includeRemoved,
-    })});
-    const data = await r.json(); showProgress(false);
+    syncLog('📤 Invio dati al server…');
+    const r = await fetch('/sync', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        stremioEmail: stremioAuth.email, stremioPassword: stremioAuth.password,
+        nuvioEmail:   nuvioAuth.email,   nuvioPassword:   nuvioAuth.password,
+        includeRemoved,
+      })
+    });
+    const data = await r.json();
+
     if (data.success) {
-      toast('Sync completato! Apri Nuvio → Impostazioni → Sync → Sincronizza ora', 'success', 'Sync OK');
-      openLogModal('🚀 Sync Log', data.log||[]);
-      setTimeout(() => document.getElementById('loadNuvioBtn').click(), 1500);
-    } else throw new Error(data.error||'Errore sconosciuto');
+      // Mostra log dal server
+      (data.log||[]).forEach(line => {
+        const isErr = /error|fail|errore/i.test(line);
+        const isOk  = /ok|success|✅|completat/i.test(line);
+        syncLog(line, isErr ? 'err' : isOk ? 'ok' : '');
+      });
+      syncLog('✅ Sync completato!', 'ok');
+      syncLog('👉 Apri Nuvio → Impostazioni → Sync → Sincronizza ora', 'ok');
+      toast('Sync completato!', 'success', 'Sync OK');
+      setTimeout(() => document.getElementById('loadNuvioBtn')?.click(), 1500);
+    } else {
+      syncLog('❌ ' + (data.error||'Errore sconosciuto'), 'err');
+      throw new Error(data.error||'Errore sconosciuto');
+    }
   } catch(e) {
-    showProgress(false); toast(e.message, 'error', 'Sync fallito');
+    syncLog('❌ ' + e.message, 'err');
+    toast(e.message, 'error', 'Sync fallito');
   } finally {
-    btn.disabled=false; btn.textContent='🚀 SYNC COMPLETO';
+    // Mostra bottone chiudi, nascondi spinner
+    const spinner = document.getElementById('syncSpinner');
+    const doneBtn = document.getElementById('syncDoneBtn');
+    if (spinner) spinner.style.display = 'none';
+    if (doneBtn) doneBtn.style.display = 'block';
+    if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = '🚀 SYNC COMPLETO'; }
+    if (syncBtnQ) { syncBtnQ.disabled = false; syncBtnQ.textContent = '🚀 SYNC Completo → Nuvio'; }
   }
-});
+}
+
+document.getElementById('syncBtnQuick')?.addEventListener('click', doSync);
+document.getElementById('syncBtn').addEventListener('click', doSync);
 
 // ══════════════════════════════════════════════════════
 // RESET WATCHED
@@ -2611,140 +2758,124 @@ function openAddAddonModal() {
 
 // ── Carica addon ──────────────────────────────────────────────
 
-// ── Addon Drawer ──────────────────────────────────────────────
-function openAddonDrawer() {
-  document.getElementById('addonDrawer').classList.add('open');
-  document.getElementById('addonDrawerOverlay').classList.add('show');
+function openAddonOverlay() {
+  document.getElementById('addonOverlay').classList.add('open');
 }
-function closeAddonDrawer() {
-  document.getElementById('addonDrawer').classList.remove('open');
-  document.getElementById('addonDrawerOverlay').classList.remove('show');
+function closeAddonOverlay() {
+  document.getElementById('addonOverlay').classList.remove('open');
+}
+function openAddonSection() {
+  openAddonOverlay();
+}
+function closeAddonSection() {
+  closeAddonOverlay();
+  const loadBtn = document.getElementById('loadAddonsBtn');
+  if (loadBtn) {
+    loadBtn.style.display = 'inline-flex';
+    loadBtn.disabled = false;
+    loadBtn.textContent = '📥 Carica Addon';
+  }
+  // Nascondi sync btn
+  const syncBtn = document.getElementById('pushAddonsBtn');
+  if (syncBtn) syncBtn.style.display = 'none';
 }
 function resetAddonDrawer() {
-  // Torna allo stato iniziale (Carica visibile, Sync/X nascosti)
-  document.getElementById('loadAddonsBtn').style.display = '';
+  document.getElementById('loadAddonsBtn').style.display = 'inline-flex';
   document.getElementById('pushAddonsBtn').style.display = 'none';
-  document.getElementById('addonDrawerClose').style.display = 'none';
-  document.getElementById('addonsLayout').style.display = 'none';
   stremioAddons = []; nuvioAddons = [];
 }
 
 // Handle: tap apre, swipe giù chiude — init dopo DOM pronto
 document.addEventListener('DOMContentLoaded', () => {
-  // ── Drawer addon ──
-  const handle = document.getElementById('addonDrawerHandle');
-  const drawer = document.getElementById('addonDrawer');
-  if (handle && drawer) {
-    let startY = 0, isDragging = false;
-    handle.addEventListener('click', () => {
-      drawer.classList.contains('open') ? closeAddonDrawer() : openAddonDrawer();
-    });
-    handle.addEventListener('touchstart', e => {
-      startY = e.touches[0].clientY; isDragging = true;
-    }, { passive: true });
-    handle.addEventListener('touchmove', e => {
-      if (!isDragging) return;
-      if (e.touches[0].clientY - startY > 60) { closeAddonDrawer(); isDragging = false; }
-    }, { passive: true });
-    handle.addEventListener('touchend', () => { isDragging = false; });
-  }
+  // ── X chiudi addon ──
+  const addonCloseBtn = document.getElementById('addonCloseBtn');
+  if (addonCloseBtn) addonCloseBtn.addEventListener('click', closeAddonSection);
 
-  // ── Bottone aggiungi addon ──
-  const addAddonBtn = document.getElementById('addAddonBtn');
-  if (addAddonBtn) addAddonBtn.addEventListener('click', openAddAddonModal);
+  // ── Aggiungi addon ──
+  const addAddonBtnEl = document.getElementById('addAddonBtn');
+  if (addAddonBtnEl) addAddonBtnEl.addEventListener('click', openAddAddonModal);
 
-  // ── Bottone refresh ──
+  // ── Refresh ──
   const refreshBtn = document.getElementById('refreshAllBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', refreshAll);
 
-
-
-  // ── loadAddonsBtn (nel drawer) ──
+  // ── Carica Addon ──
   const loadAddonsEl = document.getElementById('loadAddonsBtn');
-  if (loadAddonsEl) {
-    loadAddonsEl.addEventListener('click', async () => {
-  if (!stremioAuth || !nuvioAuth) {
-    toast('Carica prima Stremio e Nuvio dalla sidebar', 'warning'); return;
-  }
-  const btn = document.getElementById('loadAddonsBtn');
-  btn.disabled = true; btn.textContent = '⏳';
+  if (loadAddonsEl) loadAddonsEl.addEventListener('click', async () => {
+    if (!stremioAuth || !nuvioAuth) {
+      toast('Carica prima Stremio e Nuvio dalla sidebar', 'warning'); return;
+    }
+    // Se già caricati, riapri solo l'overlay
+    if (stremioAddons.length || nuvioAddons.length) {
+      openAddonOverlay(); return;
+    }
+    loadAddonsEl.disabled = true; loadAddonsEl.textContent = '⏳';
+    try {
+      const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
+      const [stRes, nuRes] = await Promise.all([
+        fetch('/get-stremio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email:stremioAuth.email,password:stremioAuth.password})}).then(safe),
+        fetch('/get-nuvio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password})}).then(safe),
+      ]);
+      if (!stRes.success) throw new Error('Stremio: '+stRes.error);
+      if (!nuRes.success) throw new Error('Nuvio: '+nuRes.error);
+      stremioAddons = stRes.addons||[];
+      nuvioAddons   = nuRes.addons||[];
+      renderAddonLists();
+      openAddonOverlay();
+      loadAddonsEl.style.display = 'none';
+      const syncEl = document.getElementById('pushAddonsBtn');
+      if (syncEl) { syncEl.style.display = 'flex'; syncEl.disabled = !nuvioAuth; }
+      toast(`${stremioAddons.length} Stremio · ${nuvioAddons.length} Nuvio`, 'success', 'Addon caricati');
+    } catch(e) {
+      toast(e.message, 'error', 'Errore caricamento addon');
+    } finally {
+      loadAddonsEl.disabled = false; loadAddonsEl.textContent = '📥 Carica Addon';
+    }
+  });
 
-  try {
-    const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
-    const [stRes, nuRes] = await Promise.all([
-      fetch('/get-stremio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({email:stremioAuth.email,password:stremioAuth.password})}).then(safe),
-      fetch('/get-nuvio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password})}).then(safe),
-    ]);
-    if (!stRes.success) throw new Error('Stremio: '+stRes.error);
-    if (!nuRes.success) throw new Error('Nuvio: '+nuRes.error);
-
-    stremioAddons = stRes.addons||[];
-    nuvioAddons   = nuRes.addons||[];
-    document.getElementById('addonsLayout').style.display = 'block';
-    renderAddonLists();
-    // Swap bottoni: nascondi "Carica", mostra "Sync" e X
-    document.getElementById('loadAddonsBtn').style.display = 'none';
-    const syncBtn2 = document.getElementById('pushAddonsBtn');
-    syncBtn2.style.display = 'flex';
-    syncBtn2.disabled = !nuvioAuth;
-    const closeBtn2 = document.getElementById('addonDrawerClose');
-    closeBtn2.style.display = 'flex';
-    openAddonDrawer();
-    toast(`${stremioAddons.length} Stremio · ${nuvioAddons.length} Nuvio`, 'success', 'Addon caricati');
-  } catch(e) {
-    toast(e.message, 'error', 'Errore caricamento addon');
-  } finally {
-    btn.disabled = false; btn.textContent = '🔄 Carica';
-  }
-});
-  }
-
-  // ── pushAddonsBtn (nel drawer) ──
-  const pushAddonsBtnEl = document.getElementById('pushAddonsBtn');
-  if (pushAddonsBtnEl) {
-    pushAddonsBtnEl.addEventListener('click', async () => {
-  if (!nuvioAuth) { toast('Carica prima Nuvio', 'warning'); return; }
-  if (!confirm(`☁️ SINCRONIZZA ADDON\n\nSostituirà la lista addon su Nuvio con i ${nuvioAddons.length} addon mostrati.\n\nContinuare?`)) return;
-
-  const btn = document.getElementById('pushAddonsBtn');
-  btn.disabled = true; btn.textContent = '⏳ Sync…';
-  try {
-    const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
-    const data = await fetch('/push-addons-to-nuvio',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,addons:nuvioAddons})}).then(safe);
-    if (!data.success) throw new Error(data.error);
-    toast(`${data.pushed} addon sincronizzati!`, 'success', 'Addon sync OK');
-    setTimeout(() => document.getElementById('loadAddonsBtn').click(), 700);
-  } catch(e) {
-    toast(e.message, 'error', 'Sync fallito');
-  } finally {
-    btn.disabled = false; btn.textContent = '☁️ Sincronizza → Nuvio';
-  }
-});
-  }
+  // ── Sync Addons ──
+  const syncEl = document.getElementById('pushAddonsBtn');
+  if (syncEl) syncEl.addEventListener('click', async () => {
+    if (!nuvioAuth) { toast('Carica prima Nuvio', 'warning'); return; }
+    if (!confirm(`☁️ SINCRONIZZA ADDON\n\nSostituirà la lista addon su Nuvio.\n\nContinuare?`)) return;
+    syncEl.disabled = true; syncEl.textContent = '⏳ Sync…';
+    try {
+      const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
+      const data = await fetch('/push-addons-to-nuvio',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,addons:nuvioAddons})}).then(safe);
+      if (!data.success) throw new Error(data.error);
+      toast(`${data.pushed} addon sincronizzati!`, 'success', 'Addon sync OK');
+      const lBtn = document.getElementById('loadAddonsBtn');
+      if (lBtn) { syncEl.style.display='none'; lBtn.style.display='inline-flex'; lBtn.click(); }
+    } catch(e) {
+      toast(e.message, 'error', 'Sync fallito');
+    } finally {
+      syncEl.disabled = false; syncEl.textContent = '⏫️ Sync Addons';
+    }
+  });
 });
 
-// loadAddonsBtn → DOMContentLoaded
+document.addEventListener('click', () => {
+  document.getElementById('langDropdown').style.display = 'none';
+});
 
-// ── Sincronizza → Nuvio ───────────────────────────────────────
-// pushAddonsBtn → DOMContentLoaded
-
+// Applica lingua salvata al caricamento
 // ══════════════════════════════════════════════════════════════
 // AUTO-LOGIN & REFRESH
 // ══════════════════════════════════════════════════════════════
 
 function showRefreshBtn() {
   if (stremioAuth && nuvioAuth) {
-    document.getElementById('refreshAllBtn').style.display = 'flex';
+    const btn = document.getElementById('refreshAllBtn');
+    if (btn) btn.style.display = 'flex';
   }
 }
 
 async function refreshAll() {
   const btn = document.getElementById('refreshAllBtn');
-  btn.textContent = '⏳';
-  btn.disabled = true;
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
     await Promise.all([
       loadStremio(stremioAuth.email, stremioAuth.password),
@@ -2755,12 +2886,9 @@ async function refreshAll() {
   } catch(e) {
     toast(e.message, 'error', 'Errore aggiornamento');
   } finally {
-    btn.textContent = '🔄 Aggiorna';
-    btn.disabled = false;
+    if (btn) { btn.textContent = '🔁'; btn.disabled = false; }
   }
 }
-
-// refreshAllBtn init → vedi DOMContentLoaded
 
 // Auto-login al caricamento pagina
 (async function autoLogin() {
@@ -2771,7 +2899,6 @@ async function refreshAll() {
   const nuPwd   = localStorage.getItem('snt_nu_pwd');
   const nuRem   = localStorage.getItem('snt_nu_remember') === '1';
 
-  // Pre-popola i campi e le checkbox
   if (stEmail && stRem) {
     document.getElementById('stremioEmail').value    = stEmail;
     document.getElementById('stremioPassword').value = stPwd;
@@ -2783,7 +2910,6 @@ async function refreshAll() {
     document.getElementById('rememberNuvio').checked = true;
   }
 
-  // Se entrambi ricordati, auto-login in parallelo
   if (stEmail && stPwd && stRem && nuEmail && nuPwd && nuRem) {
     toast('Accesso automatico in corso…', 'info');
     const [stOk, nuOk] = await Promise.all([
@@ -2808,280 +2934,18 @@ async function refreshAll() {
 // ══════════════════════════════════════════════════════════════
 
 const LANGS = {
-  it: {
-    flag:'🇮🇹', label:'Italiano',
-    // Sidebar
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Sincronizzazione',
-    rememberCreds:'Ricorda credenziali',
-    loadStremio:'Carica Library Stremio', loadNuvio:'Carica Library Nuvio',
-    syncBtn:'🚀 SYNC Completo', syncDesc:'Cancella tutto su Nuvio e reimporta da Stremio.\nIncluso: libreria, episodi visti, CW.\n\nContinuare?',
-    resetWatched:'🔄 Reset Badge Visti', resetLibrary:'🗑️ Reset Library Nuvio',
-    // Tabs
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ In Corso',
-    tabRemoved:'🗑️ Eliminati', tabAddons:'🔌 Addon',
-    // Filters
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Non in Nuvio', filterNotStremio:'⚠️ Non in Stremio',
-    // Library headers
-    libraryStremio:'🎬 Library Stremio', libraryNuvio:'☁️ Library Nuvio',
-    libraryCW:'⏯ In Corso', libraryRemoved:'🗑️ Eliminati',
-    // Stats
-    watched:'Visti', inProgress:'In Corso',
-    // Actions
-    refresh:'Aggiorna', search:'Cerca titolo…',
-    // Addon
-    addonTitle:'🔌 Addon', addonLoad:'🔄 Carica',
-    addonPush:'☁️ Sincronizza → Nuvio', addonAdd:'+ Aggiungi',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    // Misc
-    showMore:'↓ Mostra altri', of:'di', titles:'titoli',
-    empty:'Nessun titolo', confirm:'Conferma',
-  },
-  en: {
-    flag:'🇬🇧', label:'English',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Synchronization',
-    rememberCreds:'Remember credentials',
-    loadStremio:'Load Stremio Library', loadNuvio:'Load Nuvio Library',
-    syncBtn:'🚀 Full SYNC', syncDesc:'This will erase everything on Nuvio and reimport from Stremio.\nIncludes: library, watched episodes, continue watching.\n\nContinue?',
-    resetWatched:'🔄 Reset Watched Badges', resetLibrary:'🗑️ Reset Nuvio Library',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Watching',
-    tabRemoved:'🗑️ Removed', tabAddons:'🔌 Addons',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Not in Nuvio', filterNotStremio:'⚠️ Not in Stremio',
-    libraryStremio:'🎬 Stremio Library', libraryNuvio:'☁️ Nuvio Library',
-    libraryCW:'⏯ Continue Watching', libraryRemoved:'🗑️ Removed',
-    watched:'Watched', inProgress:'Watching',
-    refresh:'Refresh', search:'Search title…',
-    addonTitle:'🔌 Addons', addonLoad:'🔄 Load',
-    addonPush:'☁️ Sync → Nuvio', addonAdd:'+ Add',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ Show more', of:'of', titles:'titles',
-    empty:'No titles', confirm:'Confirm',
-  },
-  es: {
-    flag:'🇪🇸', label:'Español',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Sincronización',
-    rememberCreds:'Recordar credenciales',
-    loadStremio:'Cargar Biblioteca Stremio', loadNuvio:'Cargar Biblioteca Nuvio',
-    syncBtn:'🚀 SYNC Completo', syncDesc:'Esto borrará todo en Nuvio y reimportará desde Stremio.\n¿Continuar?',
-    resetWatched:'🔄 Reiniciar Vistos', resetLibrary:'🗑️ Reiniciar Biblioteca Nuvio',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ En Curso',
-    tabRemoved:'🗑️ Eliminados', tabAddons:'🔌 Addons',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ No en Nuvio', filterNotStremio:'⚠️ No en Stremio',
-    libraryStremio:'🎬 Biblioteca Stremio', libraryNuvio:'☁️ Biblioteca Nuvio',
-    libraryCW:'⏯ En Curso', libraryRemoved:'🗑️ Eliminados',
-    watched:'Vistos', inProgress:'En Curso',
-    refresh:'Actualizar', search:'Buscar título…',
-    addonTitle:'🔌 Addons', addonLoad:'🔄 Cargar',
-    addonPush:'☁️ Sincronizar → Nuvio', addonAdd:'+ Añadir',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ Mostrar más', of:'de', titles:'títulos',
-    empty:'Sin títulos', confirm:'Confirmar',
-  },
-  fr: {
-    flag:'🇫🇷', label:'Français',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Synchronisation',
-    rememberCreds:'Mémoriser les identifiants',
-    loadStremio:'Charger la bibliothèque Stremio', loadNuvio:'Charger la bibliothèque Nuvio',
-    syncBtn:'🚀 SYNC Complet', syncDesc:'Cela effacera tout sur Nuvio et réimportera depuis Stremio.\nContinuer ?',
-    resetWatched:'🔄 Réinitialiser les vus', resetLibrary:'🗑️ Réinitialiser la bibliothèque Nuvio',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ En cours',
-    tabRemoved:'🗑️ Supprimés', tabAddons:'🔌 Addons',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Pas dans Nuvio', filterNotStremio:'⚠️ Pas dans Stremio',
-    libraryStremio:'🎬 Bibliothèque Stremio', libraryNuvio:'☁️ Bibliothèque Nuvio',
-    libraryCW:'⏯ En cours', libraryRemoved:'🗑️ Supprimés',
-    watched:'Vus', inProgress:'En cours',
-    refresh:'Actualiser', search:'Rechercher…',
-    addonTitle:'🔌 Addons', addonLoad:'🔄 Charger',
-    addonPush:'☁️ Synchroniser → Nuvio', addonAdd:'+ Ajouter',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ Afficher plus', of:'sur', titles:'titres',
-    empty:'Aucun titre', confirm:'Confirmer',
-  },
-  de: {
-    flag:'🇩🇪', label:'Deutsch',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Synchronisierung',
-    rememberCreds:'Anmeldedaten merken',
-    loadStremio:'Stremio-Bibliothek laden', loadNuvio:'Nuvio-Bibliothek laden',
-    syncBtn:'🚀 Vollständige Synchronisation', syncDesc:'Alles auf Nuvio wird gelöscht und von Stremio importiert.\nFortfahren?',
-    resetWatched:'🔄 Gesehen zurücksetzen', resetLibrary:'🗑️ Nuvio-Bibliothek zurücksetzen',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Läuft',
-    tabRemoved:'🗑️ Gelöscht', tabAddons:'🔌 Addons',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Nicht in Nuvio', filterNotStremio:'⚠️ Nicht in Stremio',
-    libraryStremio:'🎬 Stremio-Bibliothek', libraryNuvio:'☁️ Nuvio-Bibliothek',
-    libraryCW:'⏯ Weiterschauen', libraryRemoved:'🗑️ Gelöscht',
-    watched:'Gesehen', inProgress:'Läuft',
-    refresh:'Aktualisieren', search:'Titel suchen…',
-    addonTitle:'🔌 Addons', addonLoad:'🔄 Laden',
-    addonPush:'☁️ Synchronisieren → Nuvio', addonAdd:'+ Hinzufügen',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ Mehr anzeigen', of:'von', titles:'Titel',
-    empty:'Keine Titel', confirm:'Bestätigen',
-  },
-  pt: {
-    flag:'🇧🇷', label:'Português',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Sincronização',
-    rememberCreds:'Lembrar credenciais',
-    loadStremio:'Carregar Biblioteca Stremio', loadNuvio:'Carregar Biblioteca Nuvio',
-    syncBtn:'🚀 SYNC Completo', syncDesc:'Isso apagará tudo no Nuvio e reimportará do Stremio.\nContinuar?',
-    resetWatched:'🔄 Resetar Assistidos', resetLibrary:'🗑️ Resetar Biblioteca Nuvio',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Assistindo',
-    tabRemoved:'🗑️ Removidos', tabAddons:'🔌 Addons',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Não está no Nuvio', filterNotStremio:'⚠️ Não está no Stremio',
-    libraryStremio:'🎬 Biblioteca Stremio', libraryNuvio:'☁️ Biblioteca Nuvio',
-    libraryCW:'⏯ Assistindo', libraryRemoved:'🗑️ Removidos',
-    watched:'Assistidos', inProgress:'Assistindo',
-    refresh:'Atualizar', search:'Buscar título…',
-    addonTitle:'🔌 Addons', addonLoad:'🔄 Carregar',
-    addonPush:'☁️ Sincronizar → Nuvio', addonAdd:'+ Adicionar',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ Mostrar mais', of:'de', titles:'títulos',
-    empty:'Sem títulos', confirm:'Confirmar',
-  },
-  zh: {
-    flag:'🇨🇳', label:'中文',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'同步设置',
-    rememberCreds:'记住账号密码',
-    loadStremio:'加载 Stremio 媒体库', loadNuvio:'加载 Nuvio 媒体库',
-    syncBtn:'🚀 完整同步', syncDesc:'这将清除 Nuvio 上的所有内容并从 Stremio 重新导入。\n继续？',
-    resetWatched:'🔄 重置观看标记', resetLibrary:'🗑️ 重置 Nuvio 媒体库',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ 观看中',
-    tabRemoved:'🗑️ 已删除', tabAddons:'🔌 插件',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ 不在 Nuvio', filterNotStremio:'⚠️ 不在 Stremio',
-    libraryStremio:'🎬 Stremio 媒体库', libraryNuvio:'☁️ Nuvio 媒体库',
-    libraryCW:'⏯ 继续观看', libraryRemoved:'🗑️ 已删除',
-    watched:'已观看', inProgress:'观看中',
-    refresh:'刷新', search:'搜索标题…',
-    addonTitle:'🔌 插件', addonLoad:'🔄 加载',
-    addonPush:'☁️ 同步 → Nuvio', addonAdd:'+ 添加',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ 显示更多', of:'共', titles:'部',
-    empty:'没有内容', confirm:'确认',
-  },
-  hi: {
-    flag:'🇮🇳', label:'हिंदी',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'सिंक्रोनाइज़ेशन',
-    rememberCreds:'क्रेडेंशियल याद रखें',
-    loadStremio:'Stremio लाइब्रेरी लोड करें', loadNuvio:'Nuvio लाइब्रेरी लोड करें',
-    syncBtn:'🚀 पूर्ण SYNC', syncDesc:'Nuvio से सब कुछ मिटाकर Stremio से फिर से इम्पोर्ट किया जाएगा।\nजारी रखें?',
-    resetWatched:'🔄 देखे हुए रीसेट करें', resetLibrary:'🗑️ Nuvio लाइब्रेरी रीसेट करें',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ देख रहे हैं',
-    tabRemoved:'🗑️ हटाए गए', tabAddons:'🔌 ऐडऑन',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Nuvio में नहीं', filterNotStremio:'⚠️ Stremio में नहीं',
-    libraryStremio:'🎬 Stremio लाइब्रेरी', libraryNuvio:'☁️ Nuvio लाइब्रेरी',
-    libraryCW:'⏯ देखना जारी रखें', libraryRemoved:'🗑️ हटाए गए',
-    watched:'देखे गए', inProgress:'देख रहे हैं',
-    refresh:'रिफ्रेश', search:'शीर्षक खोजें…',
-    addonTitle:'🔌 ऐडऑन', addonLoad:'🔄 लोड करें',
-    addonPush:'☁️ Nuvio पर सिंक करें', addonAdd:'+ जोड़ें',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ और दिखाएं', of:'में से', titles:'शीर्षक',
-    empty:'कोई शीर्षक नहीं', confirm:'पुष्टि करें',
-  },
-  ar: {
-    flag:'🇸🇦', label:'العربية',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'المزامنة',
-    rememberCreds:'تذكر بيانات الدخول',
-    loadStremio:'تحميل مكتبة Stremio', loadNuvio:'تحميل مكتبة Nuvio',
-    syncBtn:'🚀 مزامنة كاملة', syncDesc:'سيتم مسح كل شيء في Nuvio وإعادة استيراده من Stremio.\nهل تريد المتابعة؟',
-    resetWatched:'🔄 إعادة تعيين المشاهَد', resetLibrary:'🗑️ إعادة تعيين مكتبة Nuvio',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ قيد المشاهدة',
-    tabRemoved:'🗑️ محذوف', tabAddons:'🔌 إضافات',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ غير موجود في Nuvio', filterNotStremio:'⚠️ غير موجود في Stremio',
-    libraryStremio:'🎬 مكتبة Stremio', libraryNuvio:'☁️ مكتبة Nuvio',
-    libraryCW:'⏯ استمرار المشاهدة', libraryRemoved:'🗑️ محذوف',
-    watched:'مشاهَد', inProgress:'قيد المشاهدة',
-    refresh:'تحديث', search:'ابحث عن عنوان…',
-    addonTitle:'🔌 إضافات', addonLoad:'🔄 تحميل',
-    addonPush:'☁️ مزامنة → Nuvio', addonAdd:'+ إضافة',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ عرض المزيد', of:'من', titles:'عناوين',
-    empty:'لا توجد عناوين', confirm:'تأكيد',
-  },
-  ja: {
-    flag:'🇯🇵', label:'日本語',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'同期設定',
-    rememberCreds:'ログイン情報を記憶',
-    loadStremio:'Stremioライブラリを読み込む', loadNuvio:'Nuvioライブラリを読み込む',
-    syncBtn:'🚀 完全同期', syncDesc:'Nuvioのデータをすべて削除してStremioから再インポートします。\n続行しますか？',
-    resetWatched:'🔄 視聴済みリセット', resetLibrary:'🗑️ Nuvioライブラリリセット',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ 視聴中',
-    tabRemoved:'🗑️ 削除済み', tabAddons:'🔌 アドオン',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Nuvioにない', filterNotStremio:'⚠️ Stremioにない',
-    libraryStremio:'🎬 Stremioライブラリ', libraryNuvio:'☁️ Nuvioライブラリ',
-    libraryCW:'⏯ 視聴を続ける', libraryRemoved:'🗑️ 削除済み',
-    watched:'視聴済み', inProgress:'視聴中',
-    refresh:'更新', search:'タイトルを検索…',
-    addonTitle:'🔌 アドオン', addonLoad:'🔄 読込',
-    addonPush:'☁️ Nuvioへ同期', addonAdd:'+ 追加',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ さらに表示', of:'/', titles:'件',
-    empty:'タイトルなし', confirm:'確認',
-  },
-  ru: {
-    flag:'🇷🇺', label:'Русский',
-    stremio:'Stremio', nuvio:'Nuvio', sync:'Синхронизация',
-    rememberCreds:'Запомнить данные',
-    loadStremio:'Загрузить библиотеку Stremio', loadNuvio:'Загрузить библиотеку Nuvio',
-    syncBtn:'🚀 Полная синхронизация', syncDesc:'Все данные Nuvio будут удалены и импортированы заново из Stremio.\nПродолжить?',
-    resetWatched:'🔄 Сбросить просмотренное', resetLibrary:'🗑️ Сбросить библиотеку Nuvio',
-    tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Смотрю',
-    tabRemoved:'🗑️ Удалённые', tabAddons:'🔌 Аддоны',
-    filterMovie:'🎬', filterSeries:'📺', filterWatched:'✓',
-    filterNotNuvio:'⚠️ Нет в Nuvio', filterNotStremio:'⚠️ Нет в Stremio',
-    libraryStremio:'🎬 Библиотека Stremio', libraryNuvio:'☁️ Библиотека Nuvio',
-    libraryCW:'⏯ Продолжить просмотр', libraryRemoved:'🗑️ Удалённые',
-    watched:'Просмотрено', inProgress:'Смотрю',
-    refresh:'Обновить', search:'Поиск…',
-    addonTitle:'🔌 Аддоны', addonLoad:'🔄 Загрузить',
-    addonPush:'☁️ Синхр. → Nuvio', addonAdd:'+ Добавить',
-    addonNuvio:'☁️ Nuvio', addonStremio:'🎬 Stremio',
-    showMore:'↓ Показать ещё', of:'из', titles:'тит.',
-    empty:'Нет тайтлов', confirm:'Подтвердить',
-  },
+  it: { flag:'🇮🇹', label:'Italiano', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ In Corso', tabRemoved:'🗑️ Eliminati', filterNotNuvio:'⚠️ Non in Nuvio', filterNotStremio:'⚠️ Non in Stremio', libraryStremio:'🎬 Library Stremio', libraryNuvio:'☁️ Library Nuvio', watched:'Visti', inProgress:'In Corso', refresh:'Aggiorna', search:'Cerca titolo…', addonTitle:'🔌 Addon', addonLoad:'📥 Carica Addon', addonPush:'⏫️ Sync Addons', addonAdd:'+ Aggiungi', loadStremio:'Carica Library Stremio', loadNuvio:'Carica Library Nuvio', rememberCreds:'Ricorda credenziali' },
+  en: { flag:'🇬🇧', label:'English', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Watching', tabRemoved:'🗑️ Removed', filterNotNuvio:'⚠️ Not in Nuvio', filterNotStremio:'⚠️ Not in Stremio', libraryStremio:'🎬 Stremio Library', libraryNuvio:'☁️ Nuvio Library', watched:'Watched', inProgress:'Watching', refresh:'Refresh', search:'Search title…', addonTitle:'🔌 Addons', addonLoad:'📥 Load Addons', addonPush:'⏫️ Sync Addons', addonAdd:'+ Add', loadStremio:'Load Stremio Library', loadNuvio:'Load Nuvio Library', rememberCreds:'Remember credentials' },
+  es: { flag:'🇪🇸', label:'Español', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ En Curso', tabRemoved:'🗑️ Eliminados', filterNotNuvio:'⚠️ No en Nuvio', filterNotStremio:'⚠️ No en Stremio', libraryStremio:'🎬 Biblioteca Stremio', libraryNuvio:'☁️ Biblioteca Nuvio', watched:'Vistos', inProgress:'En Curso', refresh:'Actualizar', search:'Buscar título…', addonTitle:'🔌 Addons', addonLoad:'📥 Cargar Addons', addonPush:'⏫️ Sincronizar', addonAdd:'+ Añadir', loadStremio:'Cargar Biblioteca Stremio', loadNuvio:'Cargar Biblioteca Nuvio', rememberCreds:'Recordar credenciales' },
+  fr: { flag:'🇫🇷', label:'Français', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ En cours', tabRemoved:'🗑️ Supprimés', filterNotNuvio:'⚠️ Pas dans Nuvio', filterNotStremio:'⚠️ Pas dans Stremio', libraryStremio:'🎬 Bibliothèque Stremio', libraryNuvio:'☁️ Bibliothèque Nuvio', watched:'Vus', inProgress:'En cours', refresh:'Actualiser', search:'Rechercher…', addonTitle:'🔌 Addons', addonLoad:'📥 Charger', addonPush:'⏫️ Synchroniser', addonAdd:'+ Ajouter', loadStremio:'Charger Stremio', loadNuvio:'Charger Nuvio', rememberCreds:'Mémoriser les identifiants' },
+  de: { flag:'🇩🇪', label:'Deutsch', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Läuft', tabRemoved:'🗑️ Gelöscht', filterNotNuvio:'⚠️ Nicht in Nuvio', filterNotStremio:'⚠️ Nicht in Stremio', libraryStremio:'🎬 Stremio-Bibliothek', libraryNuvio:'☁️ Nuvio-Bibliothek', watched:'Gesehen', inProgress:'Läuft', refresh:'Aktualisieren', search:'Titel suchen…', addonTitle:'🔌 Addons', addonLoad:'📥 Laden', addonPush:'⏫️ Synchronisieren', addonAdd:'+ Hinzufügen', loadStremio:'Stremio laden', loadNuvio:'Nuvio laden', rememberCreds:'Anmeldedaten merken' },
+  pt: { flag:'🇧🇷', label:'Português', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Assistindo', tabRemoved:'🗑️ Removidos', filterNotNuvio:'⚠️ Não no Nuvio', filterNotStremio:'⚠️ Não no Stremio', libraryStremio:'🎬 Biblioteca Stremio', libraryNuvio:'☁️ Biblioteca Nuvio', watched:'Assistidos', inProgress:'Assistindo', refresh:'Atualizar', search:'Buscar…', addonTitle:'🔌 Addons', addonLoad:'📥 Carregar', addonPush:'⏫️ Sincronizar', addonAdd:'+ Adicionar', loadStremio:'Carregar Stremio', loadNuvio:'Carregar Nuvio', rememberCreds:'Lembrar credenciais' },
+  zh: { flag:'🇨🇳', label:'中文', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ 观看中', tabRemoved:'🗑️ 已删除', filterNotNuvio:'⚠️ 不在Nuvio', filterNotStremio:'⚠️ 不在Stremio', libraryStremio:'🎬 Stremio媒体库', libraryNuvio:'☁️ Nuvio媒体库', watched:'已观看', inProgress:'观看中', refresh:'刷新', search:'搜索…', addonTitle:'🔌 插件', addonLoad:'📥 加载', addonPush:'⏫️ 同步', addonAdd:'+ 添加', loadStremio:'加载Stremio', loadNuvio:'加载Nuvio', rememberCreds:'记住账号' },
+  hi: { flag:'🇮🇳', label:'हिंदी', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ देख रहे', tabRemoved:'🗑️ हटाए गए', filterNotNuvio:'⚠️ Nuvio में नहीं', filterNotStremio:'⚠️ Stremio में नहीं', libraryStremio:'🎬 Stremio लाइब्रेरी', libraryNuvio:'☁️ Nuvio लाइब्रेरी', watched:'देखे गए', inProgress:'देख रहे', refresh:'रिफ्रेश', search:'खोजें…', addonTitle:'🔌 ऐडऑन', addonLoad:'📥 लोड करें', addonPush:'⏫️ सिंक', addonAdd:'+ जोड़ें', loadStremio:'Stremio लोड करें', loadNuvio:'Nuvio लोड करें', rememberCreds:'याद रखें' },
+  ar: { flag:'🇸🇦', label:'العربية', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ قيد المشاهدة', tabRemoved:'🗑️ محذوف', filterNotNuvio:'⚠️ غير موجود في Nuvio', filterNotStremio:'⚠️ غير موجود في Stremio', libraryStremio:'🎬 مكتبة Stremio', libraryNuvio:'☁️ مكتبة Nuvio', watched:'مشاهَد', inProgress:'قيد المشاهدة', refresh:'تحديث', search:'ابحث…', addonTitle:'🔌 إضافات', addonLoad:'📥 تحميل', addonPush:'⏫️ مزامنة', addonAdd:'+ إضافة', loadStremio:'تحميل Stremio', loadNuvio:'تحميل Nuvio', rememberCreds:'تذكر بيانات الدخول' },
+  ja: { flag:'🇯🇵', label:'日本語', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ 視聴中', tabRemoved:'🗑️ 削除済み', filterNotNuvio:'⚠️ Nuvioにない', filterNotStremio:'⚠️ Stremioにない', libraryStremio:'🎬 Stremioライブラリ', libraryNuvio:'☁️ Nuvioライブラリ', watched:'視聴済み', inProgress:'視聴中', refresh:'更新', search:'検索…', addonTitle:'🔌 アドオン', addonLoad:'📥 読込', addonPush:'⏫️ 同期', addonAdd:'+ 追加', loadStremio:'Stremio読込', loadNuvio:'Nuvio読込', rememberCreds:'ログイン情報を記憶' },
+  ru: { flag:'🇷🇺', label:'Русский', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Смотрю', tabRemoved:'🗑️ Удалённые', filterNotNuvio:'⚠️ Нет в Nuvio', filterNotStremio:'⚠️ Нет в Stremio', libraryStremio:'🎬 Библиотека Stremio', libraryNuvio:'☁️ Библиотека Nuvio', watched:'Просмотрено', inProgress:'Смотрю', refresh:'Обновить', search:'Поиск…', addonTitle:'🔌 Аддоны', addonLoad:'📥 Загрузить', addonPush:'⏫️ Синхр.', addonAdd:'+ Добавить', loadStremio:'Загрузить Stremio', loadNuvio:'Загрузить Nuvio', rememberCreds:'Запомнить данные' },
 };
-
-// Mappatura chiavi → selettori DOM
-const T_MAP = [
-  // Tabs
-  ['[data-tab="stremio"]',     t => t.tabStremio + (document.getElementById('tabCountStremio')?.outerHTML||'')],
-  ['[data-tab="nuvio"]',       t => t.tabNuvio   + (document.getElementById('tabCountNuvio')?.outerHTML||'')],
-  ['[data-tab="cw"]',          t => t.tabCW      + (document.getElementById('tabCountCW')?.outerHTML||'')],
-  ['[data-tab="removed"]',     t => t.tabRemoved + (document.getElementById('tabCountRemoved')?.outerHTML||'')],
-  // Filters Stremio
-  ['[data-filter-st="notnuvio"]',   t => t.filterNotNuvio],
-  ['[data-filter-nu="notstremio"]', t => t.filterNotStremio],
-  // Library headers
-  ['#panel-stremio > div:first-child > div:first-child', t => t.libraryStremio],
-  ['#panel-nuvio > div:first-child > div:first-child',   t => t.libraryNuvio],
-  // Stat labels
-  ['#statStremio .stat-label',  t => t.stremio],
-  ['#statNuvio .stat-label',    t => t.nuvio],
-  ['#statWatched .stat-label',  t => t.watched],
-  ['#statCW .stat-label',       t => t.inProgress],
-  // Refresh btn
-  ['#refreshAllBtn',    t => '🔄 ' + t.refresh],
-  // Search
-  ['#searchInput',      t => null, 'placeholder', t => t.search],
-  // Sidebar labels
-  ['#rememberStremio + span, label:has(#rememberStremio)',  t => null], // skip complex
-  // Load buttons
-  ['#loadStremioBtn',  t => '<span>📥</span> ' + t.loadStremio],
-  ['#loadNuvioBtn',    t => '<span>☁️</span> ' + t.loadNuvio],
-  // Addon section
-  ['#addonTitle',       t => t.addonTitle],
-  ['#loadAddonsBtn',    t => t.addonLoad],
-  ['#pushAddonsBtn',    t => t.addonPush],
-  ['#addAddonBtn',      t => '+ ' + t.addonAdd.replace(/^\+\s*/,'')],
-];
 
 let currentLang = localStorage.getItem('snt_lang') || 'it';
 
@@ -3090,42 +2954,26 @@ function applyLang(code) {
   if (!t) return;
   currentLang = code;
   localStorage.setItem('snt_lang', code);
-  document.getElementById('langLabel').textContent = code.toUpperCase();
-
-  // Applica RTL per arabo
+  const lbl = document.getElementById('langLabel');
+  if (lbl) lbl.textContent = code.toUpperCase();
   document.documentElement.dir = code === 'ar' ? 'rtl' : 'ltr';
 
-  // Aggiorna testi
-  const set = (sel, fn, attr) => {
-    document.querySelectorAll(sel).forEach(el => {
-      const val = fn(t);
-      if (val === null) return;
-      if (attr) el.setAttribute(attr, val);
-      else el.innerHTML = val;
-    });
-  };
-
-  // Tabs — preserva i contatori
+  // Tabs
   ['stremio','nuvio','cw','removed'].forEach(tab => {
     const btn = document.querySelector(`[data-tab="${tab}"]`);
     if (!btn) return;
     const countEl = btn.querySelector('.tab-count');
     const countHtml = countEl ? countEl.outerHTML : '';
-    const key = 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1).replace('cw','CW').replace('removed','Removed');
     const txt = {stremio:t.tabStremio, nuvio:t.tabNuvio, cw:t.tabCW, removed:t.tabRemoved}[tab];
     btn.innerHTML = txt + ' ' + countHtml;
   });
 
   // Filtri
   document.querySelectorAll('[data-filter-st="notnuvio"]').forEach(el => {
-    const span = el.querySelector('span');
-    if (span) el.innerHTML = t.filterNotNuvio + ' ' + span.outerHTML;
-    else el.textContent = t.filterNotNuvio;
+    const span = el.querySelector('span'); el.innerHTML = t.filterNotNuvio + (span?' '+span.outerHTML:'');
   });
   document.querySelectorAll('[data-filter-nu="notstremio"]').forEach(el => {
-    const span = el.querySelector('span');
-    if (span) el.innerHTML = t.filterNotStremio + ' ' + span.outerHTML;
-    else el.textContent = t.filterNotStremio;
+    const span = el.querySelector('span'); el.innerHTML = t.filterNotStremio + (span?' '+span.outerHTML:'');
   });
 
   // Bottoni carica
@@ -3134,153 +2982,87 @@ function applyLang(code) {
   const nuBtn = document.getElementById('loadNuvioBtn');
   if (nuBtn) nuBtn.innerHTML = '<span>☁️</span> ' + t.loadNuvio;
 
-  // Ricorda credenziali checkboxes
+  // Ricorda credenziali
   document.querySelectorAll('label:has(#rememberStremio), label:has(#rememberNuvio)').forEach(el => {
     const inp = el.querySelector('input');
     if (inp) { el.textContent = ''; el.appendChild(inp); el.append(' ' + t.rememberCreds); }
   });
 
-  // Refresh btn
+  // Refresh
   const refBtn = document.getElementById('refreshAllBtn');
-  if (refBtn) refBtn.innerHTML = '🔄 ' + t.refresh;
+  if (refBtn && !refBtn.disabled) refBtn.textContent = '🔁';
 
-  // Search placeholder
+  // Search
   const srch = document.getElementById('searchInput');
   if (srch) srch.placeholder = t.search;
 
   // Stat labels
-  const statLabels = {
-    statStremio: t.stremio, statNuvio: t.nuvio,
-    statWatched: t.watched, statCW: t.inProgress,
-  };
-  Object.entries(statLabels).forEach(([id, txt]) => {
+  const statMap = { statStremio:'Stremio', statNuvio:'Nuvio', statWatched:t.watched, statCW:t.inProgress };
+  Object.entries(statMap).forEach(([id, txt]) => {
     const el = document.getElementById(id)?.querySelector('.stat-label');
     if (el) el.textContent = txt;
   });
 
-  // Addon section
+  // Addon
   const addonTitleEl = document.getElementById('addonTitle');
   if (addonTitleEl) addonTitleEl.textContent = t.addonTitle;
   const loadAddonsBtn = document.getElementById('loadAddonsBtn');
-  if (loadAddonsBtn) loadAddonsBtn.textContent = t.addonLoad;
+  if (loadAddonsBtn && loadAddonsBtn.style.display !== 'none') loadAddonsBtn.textContent = t.addonLoad;
   const pushAddonsBtn = document.getElementById('pushAddonsBtn');
-  if (pushAddonsBtn && !pushAddonsBtn.disabled) pushAddonsBtn.textContent = t.addonPush;
+  if (pushAddonsBtn && pushAddonsBtn.style.display !== 'none') pushAddonsBtn.textContent = t.addonPush;
   const addAddonBtn = document.getElementById('addAddonBtn');
   if (addAddonBtn) addAddonBtn.textContent = t.addonAdd;
 
-  // Library headers
-  const stHeader = document.getElementById('stLibHeader');
-  if (stHeader) stHeader.textContent = t.libraryStremio;
-  const nuHeader = document.getElementById('nuLibHeader');
-  if (nuHeader) nuHeader.textContent = t.libraryNuvio;
-
-  // Sync button
-  const syncBtn = document.getElementById('syncBtn');
-  if (syncBtn) syncBtn.querySelector('span:last-child') && (syncBtn.querySelector('span:last-child').textContent = t.syncBtn.replace(/^🚀\s*/,''));
+  // Header librerie
+  const stH = document.getElementById('stLibHeader');
+  if (stH) stH.textContent = t.libraryStremio;
+  const nuH = document.getElementById('nuLibHeader');
+  if (nuH) nuH.textContent = t.libraryNuvio;
 }
 
-// ── Popola e gestisci dropdown ────────────────────────────────
 function buildLangDropdown() {
   const dd = document.getElementById('langDropdown');
+  if (!dd) return;
   dd.innerHTML = '';
   Object.entries(LANGS).forEach(([code, lang]) => {
     const item = document.createElement('button');
-    item.style.cssText = `
-      display:block; width:100%; text-align:left; padding:10px 14px;
-      background:${code === currentLang ? 'rgba(59,158,255,.1)' : 'transparent'};
-      border:none; border-bottom:1px solid var(--brd);
-      color:${code === currentLang ? 'var(--blue)' : 'var(--txt2)'};
-      font-size:13px; cursor:pointer; font-family:'DM Sans',sans-serif;
-      display:flex; align-items:center; gap:8px;
-    `;
+    item.style.cssText = `display:flex;width:100%;text-align:left;padding:10px 14px;background:${code===currentLang?'rgba(59,158,255,.1)':'transparent'};border:none;border-bottom:1px solid var(--brd);color:${code===currentLang?'var(--blue)':'var(--txt2)'};font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;align-items:center;gap:8px;`;
     item.innerHTML = `<span>${lang.flag}</span><span>${lang.label}</span>`;
     item.addEventListener('click', () => {
       applyLang(code);
-      document.getElementById('langDropdown').style.display = 'none';
-      buildLangDropdown(); // aggiorna active state
+      dd.style.display = 'none';
+      buildLangDropdown();
     });
     dd.appendChild(item);
   });
 }
 
-document.getElementById('langBtn').addEventListener('click', e => {
+const langBtn = document.getElementById('langBtn');
+if (langBtn) langBtn.addEventListener('click', e => {
   e.stopPropagation();
   const dd = document.getElementById('langDropdown');
+  if (!dd) return;
   const isOpen = dd.style.display !== 'none';
   if (!isOpen) buildLangDropdown();
   dd.style.display = isOpen ? 'none' : 'block';
 });
-document.addEventListener('click', () => {
-  document.getElementById('langDropdown').style.display = 'none';
-});
 
-// Applica lingua salvata al caricamento
 applyLang(currentLang);
 
 </script>
 
-<!-- ADDON DRAWER — sempre disponibile, non sposta il contenuto -->
-<div class="addon-drawer-overlay" id="addonDrawerOverlay" onclick="closeAddonDrawer()"></div>
-<div class="addon-drawer" id="addonDrawer">
-  <div class="addon-drawer-handle" id="addonDrawerHandle">
-    <div class="addon-drawer-pill"></div>
-    <div class="addon-drawer-title">
-      🔌 <span id="addonTitle">Addon</span>
+
+<!-- SYNC OVERLAY -->
+<div class="sync-overlay" id="syncOverlay">
+  <div class="sync-box">
+    <div class="sync-box-title">
+      <div class="sync-spinner" id="syncSpinner"></div>
+      🚀 Sync in corso…
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <!-- Bottone CARICA: visibile quando non ancora caricati -->
-      <button id="loadAddonsBtn" class="btn-sm" style="background:rgba(59,158,255,.1);border:1px solid rgba(59,158,255,.3);color:var(--blue);padding:6px 12px;font-size:12px">
-        📥 Carica Addon
-      </button>
-      <!-- Bottone SYNC: visibile dopo caricamento, nascosto all'inizio -->
-      <button id="pushAddonsBtn" class="btn-primary btn-nu" style="display:none;width:auto;padding:6px 12px;font-size:12px" disabled>
-        ⏫️ Sync Addons
-      </button>
-      <!-- X chiudi: visibile solo dopo caricamento -->
-      <button id="addonDrawerClose" onclick="closeAddonDrawer()" style="
-        display:none;
-        background:rgba(255,80,80,.12);
-        border:1px solid rgba(255,80,80,.3);
-        color:#ff5050; border-radius:8px;
-        width:32px; height:32px;
-        font-size:16px; font-weight:700;
-        cursor:pointer; line-height:1;
-        align-items:center; justify-content:center;
-        flex-shrink:0;
-      ">✕</button>
-    </div>
-  </div>
-
-  <div class="addon-drawer-body">
-    <div id="addonsLayout" style="display:none">
-
-      <!-- NUVIO -->
-      <div style="margin-bottom:20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase">
-            ☁️ Nuvio <span id="addonCountNu" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
-          </div>
-          <button id="addAddonBtn" style="background:rgba(59,158,255,.12);border:1px solid rgba(59,158,255,.35);color:var(--blue);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">
-            + Aggiungi
-          </button>
-        </div>
-        <div id="nuvioAddonsList"></div>
-      </div>
-
-      <div style="height:1px;background:var(--brd);margin:4px 0 20px"></div>
-
-      <!-- STREMIO -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:var(--txt2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
-          🎬 Stremio <span id="addonCountSt" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
-        </div>
-        <div id="stremioAddonsList"></div>
-      </div>
-
-      <!-- Push info -->
-      <div id="addonPushInfo" style="font-size:12px;color:var(--txt2);padding:10px 0 4px">—</div>
-
-    </div>
+    <div class="sync-log-area" id="syncLogArea"></div>
+    <button class="sync-done-btn" id="syncDoneBtn" onclick="closeSyncOverlay()">
+      ✅ Completato — Chiudi
+    </button>
   </div>
 </div>
 
