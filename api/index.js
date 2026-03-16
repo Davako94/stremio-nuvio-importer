@@ -112,7 +112,7 @@ async function pushSeriesProxyEpisodes(watchedSeriesTitles, token, ownerId) {
   // ownerId passato dall'esterno per evitare RPC extra (rischio timeout Vercel)
   const proxyEps = (watchedSeriesTitles || []).map(s => ({
     content_id:   s.content_id,
-    content_type: 'series',
+    content_type: 'movie',
     title:        s.title || '',
     season:       1,
     episode:      1,
@@ -419,9 +419,13 @@ function buildWatchedPayload(normalizedItems) {
     // Cinemeta per distinguere serie complete (→ season=null) da parziali (→ solo episodi).
     const isWatched = watchedBool || timesWatched > 0 || flaggedWatched > 0 || pct >= 0.80;
     if (!isWatched) continue;
+    // Il developer Nuvio indica di trattare le serie watched come i film:
+    // pushaimo content_type='movie' per tutti i title-level (season=null).
+    // Questo fa sì che reconcileRemoteWatchedItems chiami setLocalWatchedStatus('movie',id)
+    // che scrive watched:movie:${id}=true in mmkv → badge visibile in ContentItem.
     result.push({
       content_id:   cid,
-      content_type: ct,
+      content_type: 'movie',
       title:        item.name || '',
       season:       null,
       episode:      null,
@@ -586,12 +590,12 @@ async function buildWatchedEpisodesPayload(normalizedItems, concurrency = 5, onP
       // sia al 100% in storageService per mostrare il badge "watched" sulla card.
       // Con dry-run + single push non c'è il limite 1000 righe.
       let epCount = 0;
-      payload.push({ content_id: cid, content_type: 'series', title: item.name||'', season: null, episode: null, watched_at: watchedAt });
+      payload.push({ content_id: cid, content_type: 'movie', title: item.name||'', season: null, episode: null, watched_at: watchedAt });
       for (let i = 0; i < sorted.length; i++) {
         if (!flags[i]) continue;
         const v = sorted[i];
         if (v.season == null || v.episode == null) continue;
-        payload.push({ content_id: cid, content_type: 'series', title: item.name||'', season: v.season, episode: v.episode, watched_at: watchedAt });
+        payload.push({ content_id: cid, content_type: 'movie', title: item.name||'', season: v.season, episode: v.episode, watched_at: watchedAt });
         epCount++;
       }
       if (onProgress) onProgress(
@@ -601,12 +605,12 @@ async function buildWatchedEpisodesPayload(normalizedItems, concurrency = 5, onP
       // CASO 2 — serie parziale o in CW:
       // Pushaimo title-level + solo gli episodi effettivamente visti
       let epCount = 0;
-      payload.push({ content_id: cid, content_type: 'series', title: item.name||'', season: null, episode: null, watched_at: watchedAt });
+      payload.push({ content_id: cid, content_type: 'movie', title: item.name||'', season: null, episode: null, watched_at: watchedAt });
       for (let i = 0; i < sorted.length; i++) {
         if (!flags[i]) continue;
         const v = sorted[i];
         if (v.season == null || v.episode == null) continue;
-        payload.push({ content_id: cid, content_type: 'series', title: item.name||'', season: v.season, episode: v.episode, watched_at: watchedAt });
+        payload.push({ content_id: cid, content_type: 'movie', title: item.name||'', season: v.season, episode: v.episode, watched_at: watchedAt });
         epCount++;
       }
       if (onProgress) onProgress(
@@ -1114,7 +1118,11 @@ app.post('/nuke-and-sync', async (req, res) => {
 
 app.post('/sync', async (req, res) => {
   const { stremioEmail, stremioPassword, nuvioEmail, nuvioPassword,
-          includeWatchedEpisodes = false, includeRemoved = false } = req.body;
+          includeRemoved = false } = req.body;
+  // Gli episodi sono sempre inclusi nel sync — quando il developer
+  // aggiungerà il fix in setLocalWatchedStatus per scrivere watched:series:id
+  // in mmkv, i badge serie compariranno automaticamente al prossimo sync.
+  const includeWatchedEpisodes = true;
   if (!stremioEmail || !stremioPassword || !nuvioEmail || !nuvioPassword)
     return res.status(400).json({ success: false, error: 'Credenziali mancanti' });
   const log = []; const addLog = m => { console.log(m); log.push(m); };
@@ -1292,7 +1300,7 @@ app.post('/mark-watched', async (req, res) => {
         body: JSON.stringify({
           user_id:      userId,
           content_id:   contentId,
-          content_type: contentType,
+          content_type: 'movie',  // sempre 'movie' per watched title-level (fix badge serie)
           title:        title || contentId,
           season:       null,
           episode:      null,
@@ -1338,7 +1346,7 @@ app.post('/mark-watched', async (req, res) => {
           body: JSON.stringify({
             user_id:      userId,
             content_id:   contentId,
-            content_type: 'series',
+            content_type: 'movie',  // 'movie' anche per episodi watched
             title:        title || contentId,
             season:       1,
             episode:      1,
@@ -2441,7 +2449,7 @@ app.post('/do-push-episode-markers', async (req, res) => {
       .filter(ep => ep.season != null && ep.episode != null)
       .map(ep => ({
         content_id:   ep.content_id,
-        content_type: ep.content_type || 'series',
+        content_type: 'movie',  // tratta episodi watched come film
         video_id:     `${ep.content_id}:${ep.season}:${ep.episode}`,
         season:       ep.season,
         episode:      ep.episode,
@@ -2457,6 +2465,242 @@ app.post('/do-push-episode-markers', async (req, res) => {
     await supabaseRpc('sync_push_watch_progress', { p_entries: allEntries }, token);
     res.json({ success: true, pushed: allEntries.length, cw: currentCW.length, markers: filteredMarkers.length });
   } catch(e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// ADDON SYNC ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+// ─── get-stremio-addons ─────────────────────────────────────
+// Recupera gli addon installati da Stremio via API addonCollectionGet
+app.post('/get-stremio-addons', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ success: false, error: 'Credenziali richieste' });
+  const debugLog = [];
+  const L = m => { console.log('[addons]', m); debugLog.push(m); };
+
+  try {
+    const auth = await stremioLogin(email, password);
+    L(`Login OK, token: ${auth.token.slice(0,8)}...`);
+
+    let rawAddons = [];
+
+    // ── Strategia 1: getUser ─────────────────────────────────
+    try {
+      const r = await fetch(`${STREMIO_API}/api/getUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+        body: JSON.stringify({ authKey: auth.token }),
+      });
+      const text = await r.text();
+      L(`getUser → status:${r.status} len:${text.length} preview:${text.slice(0,120)}`);
+      if (r.ok && text.trim()) {
+        const d = JSON.parse(text);
+        const found = d?.result?.addons || d?.result?.user?.addons || d?.addons || [];
+        if (found.length) { rawAddons = found; L(`getUser: ${found.length} addon`); }
+      }
+    } catch(e) { L(`getUser errore: ${e.message}`); }
+
+    // ── Strategia 2: addonCollectionGet ──────────────────────
+    if (!rawAddons.length) {
+      try {
+        const r = await fetch(`${STREMIO_API}/api/addonCollectionGet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+          body: JSON.stringify({ authKey: auth.token, update: true }),
+        });
+        const text = await r.text();
+        L(`addonCollectionGet → status:${r.status} len:${text.length} preview:${text.slice(0,120)}`);
+        if (r.ok && text.trim()) {
+          const d = JSON.parse(text);
+          const found = d?.result?.addons || d?.addons || [];
+          if (found.length) { rawAddons = found; L(`addonCollectionGet: ${found.length} addon`); }
+        }
+      } catch(e) { L(`addonCollectionGet errore: ${e.message}`); }
+    }
+
+    // ── Strategia 3: getAddonCollection ──────────────────────
+    if (!rawAddons.length) {
+      try {
+        const r = await fetch(`${STREMIO_API}/api/getAddonCollection`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+          body: JSON.stringify({ authKey: auth.token }),
+        });
+        const text = await r.text();
+        L(`getAddonCollection → status:${r.status} len:${text.length} preview:${text.slice(0,120)}`);
+        if (r.ok && text.trim()) {
+          const d = JSON.parse(text);
+          const found = d?.result?.addons || d?.addons || [];
+          if (found.length) { rawAddons = found; L(`getAddonCollection: ${found.length} addon`); }
+        }
+      } catch(e) { L(`getAddonCollection errore: ${e.message}`); }
+    }
+
+    if (!rawAddons.length) {
+      return res.json({ success: false, error: 'Nessun addon trovato con nessuna strategia', debug: debugLog });
+    }
+
+    const addons = rawAddons
+      .filter(a => a && (a.transportUrl || a.manifest?.transportUrl))
+      .map((a, i) => {
+        const manifest = a.manifest || {};
+        const transportUrl = (a.transportUrl || manifest.transportUrl || '').trim();
+        let manifestUrl = transportUrl;
+        if (manifestUrl && !manifestUrl.endsWith('manifest.json')) {
+          manifestUrl = manifestUrl.replace(/\/?$/, '/manifest.json');
+        }
+        return {
+          id:          manifest.id || '',
+          name:        manifest.name || transportUrl || '',
+          description: manifest.description || '',
+          version:     manifest.version || '',
+          transportUrl,
+          manifestUrl,
+          types:       Array.isArray(manifest.types) ? manifest.types : [],
+          logo:        manifest.logo || manifest.icon || null,
+          official:    Boolean(manifest.official),
+          sort_order:  i,
+        };
+      })
+      .filter(a => a.manifestUrl);
+
+    L(`Addon pronti: ${addons.length}`);
+    res.json({ success: true, addons, total: addons.length, debug: debugLog });
+  } catch(e) {
+    res.status(500).json({ success: false, error: e.message, debug: debugLog });
+  }
+});
+
+// ─── get-nuvio-addons ───────────────────────────────────────
+// Recupera gli addon installati su Nuvio via Supabase REST
+app.post('/get-nuvio-addons', async (req, res) => {
+  const { nuvioEmail, nuvioPassword } = req.body;
+  if (!nuvioEmail || !nuvioPassword) return res.status(400).json({ success: false, error: 'Credenziali richieste' });
+  try {
+    const session = await supabaseLogin(nuvioEmail, nuvioPassword);
+    const token   = session.access_token;
+    const ownerId = await getEffectiveOwnerId(token);
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/addons?select=url,sort_order&user_id=eq.${encodeURIComponent(ownerId)}&profile_id=eq.1&order=sort_order.asc`, {
+      method: 'GET',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error(`Addons query HTTP ${r.status}`);
+    const rows = await r.json();
+    // Arricchisce con dati manifest (name, logo) se possibile
+    const addons = await Promise.all((rows || []).map(async (row, i) => {
+      let name = row.url || '';
+      let description = '';
+      let logo = null;
+      let types = [];
+      let id = '';
+      let version = '';
+      try {
+        const mr = await fetch(row.url, { signal: AbortSignal.timeout(4000) });
+        if (mr.ok) {
+          const m = await mr.json();
+          name        = m.name || name;
+          description = m.description || '';
+          logo        = m.logo || null;
+          types       = m.types || [];
+          id          = m.id || '';
+          version     = m.version || '';
+        }
+      } catch { /* manifest non raggiungibile, usa URL come nome */ }
+      return { id, name, description, version, manifestUrl: row.url, logo, types, sort_order: row.sort_order ?? i };
+    }));
+    res.json({ success: true, addons, total: addons.length });
+  } catch(e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ─── push-addons-to-nuvio ───────────────────────────────────
+// Pusha lista addon a Nuvio via RPC sync_push_addons (full-replace)
+app.post('/push-addons-to-nuvio', async (req, res) => {
+  const { nuvioEmail, nuvioPassword, addons } = req.body;
+  if (!nuvioEmail || !nuvioPassword || !Array.isArray(addons))
+    return res.status(400).json({ success: false, error: 'nuvioEmail, nuvioPassword, addons richiesti' });
+  try {
+    const token = await resolveToken(req.body);
+    // Filtra URL vuoti e normalizza
+    const payload = addons
+      .filter(a => a.manifestUrl && a.manifestUrl.trim())
+      .map((a, i) => ({
+        url:        a.manifestUrl.trim(),
+        sort_order: a.sort_order ?? i,
+      }));
+    await supabaseRpc('sync_push_addons', { p_addons: payload }, token);
+    res.json({ success: true, pushed: payload.length });
+  } catch(e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+
+// ─── debug-stremio-addons ────────────────────────────────────
+// Prova tutti i possibili endpoint per recuperare gli addon Stremio
+app.post('/debug-stremio-addons', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ success: false, error: 'Credenziali richieste' });
+  const log = []; const L = m => { console.log(m); log.push(m); };
+  try {
+    const auth = await stremioLogin(email, password);
+    L(`✅ Login OK, authKey: ${auth.token.slice(0,8)}...`);
+
+    // Prova 1: getUser (fonte principale addon)
+    L('\n--- Prova 1: getUser ---');
+    try {
+      const r1 = await fetch(`${STREMIO_API}/api/getUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+        body: JSON.stringify({ authKey: auth.token }),
+      });
+      const t1 = await r1.text();
+      let preview = t1.slice(0,400);
+      try {
+        const d1 = JSON.parse(t1);
+        const addonsCount = d1?.result?.addons?.length || d1?.result?.user?.addons?.length || 0;
+        preview = `addons trovati: ${addonsCount} — ${JSON.stringify(d1?.result?.addons?.[0] || d1?.result?.user?.addons?.[0] || 'nessuno').slice(0,200)}`;
+      } catch {}
+      L(`Status: ${r1.status}, Body: ${t1.length} chars — ${preview}`);
+    } catch(e) { L(`Errore: ${e.message}`); }
+
+    // Prova 2: addonCollectionGet
+    L('\n--- Prova 2: addonCollectionGet ---');
+    try {
+      const r2 = await fetch(`${STREMIO_API}/api/addonCollectionGet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+        body: JSON.stringify({ authKey: auth.token, update: true }),
+      });
+      const t2 = await r2.text();
+      L(`Status: ${r2.status}, Body length: ${t2.length}, Preview: ${t2.slice(0,200)}`);
+    } catch(e) { L(`Errore: ${e.message}`); }
+
+    // Prova 3: datastoreGet con collection 'addon'
+    L('\n--- Prova 3: datastoreGet addon ---');
+    try {
+      const r3 = await fetch(`${STREMIO_API}/api/datastoreGet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+        body: JSON.stringify({ authKey: auth.token, collection: 'addon', all: true }),
+      });
+      const t3 = await r3.text();
+      L(`Status: ${r3.status}, Body length: ${t3.length}, Preview: ${t3.slice(0,200)}`);
+    } catch(e) { L(`Errore: ${e.message}`); }
+
+    // Prova 4: getUser (per vedere la struttura dati utente)
+    L('\n--- Prova 4: getUser ---');
+    try {
+      const r4 = await fetch(`${STREMIO_API}/api/getUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': STREMIO_UA },
+        body: JSON.stringify({ authKey: auth.token }),
+      });
+      const t4 = await r4.text();
+      L(`Status: ${r4.status}, Body length: ${t4.length}, Preview: ${t4.slice(0,500)}`);
+    } catch(e) { L(`Errore: ${e.message}`); }
+
+    res.json({ success: true, log });
+  } catch(e) { log.push(`💥 ${e.message}`); res.status(500).json({ success: false, error: e.message, log }); }
 });
 
 app.get('/backups', (req, res) => res.json({ backups: [] }));
