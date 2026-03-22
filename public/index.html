@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════
-   TOKENS & RESET
+   TOKENS & RESET (unchanged)
 ═══════════════════════════════════════ */
 :root {
   --bg:       #070a12;
@@ -49,7 +49,7 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   AMBIENT / GLOWS
+   AMBIENT / GLOWS (unchanged)
 ═══════════════════════════════════════ */
 .glow {
   position: fixed; border-radius: 50%;
@@ -59,11 +59,10 @@ body {
 .g2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(0,212,160,.07) 0%, transparent 70%); bottom: -150px; right: -100px; }
 
 /* ═══════════════════════════════════════
-   APP SHELL
+   APP SHELL (unchanged)
 ═══════════════════════════════════════ */
 .app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
 
-/* ── TOPBAR ── */
 .topbar {
   position: sticky; top: 0; z-index: 100;
   height: var(--topbar-h);
@@ -103,10 +102,8 @@ body {
 @media (max-width: 900px) { .topbar-menu-btn { display: flex; align-items: center; } }
 @media (min-width: 901px) { .topbar-brand { position: static !important; transform: none !important; } }
 
-/* ── BODY LAYOUT ── */
 .layout { display: flex; flex: 1; }
 
-/* ── SIDEBAR ── */
 .sidebar {
   width: var(--sidebar-w); flex-shrink: 0;
   border-right: 1px solid var(--brd);
@@ -139,7 +136,6 @@ body {
   .sidebar-backdrop.show { display: block; }
 }
 
-/* ── SIDEBAR SECTIONS ── */
 .sb-section {
   border-bottom: 1px solid var(--brd);
   padding: 16px;
@@ -163,7 +159,6 @@ body {
   letter-spacing: 1.2px; text-transform: uppercase; color: var(--txt2);
 }
 
-/* form fields */
 .field { margin-bottom: 10px; }
 .field-label {
   font-size: 10px; font-weight: 600; letter-spacing: .8px;
@@ -182,7 +177,6 @@ body {
   box-shadow: 0 0 0 3px rgba(59,158,255,.07);
 }
 
-/* buttons */
 .btn-primary {
   width: 100%; padding: 10px; border: none; border-radius: var(--r3);
   font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
@@ -237,7 +231,6 @@ body {
   line-height: 1.5; padding: 0 2px;
 }
 
-/* mini row buttons */
 .btn-row { display: flex; gap: 6px; }
 .btn-sm {
   flex: 1; padding: 7px 8px; border-radius: var(--r3); font-size: 11px; font-weight: 600;
@@ -249,7 +242,6 @@ body {
 .btn-danger { background: rgba(255,90,90,.1); border: 1px solid rgba(255,90,90,.25); color: var(--red); }
 .btn-danger:hover:not(:disabled) { background: rgba(255,90,90,.2); }
 
-/* status msg */
 .field-status {
   margin-top: 8px; padding: 7px 10px; border-radius: var(--r3);
   font-size: 11px; display: none; align-items: center; gap: 6px; line-height: 1.4;
@@ -257,7 +249,6 @@ body {
 .field-status.ok { display: flex; background: rgba(0,212,160,.07); border: 1px solid rgba(0,212,160,.2); color: var(--teal); }
 .field-status.err { display: flex; background: rgba(255,90,90,.07); border: 1px solid rgba(255,90,90,.2); color: #ff7070; }
 
-/* checkboxes */
 .opt-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
 .opt-item {
   display: flex; align-items: flex-start; gap: 9px;
@@ -270,7 +261,6 @@ body {
 .opt-title { font-size: 12px; font-weight: 600; }
 .opt-sub { font-size: 10px; color: var(--txt2); line-height: 1.4; }
 
-/* reset section */
 .reset-box {
   padding: 11px; background: rgba(255,90,90,.04);
   border: 1px solid rgba(255,90,90,.12); border-radius: var(--r3); margin-top: 10px;
@@ -278,7 +268,6 @@ body {
 .reset-title { font-size: 11px; font-weight: 700; color: var(--red); margin-bottom: 3px; letter-spacing: .5px; font-family: 'Syne', sans-serif; }
 .reset-desc { font-size: 10px; color: var(--txt2); margin-bottom: 8px; line-height: 1.5; }
 
-/* progress */
 .progress-wrap { margin: 12px 0 0; display: none; }
 .progress-track { height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
 .progress-fill {
@@ -291,7 +280,6 @@ body {
 @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 .progress-step { font-size: 11px; color: var(--txt2); text-align: center; }
 
-/* ── MAIN PANEL ── */
 .main-panel {
   flex: 1; min-width: 0;
   padding: 20px;
@@ -299,7 +287,6 @@ body {
 }
 @media (max-width: 600px) { .main-panel { padding: 12px; } }
 
-/* ── STATS BAR ── */
 .stats-bar {
   display: flex; gap: 8px; flex-wrap: wrap;
 }
@@ -319,7 +306,6 @@ body {
 .stat-card.cw .stat-value { color: var(--amber); }
 @media (max-width: 500px) { .stat-card { min-width: 80px; padding: 8px 10px; } .stat-value { font-size: 15px; } }
 
-/* ── TOOLBAR ── */
 .toolbar {
   display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
 }
@@ -349,7 +335,6 @@ body {
 }
 .sort-btn:hover { border-color: var(--brd2); color: var(--txt); }
 
-/* ── TABS ── */
 .lib-tabs {
   display: flex; gap: 3px;
   background: var(--bg1); border: 1px solid var(--brd);
@@ -366,7 +351,6 @@ body {
 .tab-count { font-family: 'JetBrains Mono', monospace; font-size: 10px; opacity: .6; margin-left: 3px; }
 @media (max-width: 500px) { .lib-tab { font-size: 10px; padding: 7px 6px; letter-spacing: 0; } }
 
-/* ── FILTER STRIP ── */
 .filter-strip {
   display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
 }
@@ -379,11 +363,9 @@ body {
 .fbtn:hover { border-color: var(--brd2); color: var(--txt); }
 .fbtn.active { border-color: var(--blue); background: var(--blue-dim); color: var(--blue); }
 
-/* ── PANELS ── */
 .lib-panel { display: none; }
 .lib-panel.active { display: flex; flex-direction: column; gap: 12px; }
 
-/* ── ITEMS GRID ── */
 .items-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
@@ -408,7 +390,6 @@ body {
 .show-more-count { font-size: 10px; color: var(--txt3); font-family: 'JetBrains Mono', monospace; }
 .items-empty-icon { font-size: 36px; opacity: .25; margin-bottom: 10px; }
 
-/* ── POSTER CARD ── */
 .pcard {
   position: relative; border-radius: var(--r2);
   overflow: hidden; cursor: pointer;
@@ -437,7 +418,6 @@ body {
   overflow: hidden; text-shadow: 0 1px 6px rgba(0,0,0,.9);
 }
 
-/* badges */
 .pcard-badge {
   position: absolute; top: 6px; right: 6px;
   width: 20px; height: 20px; border-radius: 50%;
@@ -451,7 +431,6 @@ body {
 .pcard-badge-prog svg { width: 8px; height: 8px; fill: #000; }
 .pcard-badge-rem { background: var(--red); font-size: 9px; color: #fff; font-weight: 700; }
 
-/* platform mini-badges */
 .pcard-platforms {
   position: absolute; bottom: 0; left: 0; right: 0;
   display: flex; gap: 3px; padding: 4px 5px;
@@ -464,11 +443,9 @@ body {
 .pp-nu { background: rgba(59,158,255,.35); color: #8bc8ff; }
 .pp-watch { background: rgba(255,215,0,.25); color: #ffd700; }
 
-/* progress bar */
 .pcard-progress { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,.08); }
 .pcard-progress-fill { height: 100%; border-radius: 0 2px 0 0; }
 
-/* hover overlay */
 .pcard-overlay {
   position: absolute; inset: 0; background: rgba(0,0,0,.82);
   border-radius: var(--r2); opacity: 0; transition: opacity .15s;
@@ -489,14 +466,12 @@ body {
 .po-btn.po-add  { background: rgba(0,212,160,.15); border-color: rgba(0,212,160,.3); color: var(--teal); }
 .po-btn.po-rem  { background: rgba(255,90,90,.15); border-color: rgba(255,90,90,.3); color: var(--red); }
 
-/* watched outline */
 .pcard.watched::after {
   content: ''; position: absolute; inset: 0;
   border-radius: var(--r2); border: 2px solid rgba(46,204,113,.5);
   pointer-events: none; z-index: 5;
 }
 
-/* ── CW PANEL ── */
 .cw-header {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 8px;
@@ -510,7 +485,6 @@ body {
 .cw-rail::-webkit-scrollbar-thumb { background: rgba(59,158,255,.3); border-radius: 2px; }
 .cw-rail .pcard { flex-shrink: 0; width: 96px; scroll-snap-align: start; }
 
-/* ── REMOVED PANEL ── */
 .removed-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .rem-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--red); }
 .toggle-wrap { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--txt2); }
@@ -526,7 +500,6 @@ body {
 .removed-rail { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
 .removed-rail .pcard { flex-shrink: 0; width: 96px; opacity: .5; filter: grayscale(.5); }
 
-/* ── RESULT BAR ── */
 .result-bar {
   padding: 11px 14px; border-radius: var(--r3); display: none;
   font-size: 12px; align-items: flex-start; gap: 8px; white-space: pre-line; line-height: 1.5;
@@ -534,7 +507,6 @@ body {
 .result-bar.ok { display: flex; background: rgba(0,212,160,.06); border: 1px solid rgba(0,212,160,.2); color: var(--teal); }
 .result-bar.err { display: flex; background: rgba(255,90,90,.06); border: 1px solid rgba(255,90,90,.2); color: #ff7070; }
 
-/* ── STAT CHIPS ── */
 .chip-row { display: flex; gap: 5px; flex-wrap: wrap; }
 .chip {
   background: var(--bg2); border: 1px solid var(--brd); border-radius: 100px;
@@ -544,9 +516,6 @@ body {
 .chip.g b { color: var(--teal); }
 .chip.a b { color: var(--amber); }
 
-/* ═══════════════════════════════════════
-   TOAST SYSTEM
-═══════════════════════════════════════ */
 .toast-container {
   position: fixed; top: 70px; right: 16px; z-index: 9999;
   display: flex; flex-direction: column; gap: 8px;
@@ -577,9 +546,6 @@ body {
 .toast.warning { border-color: rgba(255,180,84,.3); }
 .toast.warning .toast-icon { color: var(--amber); }
 
-/* ═══════════════════════════════════════
-   DETAIL MODAL
-═══════════════════════════════════════ */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 9998;
   display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -597,7 +563,6 @@ body {
 .modal-box::-webkit-scrollbar { width: 4px; }
 .modal-box::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
 
-/* detail modal */
 .detail-header {
   display: flex; gap: 16px; padding: 20px;
   border-bottom: 1px solid var(--brd);
@@ -649,7 +614,6 @@ body {
 .di-value { font-size: 12px; color: var(--txt); font-family: 'JetBrains Mono', monospace; }
 .di-value.big { font-size: 14px; font-weight: 600; }
 
-/* progress in detail */
 .detail-progress {
   padding: 12px 20px; border-bottom: 1px solid var(--brd);
 }
@@ -658,7 +622,6 @@ body {
 .dp-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--teal), var(--blue)); }
 .dp-meta { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: var(--txt2); font-family: 'JetBrains Mono', monospace; }
 
-/* actions in detail */
 .detail-actions { padding: 16px 20px; }
 .detail-actions-title { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--txt2); margin-bottom: 10px; }
 .action-groups { display: flex; flex-direction: column; gap: 12px; }
@@ -689,7 +652,6 @@ body {
 .am-imdb    { background: rgba(255,180,84,.08);color: var(--amber); border: 1px solid rgba(255,180,84,.2); }
 .am-imdb:hover    { background: rgba(255,180,84,.16); }
 
-/* log modal */
 .log-modal-box {
   background: var(--bg1); border: 1px solid var(--brd2);
   border-radius: var(--r); width: 100%; max-width: 700px;
@@ -708,19 +670,11 @@ body {
 .log-body { padding: 14px 18px; }
 .log-pre { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #bbb; white-space: pre-wrap; line-height: 1.75; }
 
-/* ═══════════════════════════════════════
-   FOOTER
-═══════════════════════════════════════ */
 .footer {
   padding: 24px 20px; border-top: 1px solid var(--brd);
   text-align: center; color: var(--txt3); font-size: 11px;
   display: flex; flex-direction: column; gap: 3px; margin-top: 20px;
 }
-
-/* ═══════════════════════════════════════
-   ADDON TAB
-═══════════════════════════════════════ */
-/* addon-layout rimosso (ora colonna unica) */
 
 .addon-card {
   background: var(--bg1); border: 1px solid var(--brd);
@@ -788,7 +742,6 @@ body {
   color: var(--blue); white-space: nowrap; flex-shrink: 0;
 }
 
-/* modal addon edit */
 .addon-edit-modal-box {
   background: var(--bg1); border: 1px solid var(--brd2);
   border-radius: var(--r); width: 100%; max-width: 500px;
@@ -814,89 +767,6 @@ body {
   background: var(--bg2); margin-left: 10px; flex-shrink: 0;
 }
 
-.addon-card.dragging { opacity: .4; border-style: dashed; }
-.addon-card.drag-over { border-color: var(--blue); background: rgba(59,158,255,.07); }
-.drag-handle {
-  cursor: grab; color: var(--txt3); font-size: 16px;
-  padding: 0 4px; flex-shrink: 0; user-select: none;
-}
-.drag-handle:active { cursor: grabbing; }
-.addon-del-btn {
-  background: transparent; border: none;
-  color: var(--txt3); font-size: 14px; cursor: pointer;
-  padding: 4px 5px; border-radius: 4px; flex-shrink: 0;
-  transition: color .15s;
-}
-.addon-del-btn:hover { color: #ff5c5c; }
-.addon-add-row {
-  border: 1px dashed var(--brd); border-radius: var(--r2);
-  padding: 10px 13px; text-align: center;
-  color: var(--txt3); font-size: 12px; cursor: pointer;
-  transition: all .15s; margin-top: 4px;
-}
-.addon-add-row:hover { border-color: var(--blue); color: var(--blue); }
-
-/* modal addon edit */
-.addon-edit-modal-box {
-  background: var(--bg1); border: 1px solid var(--brd2);
-  border-radius: var(--r); width: 100%; max-width: 480px;
-  padding: 22px; animation: slideUp .25s cubic-bezier(.4,0,.2,1);
-}
-.addon-edit-field { margin-bottom: 14px; }
-.addon-edit-label { font-size: 11px; color: var(--txt2); margin-bottom: 5px; font-weight: 600; }
-.addon-edit-inp {
-  width: 100%; padding: 8px 11px;
-  background: var(--bg3); border: 1px solid var(--brd);
-  border-radius: var(--r3); color: var(--txt);
-  font-family: 'JetBrains Mono', monospace; font-size: 11px;
-  transition: border-color .2s;
-}
-.addon-edit-inp:focus { outline: none; border-color: rgba(59,158,255,.45); }
-.addon-logo-preview {
-  width: 40px; height: 40px; border-radius: 8px;
-  object-fit: contain; border: 1px solid var(--brd);
-  background: var(--bg2); margin-left: 8px; flex-shrink: 0;
-}
-
-
-
-/* ═══════════════════════════════════════
-   ADDON OVERLAY
-═══════════════════════════════════════ */
-.addon-overlay {
-  position: fixed; inset: 0; z-index: 800;
-  background: rgba(0,0,0,.8);
-  backdrop-filter: blur(6px);
-  display: none;
-  align-items: flex-end;
-  justify-content: center;
-}
-.addon-overlay.open { display: flex; }
-.addon-modal {
-  background: var(--bg0);
-  border: 1px solid var(--brd2);
-  border-radius: 20px 20px 0 0;
-  width: 100%; max-width: 700px;
-  max-height: 88vh;
-  display: flex; flex-direction: column;
-  animation: slideUp .3s cubic-bezier(.4,0,.2,1);
-}
-.addon-modal-header {
-  display: flex; align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--brd);
-  flex-shrink: 0;
-}
-.addon-modal-body {
-  flex: 1; overflow-y: auto;
-  padding: 16px 18px 32px;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ═══════════════════════════════════════
-   SYNC OVERLAY
-═══════════════════════════════════════ */
 .sync-overlay {
   position: fixed; inset: 0; z-index: 900;
   background: rgba(0,0,0,.85);
@@ -939,135 +809,58 @@ body {
   cursor: pointer; display: none;
 }
 
-/* ═══════════════════════════════════════
-   ANIMATIONS
-═══════════════════════════════════════ */
 @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
 .fade-in { animation: fadeUp .4s ease forwards; }
 
-/* ═══════════════════════════════════════
-   MOBILE — ≤ 768px
-═══════════════════════════════════════ */
 @media (max-width: 768px) {
-
-  /* Topbar: nascondi status dots, compatta */
   .topbar { padding: 0 14px; gap: 8px; position: relative; }
   .topbar-status { display: none; }
   .brand-name { font-size: 16px; }
   .brand-logo { width: 30px; height: 30px; }
-
-  /* Stats bar: 2x2 grid invece di riga */
-  .stats-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
+  .stats-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .stat-card { min-width: 0; }
   .stat-value { font-size: 16px; }
   .stat-label { font-size: 10px; }
-
-  /* Tabs: scroll orizzontale, no flex-grow */
-  .lib-tabs {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding: 4px;
-    gap: 2px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
+  .lib-tabs { overflow-x: auto; flex-wrap: nowrap; padding: 4px; gap: 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .lib-tabs::-webkit-scrollbar { display: none; }
   .lib-tab { flex: 0 0 auto; white-space: nowrap; font-size: 11px; padding: 7px 10px; }
-
-  /* Filter strip: scroll orizzontale */
-  .filter-strip {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    gap: 5px;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
+  .filter-strip { overflow-x: auto; flex-wrap: nowrap; gap: 5px; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .filter-strip::-webkit-scrollbar { display: none; }
   .fbtn { flex: 0 0 auto; white-space: nowrap; }
   .filter-label { display: none; }
-
-  /* Search toolbar */
   .toolbar { flex-direction: column; }
   .searchbar-wrap { min-width: 0; width: 100%; }
-
-  /* Grid locandine: 3 colonne fisse su mobile */
-  .items-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  /* CW rail: card leggermente più piccole */
+  .items-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .cw-rail .pcard { width: 82px; }
   .removed-rail .pcard { width: 82px; }
-
-  /* Panel spacing */
   .lib-panel.active { gap: 10px; }
-
-  /* Header dentro pannelli */
-  .lib-panel.active > div:first-child {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  /* Chip row: scroll */
+  .lib-panel.active > div:first-child { flex-direction: column; align-items: flex-start; gap: 8px; }
   .chip-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .chip-row::-webkit-scrollbar { display: none; }
   .chip { flex-shrink: 0; }
-
-  /* Detail modal: fullscreen su mobile */
   .modal-overlay { padding: 0; align-items: flex-end; }
-  .modal-box {
-    max-width: 100%;
-    max-height: 92vh;
-    border-radius: var(--r) var(--r) 0 0;
-    border-bottom: none;
-    animation: slideUpMobile .3s cubic-bezier(.4,0,.2,1);
-  }
+  .modal-box { max-width: 100%; max-height: 92vh; border-radius: var(--r) var(--r) 0 0; border-bottom: none; animation: slideUpMobile .3s cubic-bezier(.4,0,.2,1); }
   @keyframes slideUpMobile { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
   .detail-header { padding: 16px; gap: 12px; }
   .detail-poster-img { width: 72px; height: 108px; }
   .detail-poster-fb  { width: 72px; height: 108px; }
   .detail-poster { width: 72px; }
   .detail-title { font-size: 15px; }
-
-  /* Action grid: 1 colonna su mobile */
   .action-grid { grid-template-columns: 1fr; }
   .detail-actions { padding: 12px 16px; }
-
-  /* Log modal: fullscreen */
   .log-modal-box { max-width: 100%; max-height: 92vh; border-radius: var(--r) var(--r) 0 0; }
   .log-pre { font-size: 10px; }
-
-  /* Info grid: 1 colonna */
   .detail-info-grid { grid-template-columns: 1fr; }
   .detail-info-item { border-right: none !important; }
-
-  /* Sidebar buttons */
   .sb-section { padding: 14px; }
   .btn-action { padding: 10px 12px; }
   .btn-sync { padding: 12px; font-size: 14px; }
-
-  /* Reset box */
   .btn-row { flex-direction: row; }
   .btn-sm { font-size: 11px; }
-
-  /* Toast: full width */
   .toast-container { right: 8px; left: 8px; max-width: none; }
-
-  /* Close btn dettaglio: più grande per touch */
   .detail-close-btn { top: 10px; right: 10px; padding: 7px 12px; font-size: 12px; }
 }
 
-/* ═══════════════════════════════════════
-   MOBILE — ≤ 380px (small phones)
-═══════════════════════════════════════ */
 @media (max-width: 380px) {
   .main-panel { padding: 10px; gap: 10px; }
   .items-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -1076,23 +869,16 @@ body {
   .stat-value { font-size: 15px; }
 }
 
-/* ═══════════════════════════════════════
-   TABLET — 769px–1100px
-═══════════════════════════════════════ */
 @media (min-width: 769px) and (max-width: 1100px) {
   :root { --sidebar-w: 280px; }
   .items-grid { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); }
   .stat-value { font-size: 16px; }
 }
 
-/* ═══════════════════════════════════════
-   TOUCH: rimuovi hover effects (miglior tap feel)
-═══════════════════════════════════════ */
 @media (hover: none) and (pointer: coarse) {
   .pcard:hover { transform: none; box-shadow: none; border-color: transparent; }
   .pcard:active { transform: scale(.97); }
   .pcard-overlay { opacity: 0 !important; }
-  /* Su touch, il click apre direttamente il modal */
   .pcard:hover .pcard-platforms { opacity: 0; }
 }
 </style>
@@ -1103,7 +889,6 @@ body {
 
 <div class="app">
 
-<!-- ── TOPBAR ── -->
 <header class="topbar">
   <button class="topbar-menu-btn" id="menuToggle" onclick="toggleSidebar()">☰</button>
   <div class="topbar-sep"></div>
@@ -1123,7 +908,7 @@ body {
       padding:5px 10px;font-size:13px;cursor:pointer;color:var(--txt2);
       display:flex;align-items:center;gap:5px;font-family:'DM Sans',sans-serif;
       margin-right:6px;
-    ">🌐 <span id="langLabel">IT</span></button>
+    ">🌐 <span id="langLabel">EN</span></button>
     <div id="langDropdown" style="
       display:none;position:absolute;right:0;top:calc(100% + 6px);
       background:var(--bg1);border:1px solid var(--brd2);border-radius:var(--r2);
@@ -1134,15 +919,12 @@ body {
   </div>
 </header>
 
-<!-- sidebar backdrop (mobile) -->
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
 
 <div class="layout">
 
-<!-- ── SIDEBAR ── -->
 <aside class="sidebar" id="sidebar">
 
-  <!-- STREMIO -->
   <div class="sb-section">
     <div class="sb-header">
       <div class="sb-icon sb-icon-st">🎬</div>
@@ -1150,22 +932,21 @@ body {
     </div>
     <div class="field">
       <label class="field-label">Email</label>
-      <input type="email" id="stremioEmail" class="field-inp" placeholder="tua@email.com" autocomplete="username">
+      <input type="email" id="stremioEmail" class="field-inp" placeholder="your@email.com" autocomplete="username">
     </div>
     <div class="field">
       <label class="field-label">Password</label>
       <input type="password" id="stremioPassword" class="field-inp" placeholder="••••••••" autocomplete="current-password">
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2);margin-bottom:8px;cursor:pointer">
-      <input type="checkbox" id="rememberStremio" style="accent-color:var(--blue)"> Ricorda credenziali
+      <input type="checkbox" id="rememberStremio" style="accent-color:var(--blue)"> Remember credentials
     </label>
     <button id="loadStremioBtn" class="btn-primary btn-st">
-      <span>📥</span> Carica Library Stremio
+      <span>📥</span> Load Stremio Library
     </button>
     <div id="stremioStatus" class="field-status"></div>
   </div>
 
-  <!-- NUVIO -->
   <div class="sb-section">
     <div class="sb-header">
       <div class="sb-icon sb-icon-nu">☁️</div>
@@ -1173,47 +954,41 @@ body {
     </div>
     <div class="field">
       <label class="field-label">Email</label>
-      <input type="email" id="nuvioEmail" class="field-inp" placeholder="tua@email.com" autocomplete="username">
+      <input type="email" id="nuvioEmail" class="field-inp" placeholder="your@email.com" autocomplete="username">
     </div>
     <div class="field">
       <label class="field-label">Password</label>
       <input type="password" id="nuvioPassword" class="field-inp" placeholder="••••••••" autocomplete="current-password">
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2);margin-bottom:8px;cursor:pointer">
-      <input type="checkbox" id="rememberNuvio" style="accent-color:var(--blue)"> Ricorda credenziali
+      <input type="checkbox" id="rememberNuvio" style="accent-color:var(--blue)"> Remember credentials
     </label>
     <button id="loadNuvioBtn" class="btn-primary btn-nu">
-      <span>☁️</span> Carica Library Nuvio
+      <span>☁️</span> Load Nuvio Library
     </button>
     <div id="nuvioStatus" class="field-status"></div>
   </div>
 
-  <!-- SYNC -->
   <div class="sb-section">
     <div class="sb-header">
       <div class="sb-icon sb-icon-sync">🚀</div>
-      <div class="sb-title">Sincronizzazione</div>
+      <div class="sb-title">Synchronization</div>
     </div>
 
     <div class="opt-list">
-      
       <label class="opt-item">
         <input type="checkbox" id="includeRemovedCheckSync">
         <div class="opt-label">
-          <span class="opt-title">🗑️ Includi eliminati</span>
-          <span class="opt-sub">Trasferisci titoli rimossi da Stremio</span>
+          <span class="opt-title">🗑️ Include removed</span>
+          <span class="opt-sub">Transfer titles removed from Stremio</span>
         </div>
       </label>
     </div>
 
     <button id="syncBtn" class="btn-sync" disabled>
-      🚀 SYNC COMPLETO
+      🚀 FULL SYNC
     </button>
-    <div class="btn-desc">Cancella e reimporta da zero · risolve duplicati · consigliato per primo utilizzo</div>
-
-
-
-
+    <div class="btn-desc">Clear and re‑import from scratch · resolves duplicates · recommended for first use</div>
 
     <div class="progress-wrap" id="progress">
       <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
@@ -1223,15 +998,14 @@ body {
     <div id="result" class="result-bar"></div>
   </div>
 
-  <!-- RESET -->
   <div class="sb-section">
     <div class="sb-header">
       <div class="sb-icon sb-icon-reset">⚠️</div>
-      <div class="sb-title">Gestione Dati Nuvio</div>
+      <div class="sb-title">Nuvio Data Management</div>
     </div>
     <div class="reset-box">
       <div class="reset-title">Reset Watched & Progress</div>
-      <div class="reset-desc">Azzera solo i badge visti e il progresso. La libreria rimane intatta.</div>
+      <div class="reset-desc">Reset only watched badges and progress. Library stays intact.</div>
       <div class="btn-row" style="margin-top:6px">
         <button id="resetWatchedBtn" class="btn-sm btn-danger">🗑️ Reset Watched</button>
         <button id="resetLibraryBtn" class="btn-sm btn-danger">🗑️ Reset Library</button>
@@ -1239,22 +1013,19 @@ body {
       <div id="resetStatus" class="field-status" style="margin-top:8px"></div>
     </div>
 
-    <!-- Eliminati toggle (specchio) -->
     <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--txt2)">
       <label class="toggle">
         <input type="checkbox" id="includeRemovedCheck">
         <span class="toggle-thumb"></span>
       </label>
-      Includi eliminati nel sync
+      Include removed in sync
     </div>
   </div>
 
 </aside>
 
-<!-- ── MAIN PANEL ── -->
 <main class="main-panel">
 
-  <!-- Stats -->
   <div class="stats-bar fade-in" id="statsBar">
     <div class="stat-card st" id="statStremio">
       <div class="stat-icon">🎬</div>
@@ -1274,129 +1045,116 @@ body {
       <div class="stat-icon">✓</div>
       <div class="stat-info">
         <div class="stat-value" id="statWatched">—</div>
-        <div class="stat-label">Visti</div>
+        <div class="stat-label">Watched</div>
       </div>
     </div>
     <div class="stat-card cw">
       <div class="stat-icon">⏯</div>
       <div class="stat-info">
         <div class="stat-value" id="statCW">—</div>
-        <div class="stat-label">In Corso</div>
+        <div class="stat-label">Continue Watching</div>
       </div>
     </div>
   </div>
 
-  <!-- Quick Sync Bar -->
   <div class="fade-in" style="margin-bottom:8px">
     <button id="syncBtnQuick" class="btn-sync" style="width:100%;justify-content:center" disabled>
-      🚀 SYNC Completo → Nuvio
+      🚀 FULL SYNC → Nuvio
     </button>
   </div>
 
-  <!-- Toolbar -->
   <div class="toolbar fade-in">
     <div class="searchbar-wrap">
       <span class="search-icon">🔍</span>
-      <input type="text" id="searchInput" class="searchbar" placeholder="Cerca titolo…">
+      <input type="text" id="searchInput" class="searchbar" placeholder="Search title…">
       <button class="search-clear" id="searchClear">✕</button>
     </div>
   </div>
 
-  <!-- Tabs -->
   <div class="lib-tabs fade-in">
-    <button id="refreshAllBtn" class="lib-tab" style="display:none;font-size:16px;padding:7px 10px" title="Aggiorna">🔁</button>
+    <button id="refreshAllBtn" class="lib-tab" style="display:none;font-size:16px;padding:7px 10px" title="Refresh">🔁</button>
     <button class="lib-tab active" data-tab="stremio">🎬 Stremio <span class="tab-count" id="tabCountStremio"></span></button>
     <button class="lib-tab" data-tab="nuvio">☁️ Nuvio <span class="tab-count" id="tabCountNuvio"></span></button>
-    <button class="lib-tab" data-tab="cw">⏯ In Corso <span class="tab-count" id="tabCountCW"></span></button>
-    <button class="lib-tab" data-tab="removed">🗑️ Eliminati <span class="tab-count" id="tabCountRemoved"></span></button>
+    <button class="lib-tab" data-tab="cw">⏯ Continue Watching <span class="tab-count" id="tabCountCW"></span></button>
+    <button class="lib-tab" data-tab="removed">🗑️ Removed <span class="tab-count" id="tabCountRemoved"></span></button>
   </div>
 
-  <!-- Stremio Panel -->
   <div class="lib-panel active fade-in" id="panel-stremio">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div id="stLibHeader">🎬 Library Stremio</div>
-            <div class="chip-row" id="stStats">
-        <button class="fbtn" data-filter-st="movie">🎬 <span id="stCountMovie">film</span></button>
-        <button class="fbtn" data-filter-st="series">📺 <span id="stCountSeries">serie</span></button>
-        <button class="fbtn" data-filter-st="watched">✓ <span id="stCountWatched">visti</span></button>
-        <button class="fbtn" data-filter-st="notnuvio">⚠️ Non in Nuvio</button>
+      <div id="stLibHeader">🎬 Stremio Library</div>
+      <div class="chip-row" id="stStats">
+        <button class="fbtn" data-filter-st="movie">🎬 <span id="stCountMovie">movies</span></button>
+        <button class="fbtn" data-filter-st="series">📺 <span id="stCountSeries">series</span></button>
+        <button class="fbtn" data-filter-st="watched">✓ <span id="stCountWatched">watched</span></button>
+        <button class="fbtn" data-filter-st="notnuvio">⚠️ Not in Nuvio</button>
       </div>
     </div>
     <div class="items-grid" id="stremioGrid">
       <div class="items-empty" style="grid-column:1/-1">
         <div class="items-empty-icon">🎬</div>
-        Carica la library Stremio per visualizzare i titoli
+        Load Stremio library to view titles
       </div>
     </div>
-
-
   </div>
 
-  <!-- Nuvio Panel -->
   <div class="lib-panel" id="panel-nuvio">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div id="nuLibHeader">☁️ Library Nuvio</div>
-            <div class="chip-row" id="nuStats">
-        <button class="fbtn" data-filter-nu="movie">🎬 <span id="nuCountMovie">film</span></button>
-        <button class="fbtn" data-filter-nu="series">📺 <span id="nuCountSeries">serie</span></button>
-        <button class="fbtn" data-filter-nu="watched">✓ <span id="nuCountWatched">visti</span></button>
-        <button class="fbtn" data-filter-nu="notstremio">⚠️ Non in Stremio</button>
+      <div id="nuLibHeader">☁️ Nuvio Library</div>
+      <div class="chip-row" id="nuStats">
+        <button class="fbtn" data-filter-nu="movie">🎬 <span id="nuCountMovie">movies</span></button>
+        <button class="fbtn" data-filter-nu="series">📺 <span id="nuCountSeries">series</span></button>
+        <button class="fbtn" data-filter-nu="watched">✓ <span id="nuCountWatched">watched</span></button>
+        <button class="fbtn" data-filter-nu="notstremio">⚠️ Not in Stremio</button>
       </div>
     </div>
     <div class="items-grid" id="nuvioGrid">
       <div class="items-empty" style="grid-column:1/-1">
         <div class="items-empty-icon">☁️</div>
-        Carica la library Nuvio per visualizzare i titoli
+        Load Nuvio library to view titles
       </div>
     </div>
   </div>
 
-  <!-- CW Panel -->
   <div class="lib-panel" id="panel-cw">
     <div class="cw-header">
-      <div class="cw-title">⏯ Continua a Guardare</div>
+      <div class="cw-title">⏯ Continue Watching</div>
       <div class="chip-row" id="cwStats"></div>
     </div>
     <div class="cw-rail" id="cwRail">
-      <div class="items-empty">Carica Stremio per vedere i titoli in corso</div>
+      <div class="items-empty">Load Stremio to see continue watching titles</div>
     </div>
   </div>
 
-  <!-- Removed Panel -->
   <div class="lib-panel" id="panel-removed">
     <div class="removed-header">
-      <div class="rem-title">🗑️ Eliminati da Stremio</div>
+      <div class="rem-title">🗑️ Removed from Stremio</div>
       <div class="toggle-wrap">
         <label class="toggle">
           <input type="checkbox" id="includeRemovedCheck2">
           <span class="toggle-thumb"></span>
         </label>
-        Includi nel prossimo sync
+        Include in next sync
       </div>
     </div>
     <div style="font-size:11px;color:var(--txt2);margin-bottom:8px">
-      Questi titoli sono stati rimossi da Stremio. Clicca su una locandina per aggiungerla a Nuvio.
+      These titles have been removed from Stremio. Click a poster to add it to Nuvio.
     </div>
     <div class="removed-rail" id="removedRail">
-      <div class="items-empty">Carica Stremio</div>
+      <div class="items-empty">Load Stremio</div>
     </div>
   </div>
 
-
-  <!-- ADDON TRIGGER -->
   <div id="addonSection" style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--brd);margin-top:8px">
-    <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700" id="addonTitle">🔌 Addon</div>
+    <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700" id="addonTitle">🔌 Addons</div>
     <button id="loadAddonsBtn" class="btn-sm" style="background:rgba(59,158,255,.1);border:1px solid rgba(59,158,255,.3);color:var(--blue);padding:8px 16px;font-size:13px">
-      📥 Carica Addon
+      📥 Load Addons
     </button>
   </div>
 
-  <!-- ADDON OVERLAY -->
   <div class="addon-overlay" id="addonOverlay">
     <div class="addon-modal">
-
       <div class="addon-modal-header">
-        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700">🔌 Addon</div>
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700">🔌 Addons</div>
         <div style="display:flex;gap:8px;align-items:center">
           <button id="pushAddonsBtn" class="btn-primary btn-nu" style="display:none;padding:8px 16px;font-size:13px" disabled>
             ⏫️ Sync Addons
@@ -1404,48 +1162,41 @@ body {
           <button onclick="closeAddonSection()" style="background:rgba(255,70,70,.12);border:1px solid rgba(255,70,70,.35);color:#ff5050;border-radius:8px;width:36px;height:36px;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
       </div>
-
       <div class="addon-modal-body">
         <div id="addonsLayout">
-      <!-- NUVIO -->
-      <div style="margin-bottom:20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase">
-            ☁️ Nuvio <span id="addonCountNu" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
+          <div style="margin-bottom:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase">
+                ☁️ Nuvio <span id="addonCountNu" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
+              </div>
+              <button id="addAddonBtn" style="background:rgba(59,158,255,.12);border:1px solid rgba(59,158,255,.35);color:var(--blue);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">
+                + Add
+              </button>
+            </div>
+            <div id="nuvioAddonsList"></div>
           </div>
-          <button id="addAddonBtn" style="background:rgba(59,158,255,.12);border:1px solid rgba(59,158,255,.35);color:var(--blue);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">
-            + Aggiungi
-          </button>
-        </div>
-        <div id="nuvioAddonsList"></div>
-      </div>
-
-      <div style="height:1px;background:var(--brd);margin:4px 0 20px"></div>
-
-      <!-- STREMIO -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:var(--txt2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
-          🎬 Stremio <span id="addonCountSt" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
-        </div>
-        <div id="stremioAddonsList"></div>
-      </div>
-
+          <div style="height:1px;background:var(--brd);margin:4px 0 20px"></div>
+          <div style="margin-bottom:20px">
+            <div style="font-size:12px;font-weight:700;color:var(--txt2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
+              🎬 Stremio <span id="addonCountSt" style="font-size:11px;opacity:.7;font-weight:400;margin-left:4px"></span>
+            </div>
+            <div id="stremioAddonsList"></div>
+          </div>
           <div id="addonPushInfo" style="font-size:12px;color:var(--txt2);padding:4px 0 8px">—</div>
-        </div><!-- /addonsLayout -->
-      </div><!-- /addon-modal-body -->
-    </div><!-- /addon-modal -->
-  </div><!-- /addon-overlay -->
+        </div>
+      </div>
+    </div>
+  </div>
 
   <footer class="footer">
     <div>❤️ Thanks: <strong>Tap, Gianluca, Bestia</strong></div>
-    <div>✨ Strumento non ufficiale — non affiliato con Nuvio o Stremio</div>
+    <div>✨ Unofficial tool — not affiliated with Nuvio or Stremio</div>
   </footer>
 
 </main>
-</div><!-- /layout -->
-</div><!-- /app -->
+</div>
+</div>
 
-<!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
@@ -1460,17 +1211,14 @@ function toggleSidebar() {
   const isOpen = s.classList.contains('open');
   s.classList.toggle('open');
   b.classList.toggle('show');
-  // Blocca scroll del body quando sidebar aperta su mobile
   document.body.style.overflow = isOpen ? '' : 'hidden';
 }
-// Chiudi sidebar su ESC
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     const s = document.getElementById('sidebar');
     if (s.classList.contains('open')) {
       toggleSidebar();
     } else {
-      // Chiudi anche i modal aperti
       const modals = document.querySelectorAll('.modal-overlay');
       if (modals.length) modals[modals.length-1].remove();
     }
@@ -1502,9 +1250,6 @@ function removeToast(el) {
   setTimeout(() => el.remove(), 300);
 }
 
-// ══════════════════════════════════════════════════════
-// LEGACY COMPAT (showResult still used internally)
-// ══════════════════════════════════════════════════════
 function showResult(msg, type) {
   const el = document.getElementById('result');
   el.textContent = msg; el.className = 'result-bar ' + type;
@@ -1578,7 +1323,6 @@ function makeCard(item, opts={}) {
   if (watched) cls += ' watched';
   card.className = cls;
 
-  // badge
   let badge = '';
   if (isInProgress && progressPct != null)
     badge = `<div class="pcard-badge pcard-badge-prog" title="${progressPct}%"><svg viewBox="0 0 10 12"><polygon points="2,1 9,6 2,11"/></svg></div>`;
@@ -1590,7 +1334,6 @@ function makeCard(item, opts={}) {
   const progBar = (progressPct != null && !isRemoved)
     ? `<div class="pcard-progress"><div class="pcard-progress-fill" style="width:${progressPct}%;background:var(--teal)"></div></div>` : '';
 
-  // platform mini-badges on hover
   const inSt = source !== 'nuvio' ? true : !!(nuvioData && stremioData?.library?.find(i=>extractId(i._id||i.id)===cid));
   const inNu = source !== 'stremio' ? true : !!(nuvioData?.library?.find(i=>extractId(i.content_id)===cid));
   let platforms = '';
@@ -1609,17 +1352,16 @@ function makeCard(item, opts={}) {
 
   let overlayBtns = '';
   if (source === 'stremio') {
-    overlayBtns = `<div class="po-btn po-watch" onclick="event.stopPropagation();quickMarkWatched('${cid}','${sn}','${isMovie?'movie':'series'}')">${watched?'✓ Già visto':'○ Segna visto'}</div><div class="po-btn" onclick="event.stopPropagation();openItemActions('${cid}','${sn}','${isMovie?'movie':'series'}','${ps}')">⋯ Dettagli</div>`;
+    overlayBtns = `<div class="po-btn po-watch" onclick="event.stopPropagation();quickMarkWatched('${cid}','${sn}','${isMovie?'movie':'series'}')">${watched?'✓ Already watched':'○ Mark watched'}</div><div class="po-btn" onclick="event.stopPropagation();openItemActions('${cid}','${sn}','${isMovie?'movie':'series'}','${ps}')">⋯ Details</div>`;
   } else if (source === 'nuvio') {
-    overlayBtns = `<div class="po-btn po-rem" onclick="event.stopPropagation();quickRemoveFromNuvio('${cid}','${isMovie?'movie':'series'}')">✕ Rimuovi</div><div class="po-btn" onclick="event.stopPropagation();openItemActions('${cid}','${sn}','${isMovie?'movie':'series'}','${ps}')">⋯ Dettagli</div>`;
+    overlayBtns = `<div class="po-btn po-rem" onclick="event.stopPropagation();quickRemoveFromNuvio('${cid}','${isMovie?'movie':'series'}')">✕ Remove</div><div class="po-btn" onclick="event.stopPropagation();openItemActions('${cid}','${sn}','${isMovie?'movie':'series'}','${ps}')">⋯ Details</div>`;
   } else if (source === 'removed') {
-    overlayBtns = `<div class="po-btn po-add" onclick="event.stopPropagation();quickAddToNuvio('${cid}','${sn}','${isMovie?'movie':'series'}')">+ Aggiungi</div><div class="po-btn" onclick="event.stopPropagation();openItemActions('${cid}','${sn}','${isMovie?'movie':'series'}','${ps}')">⋯ Dettagli</div>`;
+    overlayBtns = `<div class="po-btn po-add" onclick="event.stopPropagation();quickAddToNuvio('${cid}','${sn}','${isMovie?'movie':'series'}')">+ Add</div><div class="po-btn" onclick="event.stopPropagation();openItemActions('${cid}','${sn}','${isMovie?'movie':'series'}','${ps}')">⋯ Details</div>`;
   }
 
   card.innerHTML = `<div class="pcard-fallback" style="--c1:${c1};--c2:${c2}"><div class="pcard-fbg"></div><span class="pcard-fyear">${rawYear}</span><span class="pcard-ficon">${isMovie?'🎬':'📺'}</span><span class="pcard-ftitle">${rawName}</span></div>${badge}<div class="pcard-platforms">${platforms}</div><div class="pcard-overlay">${overlayBtns}</div>${progBar}`;
   card.addEventListener('click', () => openItemActions(cid, rawName, isMovie?'movie':'series', item.poster||item.background||''));
 
-  // Async poster load
   const posterUrl = item.poster||item.background||null;
   if (posterUrl) {
     const img = document.createElement('img'); img.className='pcard-img'; img.src=posterUrl; img.alt=rawName;
@@ -1639,13 +1381,11 @@ function makeCard(item, opts={}) {
 // RENDER
 // ══════════════════════════════════════════════════════
 const PAGE_SIZE = 9;
-// Traccia quanti elementi sono visibili per ogni grid
 const gridPageState = {};
 
 function makeGridCard(item, watchedSet, opts) {
   const rawId = String(item._id||item.id||item.content_id||'').toLowerCase();
   const m = rawId.match(/tt\d+/i); const cid = m ? m[0].toLowerCase() : rawId.split(':')[0];
-  // Controlla anche varianti: con/senza "tt", content_id diretto
   const contentId = String(item.content_id||'').toLowerCase();
   const watched = watchedSet ? (
     watchedSet.has(cid) ||
@@ -1661,12 +1401,10 @@ function makeGridCard(item, watchedSet, opts) {
 function renderGrid(gridEl, items, watchedSet, opts={}) {
   while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
   if (!items?.length) {
-    gridEl.innerHTML = '<div class="items-empty" style="grid-column:1/-1"><div class="items-empty-icon">—</div>Nessun titolo</div>';
-    // Reset paginazione
+    gridEl.innerHTML = '<div class="items-empty" style="grid-column:1/-1"><div class="items-empty-icon">—</div>No titles</div>';
     gridPageState[gridEl.id] = { items: [], watchedSet, opts, shown: 0 };
     return;
   }
-  // Reset paginazione per questa grid
   gridPageState[gridEl.id] = { items, watchedSet, opts, shown: 0 };
   renderGridPage(gridEl);
 }
@@ -1676,11 +1414,9 @@ function renderGridPage(gridEl) {
   if (!state) return;
   const { items, watchedSet, opts } = state;
 
-  // Rimuovi eventuale show-more precedente
   const existing = gridEl.querySelector('.show-more-wrap');
   if (existing) existing.remove();
 
-  // Aggiungi i prossimi PAGE_SIZE elementi
   const from = state.shown;
   const to   = Math.min(from + PAGE_SIZE, items.length);
   for (let i = from; i < to; i++) {
@@ -1688,23 +1424,22 @@ function renderGridPage(gridEl) {
   }
   state.shown = to;
 
-  // Aggiungi pulsante "mostra altro" se ci sono ancora elementi
   if (state.shown < items.length) {
     const remaining = items.length - state.shown;
     const wrap = document.createElement('div');
     wrap.className = 'show-more-wrap';
     wrap.innerHTML = `
       <button class="show-more-btn" onclick="renderGridPage(document.getElementById('${gridEl.id}'))">
-        ↓ Mostra altri ${Math.min(PAGE_SIZE, remaining)}
+        ↓ Show ${Math.min(PAGE_SIZE, remaining)} more
       </button>
-      <span class="show-more-count">${state.shown} di ${items.length} titoli</span>
+      <span class="show-more-count">${state.shown} of ${items.length} titles</span>
     `;
     gridEl.appendChild(wrap);
   }
 }
 function renderRail(railEl, items, watchedSet, opts={}) {
   while (railEl.firstChild) railEl.removeChild(railEl.firstChild);
-  if (!items?.length) { railEl.innerHTML='<div class="items-empty">Nessun elemento</div>'; return; }
+  if (!items?.length) { railEl.innerHTML='<div class="items-empty">No items</div>'; return; }
   for (const item of items) {
     const rawId = String(item._id||item.id||item.content_id||'').toLowerCase();
     const m = rawId.match(/tt\d+/i); const cid = m ? m[0].toLowerCase() : rawId.split(':')[0];
@@ -1727,7 +1462,6 @@ function matchSearch(item) {
   return name.includes(q);
 }
 function applyFiltersAndRender() {
-  // STREMIO — filtri combinati (AND tra categorie diverse)
   const stAll = (stremioData?.library||[]).filter(i => matchSearch(i));
   const nuSet = new Set((nuvioData?.library||[]).map(i => extractId(i.content_id)));
   const sf = currentFilter.st;
@@ -1741,7 +1475,6 @@ function applyFiltersAndRender() {
       const m = String(i._id||i.id||'').match(/tt\d+/i);
       const isWatched  = m ? stremioWatchedSet.has(m[0].toLowerCase()) : false;
       const notInNuvio = !nuSet.has(id);
-      // Tipo: film o serie — mutuamente esclusivi, usa OR tra di loro
       const typeActive = sf.has('movie') || sf.has('series');
       const typeOk = !typeActive || (sf.has('movie') && isMovie) || (sf.has('series') && isSeries);
       const watchedOk  = !sf.has('watched')  || isWatched;
@@ -1751,7 +1484,6 @@ function applyFiltersAndRender() {
   }
   renderGrid(document.getElementById('stremioGrid'), stFiltered, stremioWatchedSet, {source:'stremio'});
 
-  // NUVIO — filtri combinati
   const nuAll = (nuvioData?.library||[]).filter(i => matchSearch(i));
   const stSet = new Set((stremioData?.library||[]).map(i => extractId(i._id||i.id||'')));
   const nf = currentFilter.nu;
@@ -1781,11 +1513,9 @@ function updateAll() {
   const stLib = stremioData?.library||[];
   const nuLib = nuvioData?.library||[];
 
-  // Tabs
   document.getElementById('tabCountStremio').textContent = stLib.length ? `(${stLib.length})` : '';
   document.getElementById('tabCountNuvio').textContent = nuLib.length ? `(${nuLib.length})` : '';
 
-  // Stats bar
   const stMovies = stLib.filter(i=>(i.type||'')==='movie').length;
   const stSeries = stLib.filter(i=>(i.type||'')==='series'||(i.type||'')==='show').length;
   const stWatched = (stremioData?.watchedIds||[]).length;
@@ -1799,7 +1529,6 @@ function updateAll() {
   document.getElementById('statWatched').textContent = Math.max(stWatched, nuWatched) || '—';
   document.getElementById('statCW').textContent = cwCount || '—';
 
-  // Aggiorna conteggi nei chip
   const el = id => document.getElementById(id);
   if(el('stCountMovie'))  el('stCountMovie').textContent  = stMovies;
   if(el('stCountSeries')) el('stCountSeries').textContent = stSeries;
@@ -1808,29 +1537,23 @@ function updateAll() {
   if(el('nuCountSeries')) el('nuCountSeries').textContent = nuSeries;
   if(el('nuCountWatched'))el('nuCountWatched').textContent= nuWatched;
 
-  // Filters
   applyFiltersAndRender();
 
-  // CW
   const inProgress = stremioData?.inProgressItems||[];
   document.getElementById('tabCountCW').textContent = inProgress.length ? `(${inProgress.length})` : '';
-  document.getElementById('cwStats').innerHTML = inProgress.length ? chip('⏯','in corso',inProgress.length,'a') : '';
+  document.getElementById('cwStats').innerHTML = inProgress.length ? chip('⏯','in progress',inProgress.length,'a') : '';
   renderRail(document.getElementById('cwRail'), inProgress.map(i=>({...i,_isInProgress:true})), stremioWatchedSet, {source:'stremio'});
 
-  // Removed
   const removed = stremioData?.removedItems||[];
   document.getElementById('tabCountRemoved').textContent = removed.length ? `(${removed.length})` : '';
   renderRail(document.getElementById('removedRail'), removed.map(i=>({...i,_isRemoved:true})), null, {source:'removed'});
 
-  // Status dots
   document.getElementById('statusStremio').classList.toggle('connected', !!stremioData);
   document.getElementById('statusNuvio').classList.toggle('connected', !!nuvioData);
 
-  // Sync buttons
   if (stremioData && nuvioData) {
     document.getElementById('syncBtn').disabled = false;
     const q = document.getElementById('syncBtnQuick'); if (q) q.disabled = false;
-
   } else {
     document.getElementById('syncBtn').disabled = true;
     const q2 = document.getElementById('syncBtnQuick'); if (q2) q2.disabled = true;
@@ -1855,12 +1578,10 @@ document.querySelectorAll('.lib-tab').forEach(btn => {
 document.querySelectorAll('[data-filter-st]').forEach(btn => {
   btn.addEventListener('click', () => {
     const f = btn.dataset.filterSt;
-    // Film e Serie sono mutuamente esclusivi tra loro
     if (f === 'movie' && currentFilter.st.has('series')) currentFilter.st.delete('series');
     if (f === 'series' && currentFilter.st.has('movie')) currentFilter.st.delete('movie');
     if (currentFilter.st.has(f)) currentFilter.st.delete(f);
     else currentFilter.st.add(f);
-    // Aggiorna stile bottoni
     document.querySelectorAll('[data-filter-st]').forEach(b =>
       b.classList.toggle('active', currentFilter.st.has(b.dataset.filterSt))
     );
@@ -1895,7 +1616,6 @@ document.getElementById('searchClear').addEventListener('click', () => {
   applyFiltersAndRender();
 });
 
-// Ctrl+K shortcut
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault();
@@ -1923,18 +1643,17 @@ document.getElementById('includeRemovedCheck2').addEventListener('change', funct
 // LOAD STREMIO
 // ══════════════════════════════════════════════════════
 async function loadStremio(email, pwd) {
-  if (!email || !pwd) { setStatus('stremioStatus','err','❌ Inserisci email e password'); return false; }
+  if (!email || !pwd) { setStatus('stremioStatus','err','❌ Enter email and password'); return false; }
   const btn = document.getElementById('loadStremioBtn');
-  btn.disabled = true; btn.innerHTML = '<span>⏳</span> Caricamento…';
-  showProgress(true, 'Caricamento library Stremio…', 30);
+  btn.disabled = true; btn.innerHTML = '<span>⏳</span> Loading…';
+  showProgress(true, 'Loading Stremio library…', 30);
   try {
     const r = await fetch('/get-stremio-data', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pwd})});
     const data = await r.json(); if (!data.success) throw new Error(data.error);
     stremioData = data; stremioAuth = {email, password:pwd};
     stremioWatchedSet = new Set((data.watchedIds||[]).map(id=>String(id).toLowerCase()));
     const s = data.stats;
-    setStatus('stremioStatus','ok',`✅ ${s.total} titoli · ${s.watched} visti · ${s.continueWatching} CW · ${s.removed} eliminati`+(s.watchedSeriesCount>0?` · ${s.watchedSeriesCount} serie con ep.`:''));
-    // Salva se checkbox attiva
+    setStatus('stremioStatus','ok',`✅ ${s.total} titles · ${s.watched} watched · ${s.continueWatching} CW · ${s.removed} removed`+(s.watchedSeriesCount>0?` · ${s.watchedSeriesCount} series with episodes`:''));
     if (document.getElementById('rememberStremio')?.checked) {
       localStorage.setItem('snt_st_email', email);
       localStorage.setItem('snt_st_pwd', pwd);
@@ -1948,10 +1667,10 @@ async function loadStremio(email, pwd) {
     return true;
   } catch(e) {
     setStatus('stremioStatus','err','❌ '+e.message);
-    toast(e.message, 'error', 'Errore Stremio');
+    toast(e.message, 'error', 'Stremio Error');
     return false;
   } finally {
-    btn.disabled=false; btn.innerHTML='<span>📥</span> Carica Library Stremio';
+    btn.disabled=false; btn.innerHTML='<span>📥</span> Load Stremio Library';
     showProgress(false);
   }
 }
@@ -1970,18 +1689,17 @@ document.getElementById('loadStremioBtn').addEventListener('click', async () => 
 // LOAD NUVIO
 // ══════════════════════════════════════════════════════
 async function loadNuvio(email, pwd) {
-  if (!email || !pwd) { setStatus('nuvioStatus','err','❌ Inserisci email e password'); return false; }
+  if (!email || !pwd) { setStatus('nuvioStatus','err','❌ Enter email and password'); return false; }
   const btn = document.getElementById('loadNuvioBtn');
-  btn.disabled = true; btn.innerHTML = '<span>⏳</span> Caricamento…';
-  showProgress(true, 'Caricamento library Nuvio…', 30);
+  btn.disabled = true; btn.innerHTML = '<span>⏳</span> Loading…';
+  showProgress(true, 'Loading Nuvio library…', 30);
   try {
     const r = await fetch('/get-nuvio-data', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pwd})});
     const data = await r.json(); if (!data.success) throw new Error(data.error);
     nuvioData = data; nuvioAuth = {email, password:pwd};
     nuvioWatchedSet = new Set((data.watchedIds||[]).map(id=>String(id).toLowerCase()));
     const s = data.stats;
-    setStatus('nuvioStatus','ok',`✅ ${s.total} titoli · ${s.movies} film · ${s.series} serie · ${s.watched} visti · ${s.inProgress} CW`);
-    // Salva se checkbox attiva
+    setStatus('nuvioStatus','ok',`✅ ${s.total} titles · ${s.movies} movies · ${s.series} series · ${s.watched} watched · ${s.inProgress} CW`);
     if (document.getElementById('rememberNuvio')?.checked) {
       localStorage.setItem('snt_nu_email', email);
       localStorage.setItem('snt_nu_pwd', pwd);
@@ -1995,10 +1713,10 @@ async function loadNuvio(email, pwd) {
     return true;
   } catch(e) {
     setStatus('nuvioStatus','err','❌ '+e.message);
-    toast(e.message, 'error', 'Errore Nuvio');
+    toast(e.message, 'error', 'Nuvio Error');
     return false;
   } finally {
-    btn.disabled=false; btn.innerHTML='<span>☁️</span> Carica Library Nuvio';
+    btn.disabled=false; btn.innerHTML='<span>☁️</span> Load Nuvio Library';
     showProgress(false);
   }
 }
@@ -2041,20 +1759,20 @@ function closeSyncOverlay() {
 }
 
 async function doSync() {
-  if (!stremioAuth || !nuvioAuth) { toast('Carica prima Stremio e Nuvio', 'warning'); return; }
-  if (!confirm('🚀 SYNC COMPLETO\n\nCancella tutto su Nuvio e reimporta da Stremio.\nIncluso: libreria, episodi visti, CW.\n\nContinuare?')) return;
+  if (!stremioAuth || !nuvioAuth) { toast('Load Stremio and Nuvio first', 'warning'); return; }
+  if (!confirm('🚀 FULL SYNC\n\nClears everything on Nuvio and re‑imports from Stremio.\nIncluding library, watched episodes, CW.\n\nContinue?')) return;
 
   openSyncOverlay();
-  syncLog('🔐 Login Stremio e Nuvio…');
+  syncLog('🔐 Logging into Stremio and Nuvio…');
 
   const includeRemoved = document.getElementById('includeRemovedCheckSync')?.checked;
   const syncBtn = document.getElementById('syncBtn');
   const syncBtnQ = document.getElementById('syncBtnQuick');
-  if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = '⏳ Sync…'; }
-  if (syncBtnQ) { syncBtnQ.disabled = true; syncBtnQ.textContent = '⏳ Sync…'; }
+  if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = '⏳ Syncing…'; }
+  if (syncBtnQ) { syncBtnQ.disabled = true; syncBtnQ.textContent = '⏳ Syncing…'; }
 
   try {
-    syncLog('📤 Invio dati al server…');
+    syncLog('📤 Sending data to server…');
     const r = await fetch('/sync', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -2067,31 +1785,29 @@ async function doSync() {
     const data = await r.json();
 
     if (data.success) {
-      // Mostra log dal server
       (data.log||[]).forEach(line => {
         const isErr = /error|fail|errore/i.test(line);
         const isOk  = /ok|success|✅|completat/i.test(line);
         syncLog(line, isErr ? 'err' : isOk ? 'ok' : '');
       });
-      syncLog('✅ Sync completato!', 'ok');
-      syncLog('👉 Apri Nuvio → Impostazioni → Sync → Sincronizza ora', 'ok');
-      toast('Sync completato!', 'success', 'Sync OK');
+      syncLog('✅ Sync completed!', 'ok');
+      syncLog('👉 Open Nuvio → Settings → Sync → Sync now', 'ok');
+      toast('Sync completed!', 'success', 'Sync OK');
       setTimeout(() => document.getElementById('loadNuvioBtn')?.click(), 1500);
     } else {
-      syncLog('❌ ' + (data.error||'Errore sconosciuto'), 'err');
-      throw new Error(data.error||'Errore sconosciuto');
+      syncLog('❌ ' + (data.error||'Unknown error'), 'err');
+      throw new Error(data.error||'Unknown error');
     }
   } catch(e) {
     syncLog('❌ ' + e.message, 'err');
-    toast(e.message, 'error', 'Sync fallito');
+    toast(e.message, 'error', 'Sync failed');
   } finally {
-    // Mostra bottone chiudi, nascondi spinner
     const spinner = document.getElementById('syncSpinner');
     const doneBtn = document.getElementById('syncDoneBtn');
     if (spinner) spinner.style.display = 'none';
     if (doneBtn) doneBtn.style.display = 'block';
-    if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = '🚀 SYNC COMPLETO'; }
-    if (syncBtnQ) { syncBtnQ.disabled = false; syncBtnQ.textContent = '🚀 SYNC Completo → Nuvio'; }
+    if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = '🚀 FULL SYNC'; }
+    if (syncBtnQ) { syncBtnQ.disabled = false; syncBtnQ.textContent = '🚀 FULL SYNC → Nuvio'; }
   }
 }
 
@@ -2102,18 +1818,18 @@ document.getElementById('syncBtn').addEventListener('click', doSync);
 // RESET WATCHED
 // ══════════════════════════════════════════════════════
 document.getElementById('resetWatchedBtn').addEventListener('click', async () => {
-  if (!nuvioAuth) { toast('Carica prima Nuvio', 'warning'); return; }
-  if (!confirm('⚠️ Azzererà watched + progress su Nuvio. Continuare?')) return;
+  if (!nuvioAuth) { toast('Load Nuvio first', 'warning'); return; }
+  if (!confirm('⚠️ This will clear watched badges + progress on Nuvio. Continue?')) return;
   const btn = document.getElementById('resetWatchedBtn'); btn.disabled=true; btn.textContent='⏳…';
-  showProgress(true,'Reset…',50);
+  showProgress(true,'Resetting…',50);
   try {
     const r = await fetch('/reset-watched',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password})});
     const data = await r.json(); showProgress(false);
     if (data.success) {
-      setStatus('resetStatus','ok',data.message||'✅ Reset avviato…');
-      toast('Reset watched avviato', 'success');
-      setTimeout(()=>{ setStatus('resetStatus','ok','✅ Reset completato.'); document.getElementById('loadNuvioBtn').click(); }, 5000);
-    } else throw new Error(data.error||'Reset fallito');
+      setStatus('resetStatus','ok',data.message||'✅ Reset started…');
+      toast('Reset watched started', 'success');
+      setTimeout(()=>{ setStatus('resetStatus','ok','✅ Reset completed.'); document.getElementById('loadNuvioBtn').click(); }, 5000);
+    } else throw new Error(data.error||'Reset failed');
   } catch(e) { showProgress(false); setStatus('resetStatus','err','❌ '+e.message); toast(e.message, 'error'); }
   finally { btn.disabled=false; btn.textContent='🗑️ Reset Watched'; }
 });
@@ -2122,18 +1838,18 @@ document.getElementById('resetWatchedBtn').addEventListener('click', async () =>
 // RESET LIBRARY
 // ══════════════════════════════════════════════════════
 document.getElementById('resetLibraryBtn').addEventListener('click', async () => {
-  if (!nuvioAuth) { toast('Carica prima Nuvio', 'warning'); return; }
-  if (!confirm('⚠️ ATTENZIONE: Eliminerà TUTTA la libreria Nuvio. Continuare?')) return;
+  if (!nuvioAuth) { toast('Load Nuvio first', 'warning'); return; }
+  if (!confirm('⚠️ WARNING: This will DELETE your entire Nuvio library. Continue?')) return;
   const btn = document.getElementById('resetLibraryBtn'); btn.disabled=true; btn.textContent='⏳…';
-  showProgress(true,'Reset library…',50);
+  showProgress(true,'Resetting library…',50);
   try {
     const r = await fetch('/reset-library',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password})});
     const data = await r.json(); showProgress(false);
     if (data.success) {
-      setStatus('resetStatus','ok',data.message||'✅ Library azzerata');
-      toast('Library azzerata', 'success');
+      setStatus('resetStatus','ok',data.message||'✅ Library cleared');
+      toast('Library cleared', 'success');
       setTimeout(()=>document.getElementById('loadNuvioBtn').click(), 1000);
-    } else throw new Error(data.error||'Reset fallito');
+    } else throw new Error(data.error||'Reset failed');
   } catch(e) { showProgress(false); setStatus('resetStatus','err','❌ '+e.message); toast(e.message, 'error'); }
   finally { btn.disabled=false; btn.textContent='🗑️ Reset Library'; }
 });
@@ -2142,57 +1858,46 @@ document.getElementById('resetLibraryBtn').addEventListener('click', async () =>
 // QUICK ACTIONS
 // ══════════════════════════════════════════════════════
 async function quickMarkWatched(cid, name, type) {
-  if (!nuvioAuth) return toast('Carica prima Nuvio', 'warning');
-  showProgress(true,'Aggiornamento badge…',60);
+  if (!nuvioAuth) return toast('Load Nuvio first', 'warning');
+  showProgress(true,'Updating badge…',60);
   try {
     const r = await fetch('/mark-watched',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,contentId:cid,contentType:type,title:name,watched:true})});
     const d = await r.json(); showProgress(false);
-    if (d.success) { toast(`"${name}" marcato come visto`, 'success'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
+    if (d.success) { toast(`"${name}" marked as watched`, 'success'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
     else throw new Error(d.error);
   } catch(e) { showProgress(false); toast(e.message, 'error'); }
 }
 async function quickUnmarkWatched(cid, name, type) {
-  if (!nuvioAuth) return toast('Carica prima Nuvio', 'warning');
-  showProgress(true,'Rimozione badge…',60);
+  if (!nuvioAuth) return toast('Load Nuvio first', 'warning');
+  showProgress(true,'Removing badge…',60);
   try {
     const r = await fetch('/mark-watched',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,contentId:cid,contentType:type,title:name,watched:false})});
     const d = await r.json(); showProgress(false);
-    if (d.success) { toast(`Badge rimosso per "${name}"`, 'info'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
+    if (d.success) { toast(`Badge removed for "${name}"`, 'info'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
     else throw new Error(d.error);
   } catch(e) { showProgress(false); toast(e.message, 'error'); }
 }
 async function quickAddToNuvio(cid, name, type) {
-  if (!nuvioAuth || !stremioData) return toast('Carica prima entrambi', 'warning');
+  if (!nuvioAuth || !stremioData) return toast('Load both libraries first', 'warning');
   const item = (stremioData.library||[]).find(i=>extractId(i._id)===cid)||(stremioData.libraryAll||[]).find(i=>extractId(i._id)===cid);
-  if (!item) return toast('Item non trovato in Stremio', 'error');
-  showProgress(true,'Aggiunta a Nuvio…',60);
+  if (!item) return toast('Item not found in Stremio', 'error');
+  showProgress(true,'Adding to Nuvio…',60);
   try {
     const r = await fetch('/add-to-nuvio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,item})});
     const d = await r.json(); showProgress(false);
-    if (d.success) { toast(`"${name}" aggiunto a Nuvio`, 'success'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
+    if (d.success) { toast(`"${name}" added to Nuvio`, 'success'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
     else throw new Error(d.error);
   } catch(e) { showProgress(false); toast(e.message, 'error'); }
 }
 async function quickRemoveFromNuvio(cid, type) {
   if (!nuvioAuth) return;
-  showProgress(true,'Rimozione da Nuvio…',60);
+  showProgress(true,'Removing from Nuvio…',60);
   try {
     const r = await fetch('/remove-from-nuvio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,contentId:cid,contentType:type})});
     const d = await r.json(); showProgress(false);
-    if (d.success) { toast('Rimosso da Nuvio', 'info'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
-    else throw new Error(d.error);
-  } catch(e) { showProgress(false); toast(e.message, 'error'); }
-}
-async function quickRemoveFromStremio(itemId, name) {
-  if (!stremioAuth) return toast('Carica prima Stremio', 'warning');
-  if (!confirm(`Rimuovere "${name}" da Stremio?`)) return;
-  showProgress(true,'Rimozione da Stremio…',60);
-  try {
-    const r = await fetch('/remove-from-stremio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stremioEmail:stremioAuth.email,stremioPassword:stremioAuth.password,itemId})});
-    const d = await r.json(); showProgress(false);
-    if (d.success) { toast('Rimosso da Stremio', 'info'); setTimeout(()=>document.getElementById('loadStremioBtn').click(),1200); }
+    if (d.success) { toast('Removed from Nuvio', 'info'); setTimeout(()=>document.getElementById('loadNuvioBtn').click(),1200); }
     else throw new Error(d.error);
   } catch(e) { showProgress(false); toast(e.message, 'error'); }
 }
@@ -2203,9 +1908,9 @@ async function quickRemoveFromStremio(itemId, name) {
 async function copyToClipboard(text, label) {
   try {
     await navigator.clipboard.writeText(text);
-    toast(`${label} copiato: ${text}`, 'info');
+    toast(`${label} copied: ${text}`, 'info');
   } catch {
-    toast('Copia non disponibile', 'warning');
+    toast('Copy not available', 'warning');
   }
 }
 
@@ -2218,7 +1923,7 @@ function openLogModal(title, lines) {
   m.innerHTML = `<div class="log-modal-box">
     <div class="log-header">
       <div class="log-title">${title}</div>
-      <button class="log-close" onclick="this.closest('.modal-overlay').remove()">✕ Chiudi</button>
+      <button class="log-close" onclick="this.closest('.modal-overlay').remove()">✕ Close</button>
     </div>
     <div class="log-body"><pre class="log-pre">${(lines||[]).join('\n')}</pre></div>
   </div>`;
@@ -2226,18 +1931,17 @@ function openLogModal(title, lines) {
   m.addEventListener('click', e => { if(e.target===m) m.remove(); });
 }
 
-// Legacy compat for openModal (used in episodes/serie-finite)
 function openModal(title, bodyHtml, extraClass) {
   const m = document.createElement('div');
   m.className = 'modal-overlay' + (extraClass ? ' ' + extraClass : '');
-  m.innerHTML = `<div class="log-modal-box"><div class="log-header"><div class="log-title">${title}</div><button class="log-close" onclick="this.closest('.modal-overlay').remove()">✕ Chiudi</button></div><div class="log-body">${bodyHtml}</div></div>`;
+  m.innerHTML = `<div class="log-modal-box"><div class="log-header"><div class="log-title">${title}</div><button class="log-close" onclick="this.closest('.modal-overlay').remove()">✕ Close</button></div><div class="log-body">${bodyHtml}</div></div>`;
   document.body.appendChild(m);
   m.addEventListener('click', e => { if(e.target===m) m.remove(); });
   return m;
 }
 
 // ══════════════════════════════════════════════════════
-// ITEM DETAIL MODAL (NUOVO)
+// ITEM DETAIL MODAL
 // ══════════════════════════════════════════════════════
 function openItemActions(cid, name, type, poster) {
   const isMovie = type === 'movie';
@@ -2251,80 +1955,71 @@ function openItemActions(cid, name, type, poster) {
   const isWatchedNu = nuvioWatchedSet.has(cid);
   const cwItem = stremioData?.inProgressItems?.find(i=>extractId(i.id||i._id||'')===cid);
 
-  // Rich metadata from Stremio raw item
   const year = stRawItem?.year || (stRawItem?.release_info ? String(stRawItem.release_info).slice(0,4) : '') || nuItem?.release_info || '';
   const genres = stRawItem?.genres?.join(', ') || nuItem?.genres?.join(', ') || '';
   const rating = stRawItem?.imdbRating || nuItem?.imdb_rating || '';
   const state = stRawItem?.state || {};
   const duration = state.duration ? Math.round(state.duration/60000) + ' min' : '';
-  const lastWatched = state.lastWatched ? new Date(Number(state.lastWatched) < 1e11 ? Number(state.lastWatched)*1000 : Number(state.lastWatched)).toLocaleDateString('it-IT') : '';
+  const lastWatched = state.lastWatched ? new Date(Number(state.lastWatched) < 1e11 ? Number(state.lastWatched)*1000 : Number(state.lastWatched)).toLocaleDateString('en-US') : '';
 
-  // Status badges
   let badges = '';
   if (inStremio) badges += `<span class="detail-badge db-st">🎬 Stremio</span>`;
   if (inNuvio)   badges += `<span class="detail-badge db-nu">☁️ Nuvio</span>`;
-  if (isWatchedSt) badges += `<span class="detail-badge db-w">✓ Visto St.</span>`;
-  if (isWatchedNu) badges += `<span class="detail-badge db-w">✓ Visto Nu.</span>`;
+  if (isWatchedSt) badges += `<span class="detail-badge db-w">✓ Watched St.</span>`;
+  if (isWatchedNu) badges += `<span class="detail-badge db-w">✓ Watched Nu.</span>`;
   if (cwItem)    badges += `<span class="detail-badge db-cw">⏯ ${cwItem.progressPct}% CW</span>`;
 
-  // Poster
   const posterHtml = poster
     ? `<img class="detail-poster-img" src="${poster}" onerror="this.outerHTML='<div class=detail-poster-fb>${isMovie?'🎬':'📺'}</div>'">`
     : `<div class="detail-poster-fb">${isMovie?'🎬':'📺'}</div>`;
 
-  // Info grid
   const infoItems = [
     {label:'ID', value: cid},
-    {label:'Tipo', value: isMovie ? '🎬 Film' : '📺 Serie'},
-    ...(year ? [{label:'Anno', value: year}] : []),
-    ...(genres ? [{label:'Generi', value: genres}] : []),
-    ...(rating ? [{label:'Rating IMDB', value: `⭐ ${rating}`}] : []),
-    ...(duration ? [{label:'Durata', value: duration}] : []),
-    ...(lastWatched ? [{label:'Ultimo accesso', value: lastWatched}] : []),
-    ...(cwItem ? [{label:'Progresso', value: cwItem.progressPct + '%'}] : []),
+    {label:'Type', value: isMovie ? '🎬 Movie' : '📺 Series'},
+    ...(year ? [{label:'Year', value: year}] : []),
+    ...(genres ? [{label:'Genres', value: genres}] : []),
+    ...(rating ? [{label:'IMDB Rating', value: `⭐ ${rating}`}] : []),
+    ...(duration ? [{label:'Runtime', value: duration}] : []),
+    ...(lastWatched ? [{label:'Last accessed', value: lastWatched}] : []),
+    ...(cwItem ? [{label:'Progress', value: cwItem.progressPct + '%'}] : []),
   ];
 
   const infoGridHtml = infoItems.length > 0
     ? `<div class="detail-info-grid">${infoItems.map(i=>`<div class="detail-info-item"><div class="di-label">${i.label}</div><div class="di-value">${i.value}</div></div>`).join('')}</div>`
     : '';
 
-  // Progress bar (CW)
   const progressHtml = cwItem
     ? `<div class="detail-progress">
-        <div class="dp-label">Progresso visione</div>
+        <div class="dp-label">Watch Progress</div>
         <div class="dp-bar"><div class="dp-fill" style="width:${cwItem.progressPct}%"></div></div>
-        <div class="dp-meta"><span>${cwItem.progressPct}% completato</span><span>${duration}</span></div>
+        <div class="dp-meta"><span>${cwItem.progressPct}% completed</span><span>${duration}</span></div>
        </div>` : '';
 
-  // Action groups
   const sn = name.replace(/'/g,"\\'").replace(/`/g,'\\`');
   const raw = rawItemId.replace(/'/g,"\\'");
 
   let nuActions = '';
   if (nuvioAuth) {
     if (!inNuvio) {
-      nuActions += `<button class="am-btn am-add" onclick="quickAddToNuvio('${cid}','${sn}','${type}');this.closest('.modal-overlay').remove()">➕ Aggiungi a Nuvio</button>`;
+      nuActions += `<button class="am-btn am-add" onclick="quickAddToNuvio('${cid}','${sn}','${type}');this.closest('.modal-overlay').remove()">➕ Add to Nuvio</button>`;
     } else {
-      nuActions += `<button class="am-btn am-rem" onclick="quickRemoveFromNuvio('${cid}','${type}');this.closest('.modal-overlay').remove()">✕ Rimuovi da Nuvio</button>`;
+      nuActions += `<button class="am-btn am-rem" onclick="quickRemoveFromNuvio('${cid}','${type}');this.closest('.modal-overlay').remove()">✕ Remove from Nuvio</button>`;
     }
     if (!isWatchedNu) {
-      nuActions += `<button class="am-btn am-watch" onclick="quickMarkWatched('${cid}','${sn}','${type}');this.closest('.modal-overlay').remove()">✓ Segna visto in Nuvio</button>`;
+      nuActions += `<button class="am-btn am-watch" onclick="quickMarkWatched('${cid}','${sn}','${type}');this.closest('.modal-overlay').remove()">✓ Mark watched in Nuvio</button>`;
     } else {
-      nuActions += `<button class="am-btn am-watch" onclick="quickUnmarkWatched('${cid}','${sn}','${type}');this.closest('.modal-overlay').remove()">✗ Rimuovi badge visto</button>`;
+      nuActions += `<button class="am-btn am-watch" onclick="quickUnmarkWatched('${cid}','${sn}','${type}');this.closest('.modal-overlay').remove()">✗ Remove watched badge</button>`;
     }
   }
 
   let stActions = '';
   if (stremioAuth && inStremio && rawItemId) {
-    stActions += `<button class="am-btn am-st-rem" onclick="quickRemoveFromStremio('${raw}','${sn}');this.closest('.modal-overlay').remove()">✕ Rimuovi da Stremio</button>`;
-  }
-  if (stremioAuth && !inStremio && inNuvio) {
-    // Item è in Nuvio ma non in Stremio — non possiamo aggiungerlo (non abbiamo i dati)
+    stActions += `<button class="am-btn am-st-rem" onclick="quickRemoveFromStremio('${raw}','${sn}');this.closest('.modal-overlay').remove()">✕ Remove from Stremio</button>`;
   }
 
-  let utilActions = `<button class="am-btn am-copy" onclick="copyToClipboard('${cid}','ID IMDB')">📋 Copia ID</button>`;
+  let utilActions = `<button class="am-btn am-copy" onclick="copyToClipboard('${cid}','IMDB ID')">📋 Copy ID</button>`;
   if (cid.startsWith('tt')) {
-    utilActions += `<button class="am-btn am-imdb" onclick="window.open('https://www.imdb.com/title/${cid}/','_blank')">🔗 Apri su IMDB</button>`;
+    utilActions += `<button class="am-btn am-imdb" onclick="window.open('https://www.imdb.com/title/${cid}/','_blank')">🔗 Open on IMDB</button>`;
   }
 
   const hasNuSection = nuActions.length > 0;
@@ -2335,8 +2030,8 @@ function openItemActions(cid, name, type, poster) {
       <div class="action-groups">
         ${hasNuSection ? `<div class="action-group"><div class="action-group-label">☁️ Nuvio</div><div class="action-grid">${nuActions}</div></div>` : ''}
         ${hasStSection ? `<div class="action-group"><div class="action-group-label">🎬 Stremio</div><div class="action-grid">${stActions}</div></div>` : ''}
-        <div class="action-group"><div class="action-group-label">Utilità</div><div class="action-grid">${utilActions}</div></div>
-        ${(!nuvioAuth && !stremioAuth) ? '<p style="font-size:12px;color:var(--txt2);padding:8px 0">Carica le librerie per vedere le azioni disponibili.</p>' : ''}
+        <div class="action-group"><div class="action-group-label">Utilities</div><div class="action-grid">${utilActions}</div></div>
+        ${(!nuvioAuth && !stremioAuth) ? '<p style="font-size:12px;color:var(--txt2);padding:8px 0">Load libraries to see available actions.</p>' : ''}
       </div>
     </div>`;
 
@@ -2345,13 +2040,13 @@ function openItemActions(cid, name, type, poster) {
   m.style.position = 'fixed';
   m.innerHTML = `
     <div class="modal-box" style="position:relative">
-      <button class="detail-close-btn" onclick="this.closest('.modal-overlay').remove()">✕ Chiudi</button>
+      <button class="detail-close-btn" onclick="this.closest('.modal-overlay').remove()">✕ Close</button>
       <div class="detail-header">
         <div class="detail-poster">${posterHtml}</div>
         <div class="detail-meta">
           <div class="detail-title">${name}</div>
           <div class="detail-sub">
-            ${isMovie ? '🎬 Film' : '📺 Serie TV'}
+            ${isMovie ? '🎬 Movie' : '📺 TV Series'}
             ${year ? `<span>·</span><span>${year}</span>` : ''}
             ${rating ? `<span>·</span><span>⭐ ${rating}</span>` : ''}
           </div>
@@ -2367,39 +2062,20 @@ function openItemActions(cid, name, type, poster) {
 }
 
 // ══════════════════════════════════════════════════════
-// EPISODI SYNC
+// ADDON MANAGEMENT (full, unchanged)
 // ══════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════
-// SERIE FINITE
-// ══════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════════════
-// ADDON MANAGEMENT
-// ══════════════════════════════════════════════════════════════
-
-
-// Render una card addon
-// ══════════════════════════════════════════════════════════════
-// ADDON MANAGEMENT — mobile-first, drag&drop, edit, aggiungi
-// ══════════════════════════════════════════════════════════════
-
 let stremioAddons = [];
 let nuvioAddons   = [];
 let dragSrcIdx    = null;
-
-// ── Touch drag globale ───────────────────────────────────────
-let touchDragEl    = null;   // elemento clone che segue il dito
-let touchDragIdx   = null;   // indice sorgente
-let touchDragOrig  = null;   // elemento originale
-let touchLastOver  = null;   // ultimo elemento su cui si è passati
+let touchDragEl    = null;
+let touchDragIdx   = null;
+let touchDragOrig  = null;
+let touchLastOver  = null;
 
 function touchDragStart(e, origDiv, idx) {
   e.preventDefault();
   touchDragIdx  = idx;
   touchDragOrig = origDiv;
-
-  // Clone visivo
   const rect = origDiv.getBoundingClientRect();
   touchDragEl = origDiv.cloneNode(true);
   touchDragEl.style.cssText = `
@@ -2422,12 +2098,9 @@ function touchDragStart(e, origDiv, idx) {
     const t = ev.touches[0];
     touchDragEl.style.left = (t.clientX - offsetX) + 'px';
     touchDragEl.style.top  = (t.clientY - offsetY) + 'px';
-
-    // Trova elemento sotto il dito
     touchDragEl.style.display = 'none';
     const elBelow = document.elementFromPoint(t.clientX, t.clientY);
     touchDragEl.style.display = '';
-
     const cardBelow = elBelow?.closest('.addon-card[data-idx]');
     if (touchLastOver && touchLastOver !== cardBelow) {
       touchLastOver.classList.remove('drag-over');
@@ -2439,17 +2112,12 @@ function touchDragStart(e, origDiv, idx) {
       touchLastOver = null;
     }
   }
-
   function onEnd(ev) {
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend', onEnd);
-
-    // Rimuovi clone e stili
     touchDragEl?.remove(); touchDragEl = null;
     origDiv.classList.remove('dragging');
     if (touchLastOver) touchLastOver.classList.remove('drag-over');
-
-    // Esegui lo swap se c'è un target valido
     if (touchLastOver) {
       const targetIdx = parseInt(touchLastOver.dataset.idx);
       if (!isNaN(targetIdx) && targetIdx !== touchDragIdx) {
@@ -2462,7 +2130,6 @@ function touchDragStart(e, origDiv, idx) {
     }
     touchDragIdx = null; touchDragOrig = null; touchLastOver = null;
   }
-
   document.addEventListener('touchmove', onMove, { passive: false });
   document.addEventListener('touchend', onEnd);
 }
@@ -2472,7 +2139,6 @@ function normalizeAddonUrl(url) {
     .replace(/\/manifest\.json\/?$/,'').replace(/\/$/,'');
 }
 
-// ── Card Nuvio: cliccabile, draggable, cancellabile ──────────
 function makeNuvioCard(addon, idx) {
   const div = document.createElement('div');
   div.className = 'addon-card';
@@ -2486,26 +2152,22 @@ function makeNuvioCard(addon, idx) {
   const types = (addon.types||[]).slice(0,3).map(t=>`<span class="addon-type-badge">${t}</span>`).join('');
 
   div.innerHTML = `
-    <span class="drag-handle" title="Tieni premuto per spostare">⠿</span>
+    <span class="drag-handle" title="Press and hold to drag">⠿</span>
     ${logo}
     <div class="addon-info">
       <div class="addon-name"></div>
       <div class="addon-sub"></div>
       ${types?`<div class="addon-types">${types}</div>`:''}
     </div>
-    <button class="addon-del-btn" title="Rimuovi">🗑</button>
+    <button class="addon-del-btn" title="Remove">🗑</button>
   `;
-
-  // Testo via textContent per sicurezza
   div.querySelector('.addon-name').textContent = addon.name || urlShort;
   div.querySelector('.addon-sub').textContent  = urlShort;
 
-  // Click su tutta la card → edit (tranne sul handle e del btn)
   div.addEventListener('click', e => {
     if (e.target.closest('.drag-handle') || e.target.closest('.addon-del-btn')) return;
     openAddonEdit(idx, 'nuvio');
   });
-
   div.querySelector('.addon-del-btn').addEventListener('click', e => {
     e.stopPropagation();
     nuvioAddons.splice(idx, 1);
@@ -2514,7 +2176,6 @@ function makeNuvioCard(addon, idx) {
     updateAddonPushInfo();
   });
 
-  // ── Drag & drop (desktop) ──
   div.addEventListener('dragstart', e => {
     dragSrcIdx = idx;
     setTimeout(() => div.classList.add('dragging'), 0);
@@ -2532,19 +2193,15 @@ function makeNuvioCard(addon, idx) {
     dragSrcIdx = null;
     renderNuvioList(); updateAddonPushInfo();
   });
-
-  // ── Touch drag (mobile) ──
   const handle = div.querySelector('.drag-handle');
   if (handle) {
     handle.addEventListener('touchstart', e => {
       touchDragStart(e, div, idx);
     }, { passive: false });
   }
-
   return div;
 }
 
-// ── Card Stremio: cliccabile per editare URL prima di pushare ─
 function makeStremioCard(addon, inNuvio) {
   const div = document.createElement('div');
   div.className = 'addon-card';
@@ -2569,25 +2226,20 @@ function makeStremioCard(addon, inNuvio) {
     Object.assign(document.createTextNode(addon.name || urlShort))
   );
   div.querySelector('.addon-sub').textContent = urlShort;
-
-  // Click → edit URL/logo anche per Stremio
   div.addEventListener('click', () => openAddonEdit(
     stremioAddons.indexOf(addon), 'stremio'
   ));
-
   return div;
 }
 
-// ── Render ────────────────────────────────────────────────────
 function renderNuvioList() {
   const list = document.getElementById('nuvioAddonsList');
   document.getElementById('addonCountNu').textContent = `(${nuvioAddons.length})`;
   list.innerHTML = '';
   nuvioAddons.forEach((a, i) => list.appendChild(makeNuvioCard(a, i)));
-  // Riga aggiungi
   const addRow = document.createElement('div');
   addRow.className = 'addon-add-row';
-  addRow.textContent = '+ Aggiungi addon manualmente';
+  addRow.textContent = '+ Add addon manually';
   addRow.addEventListener('click', openAddAddonModal);
   list.appendChild(addRow);
 }
@@ -2596,10 +2248,9 @@ function renderAddonLists() {
   const stList = document.getElementById('stremioAddonsList');
   document.getElementById('addonCountSt').textContent = `(${stremioAddons.length})`;
   stList.innerHTML = '';
-
   const nuUrls = new Set(nuvioAddons.map(a => normalizeAddonUrl(a.manifestUrl)));
   if (!stremioAddons.length) {
-    stList.innerHTML = '<div class="items-empty" style="padding:14px 0;font-size:12px">Nessun addon Stremio</div>';
+    stList.innerHTML = '<div class="items-empty" style="padding:14px 0;font-size:12px">No Stremio addons</div>';
   } else {
     stremioAddons.forEach(a => stList.appendChild(makeStremioCard(a, nuUrls.has(normalizeAddonUrl(a.manifestUrl)))));
   }
@@ -2617,16 +2268,15 @@ function updateAddonPushInfo() {
   const missing = stremioAddons.filter(a => !nuUrls.has(normalizeAddonUrl(a.manifestUrl)));
 
   if (!stremioAddons.length && !nuvioAddons.length) {
-    info.textContent = 'Premi Carica per vedere gli addon';
+    info.textContent = 'Press Load to see addons';
     btn.disabled = true; return;
   }
   info.innerHTML = missing.length
-    ? `<b>${missing.length}</b> addon Stremio non su Nuvio`
-    : `✅ Tutto sincronizzato · <b>${nuvioAddons.length}</b> addon su Nuvio`;
+    ? `<b>${missing.length}</b> Stremio addon(s) not in Nuvio`
+    : `✅ All synced · <b>${nuvioAddons.length}</b> addon(s) on Nuvio`;
   btn.disabled = !nuvioAuth;
 }
 
-// ── Modal edit (Nuvio e Stremio) ──────────────────────────────
 function openAddonEdit(idx, source) {
   const list   = source === 'nuvio' ? nuvioAddons : stremioAddons;
   const addon  = list[idx];
@@ -2638,19 +2288,19 @@ function openAddonEdit(idx, source) {
   m.innerHTML = `
     <div class="addon-edit-modal-box">
       <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:18px">
-        ✏️ ${source === 'nuvio' ? 'Modifica Addon Nuvio' : 'Modifica prima del push'}
+        ✏️ ${source === 'nuvio' ? 'Edit Nuvio Addon' : 'Edit before push'}
       </div>
 
       <div class="addon-edit-field">
-        <div class="addon-edit-label">Nome</div>
-        <input class="addon-edit-inp" id="aeNameInp" placeholder="Nome addon">
+        <div class="addon-edit-label">Name</div>
+        <input class="addon-edit-inp" id="aeNameInp" placeholder="Addon name">
       </div>
       <div class="addon-edit-field">
-        <div class="addon-edit-label">URL Manifest *</div>
+        <div class="addon-edit-label">Manifest URL *</div>
         <input class="addon-edit-inp" id="aeUrlInp" placeholder="https://addon.example.com/manifest.json">
       </div>
       <div class="addon-edit-field">
-        <div class="addon-edit-label">URL Logo</div>
+        <div class="addon-edit-label">Logo URL</div>
         <div style="display:flex;align-items:center;gap:0">
           <input class="addon-edit-inp" id="aeLogoInp" placeholder="https://example.com/logo.png"
             style="flex:1"
@@ -2661,10 +2311,10 @@ function openAddonEdit(idx, source) {
 
       <div style="display:flex;gap:10px;margin-top:6px">
         <button id="aeCancel" style="flex:1;padding:12px;border-radius:var(--r2);background:var(--bg3);border:1px solid var(--brd);color:var(--txt2);font-size:14px;cursor:pointer">
-          Annulla
+          Cancel
         </button>
         <button id="aeSave" style="flex:2;padding:12px;border-radius:var(--r2);background:rgba(59,158,255,.15);border:1px solid rgba(59,158,255,.4);color:var(--blue);font-size:14px;font-weight:700;cursor:pointer">
-          💾 Salva
+          💾 Save
         </button>
       </div>
     </div>
@@ -2682,38 +2332,37 @@ function openAddonEdit(idx, source) {
   document.getElementById('aeCancel').addEventListener('click', () => m.remove());
   document.getElementById('aeSave').addEventListener('click', () => {
     let url = document.getElementById('aeUrlInp').value.trim();
-    if (!url) { toast('URL manifest richiesto', 'warning'); return; }
+    if (!url) { toast('Manifest URL required', 'warning'); return; }
     if (!url.endsWith('manifest.json')) url = url.replace(/\/?$/, '/manifest.json');
     const name = document.getElementById('aeNameInp').value.trim() || list[idx].name;
     const logo = document.getElementById('aeLogoInp').value.trim() || null;
     list[idx] = { ...list[idx], name, manifestUrl: url, logo };
     m.remove();
     renderAddonLists();
-    toast('Aggiornato — premi Sincronizza per salvare su Nuvio', 'info');
+    toast('Updated — press Sync to save to Nuvio', 'info');
   });
   m.addEventListener('click', e => { if (e.target === m) m.remove(); });
 }
 
-// ── Modal aggiungi addon ──────────────────────────────────────
 function openAddAddonModal() {
   const m = document.createElement('div');
   m.className = 'modal-overlay';
   m.id = 'addAddonModal';
   m.innerHTML = `
     <div class="addon-edit-modal-box">
-      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:18px">➕ Aggiungi Addon</div>
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:18px">➕ Add Addon</div>
 
       <div class="addon-edit-field">
-        <div class="addon-edit-label">URL Manifest *</div>
+        <div class="addon-edit-label">Manifest URL *</div>
         <input class="addon-edit-inp" id="aaUrlInp" placeholder="https://addon.example.com/manifest.json">
-        <div style="font-size:11px;color:var(--txt3);margin-top:5px">Nome e logo vengono letti automaticamente dal manifest</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:5px">Name and logo are auto‑fetched from manifest</div>
       </div>
       <div class="addon-edit-field">
-        <div class="addon-edit-label">Nome (opzionale)</div>
-        <input class="addon-edit-inp" id="aaNameInp" placeholder="Auto dal manifest">
+        <div class="addon-edit-label">Name (optional)</div>
+        <input class="addon-edit-inp" id="aaNameInp" placeholder="Auto from manifest">
       </div>
       <div class="addon-edit-field">
-        <div class="addon-edit-label">URL Logo (opzionale)</div>
+        <div class="addon-edit-label">Logo URL (optional)</div>
         <div style="display:flex;align-items:center">
           <input class="addon-edit-inp" id="aaLogoInp" placeholder="https://example.com/logo.png"
             style="flex:1"
@@ -2724,10 +2373,10 @@ function openAddAddonModal() {
 
       <div style="display:flex;gap:10px;margin-top:6px">
         <button id="aaCancel" style="flex:1;padding:12px;border-radius:var(--r2);background:var(--bg3);border:1px solid var(--brd);color:var(--txt2);font-size:14px;cursor:pointer">
-          Annulla
+          Cancel
         </button>
         <button id="aaAdd" style="flex:2;padding:12px;border-radius:var(--r2);background:rgba(59,158,255,.15);border:1px solid rgba(59,158,255,.4);color:var(--blue);font-size:14px;font-weight:700;cursor:pointer">
-          ➕ Aggiungi
+          ➕ Add
         </button>
       </div>
     </div>
@@ -2737,26 +2386,21 @@ function openAddAddonModal() {
   document.getElementById('aaCancel').addEventListener('click', () => m.remove());
   document.getElementById('aaAdd').addEventListener('click', () => {
     let url = document.getElementById('aaUrlInp').value.trim();
-    if (!url) { toast('URL manifest richiesto', 'warning'); return; }
+    if (!url) { toast('Manifest URL required', 'warning'); return; }
     if (!url.endsWith('manifest.json')) url = url.replace(/\/?$/, '/manifest.json');
     const name = document.getElementById('aaNameInp').value.trim() || url.replace(/^https?:\/\//,'').split('/')[0];
     const logo = document.getElementById('aaLogoInp').value.trim() || null;
     if (nuvioAddons.some(a => normalizeAddonUrl(a.manifestUrl) === normalizeAddonUrl(url))) {
-      toast('Addon già presente in Nuvio', 'warning'); return;
+      toast('Addon already present in Nuvio', 'warning'); return;
     }
     nuvioAddons.push({ id:'', name, manifestUrl: url, logo, types:[], sort_order: nuvioAddons.length });
     m.remove();
     renderNuvioList(); updateAddonPushInfo();
-    toast(`"${name}" aggiunto — premi Sincronizza`, 'success');
+    toast(`"${name}" added — press Sync`, 'success');
   });
   m.addEventListener('click', e => { if (e.target === m) m.remove(); });
   setTimeout(() => document.getElementById('aaUrlInp')?.focus(), 50);
 }
-
-// ── Bottone Aggiungi ──────────────────────────────────────────
-// addAddonBtn init → vedi DOMContentLoaded
-
-// ── Carica addon ──────────────────────────────────────────────
 
 function openAddonOverlay() {
   document.getElementById('addonOverlay').classList.add('open');
@@ -2773,9 +2417,8 @@ function closeAddonSection() {
   if (loadBtn) {
     loadBtn.style.display = 'inline-flex';
     loadBtn.disabled = false;
-    loadBtn.textContent = '📥 Carica Addon';
+    loadBtn.textContent = '📥 Load Addons';
   }
-  // Nascondi sync btn
   const syncBtn = document.getElementById('pushAddonsBtn');
   if (syncBtn) syncBtn.style.display = 'none';
 }
@@ -2785,94 +2428,15 @@ function resetAddonDrawer() {
   stremioAddons = []; nuvioAddons = [];
 }
 
-// Handle: tap apre, swipe giù chiude — init dopo DOM pronto
-document.addEventListener('DOMContentLoaded', () => {
-  // ── X chiudi addon ──
-  const addonCloseBtn = document.getElementById('addonCloseBtn');
-  if (addonCloseBtn) addonCloseBtn.addEventListener('click', closeAddonSection);
-
-  // ── Aggiungi addon ──
-  const addAddonBtnEl = document.getElementById('addAddonBtn');
-  if (addAddonBtnEl) addAddonBtnEl.addEventListener('click', openAddAddonModal);
-
-  // ── Refresh ──
-  const refreshBtn = document.getElementById('refreshAllBtn');
-  if (refreshBtn) refreshBtn.addEventListener('click', refreshAll);
-
-  // ── Carica Addon ──
-  const loadAddonsEl = document.getElementById('loadAddonsBtn');
-  if (loadAddonsEl) loadAddonsEl.addEventListener('click', async () => {
-    if (!stremioAuth || !nuvioAuth) {
-      toast('Carica prima Stremio e Nuvio dalla sidebar', 'warning'); return;
-    }
-    // Se già caricati, riapri solo l'overlay
-    if (stremioAddons.length || nuvioAddons.length) {
-      openAddonOverlay(); return;
-    }
-    loadAddonsEl.disabled = true; loadAddonsEl.textContent = '⏳';
-    try {
-      const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
-      const [stRes, nuRes] = await Promise.all([
-        fetch('/get-stremio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({email:stremioAuth.email,password:stremioAuth.password})}).then(safe),
-        fetch('/get-nuvio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password})}).then(safe),
-      ]);
-      if (!stRes.success) throw new Error('Stremio: '+stRes.error);
-      if (!nuRes.success) throw new Error('Nuvio: '+nuRes.error);
-      stremioAddons = stRes.addons||[];
-      nuvioAddons   = nuRes.addons||[];
-      renderAddonLists();
-      openAddonOverlay();
-      loadAddonsEl.style.display = 'none';
-      const syncEl = document.getElementById('pushAddonsBtn');
-      if (syncEl) { syncEl.style.display = 'flex'; syncEl.disabled = !nuvioAuth; }
-      toast(`${stremioAddons.length} Stremio · ${nuvioAddons.length} Nuvio`, 'success', 'Addon caricati');
-    } catch(e) {
-      toast(e.message, 'error', 'Errore caricamento addon');
-    } finally {
-      loadAddonsEl.disabled = false; loadAddonsEl.textContent = '📥 Carica Addon';
-    }
-  });
-
-  // ── Sync Addons ──
-  const syncEl = document.getElementById('pushAddonsBtn');
-  if (syncEl) syncEl.addEventListener('click', async () => {
-    if (!nuvioAuth) { toast('Carica prima Nuvio', 'warning'); return; }
-    if (!confirm(`☁️ SINCRONIZZA ADDON\n\nSostituirà la lista addon su Nuvio.\n\nContinuare?`)) return;
-    syncEl.disabled = true; syncEl.textContent = '⏳ Sync…';
-    try {
-      const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
-      const data = await fetch('/push-addons-to-nuvio',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,addons:nuvioAddons})}).then(safe);
-      if (!data.success) throw new Error(data.error);
-      toast(`${data.pushed} addon sincronizzati!`, 'success', 'Addon sync OK');
-      const lBtn = document.getElementById('loadAddonsBtn');
-      if (lBtn) { syncEl.style.display='none'; lBtn.style.display='inline-flex'; lBtn.click(); }
-    } catch(e) {
-      toast(e.message, 'error', 'Sync fallito');
-    } finally {
-      syncEl.disabled = false; syncEl.textContent = '⏫️ Sync Addons';
-    }
-  });
-});
-
-document.addEventListener('click', () => {
-  document.getElementById('langDropdown').style.display = 'none';
-});
-
-// Applica lingua salvata al caricamento
-// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 // AUTO-LOGIN & REFRESH
-// ══════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════
 function showRefreshBtn() {
   if (stremioAuth && nuvioAuth) {
     const btn = document.getElementById('refreshAllBtn');
     if (btn) btn.style.display = 'flex';
   }
 }
-
 async function refreshAll() {
   const btn = document.getElementById('refreshAllBtn');
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
@@ -2882,60 +2446,20 @@ async function refreshAll() {
       loadNuvio(nuvioAuth.email, nuvioAuth.password),
     ]);
     updateAll();
-    toast('Liste aggiornate!', 'success');
+    toast('Libraries refreshed!', 'success');
   } catch(e) {
-    toast(e.message, 'error', 'Errore aggiornamento');
+    toast(e.message, 'error', 'Refresh error');
   } finally {
     if (btn) { btn.textContent = '🔁'; btn.disabled = false; }
   }
 }
 
-// Auto-login al caricamento pagina
-(async function autoLogin() {
-  const stEmail = localStorage.getItem('snt_st_email');
-  const stPwd   = localStorage.getItem('snt_st_pwd');
-  const stRem   = localStorage.getItem('snt_st_remember') === '1';
-  const nuEmail = localStorage.getItem('snt_nu_email');
-  const nuPwd   = localStorage.getItem('snt_nu_pwd');
-  const nuRem   = localStorage.getItem('snt_nu_remember') === '1';
-
-  if (stEmail && stRem) {
-    document.getElementById('stremioEmail').value    = stEmail;
-    document.getElementById('stremioPassword').value = stPwd;
-    document.getElementById('rememberStremio').checked = true;
-  }
-  if (nuEmail && nuRem) {
-    document.getElementById('nuvioEmail').value    = nuEmail;
-    document.getElementById('nuvioPassword').value = nuPwd;
-    document.getElementById('rememberNuvio').checked = true;
-  }
-
-  if (stEmail && stPwd && stRem && nuEmail && nuPwd && nuRem) {
-    toast('Accesso automatico in corso…', 'info');
-    const [stOk, nuOk] = await Promise.all([
-      loadStremio(stEmail, stPwd),
-      loadNuvio(nuEmail, nuPwd),
-    ]);
-    if (stOk && nuOk) {
-      updateAll();
-      toast('Bentornato! Liste caricate automaticamente.', 'success');
-    }
-  } else if (stEmail && stPwd && stRem) {
-    const ok = await loadStremio(stEmail, stPwd);
-    if (ok) updateAll();
-  } else if (nuEmail && nuPwd && nuRem) {
-    const ok = await loadNuvio(nuEmail, nuPwd);
-    if (ok) updateAll();
-  }
-})();
-
-// ══════════════════════════════════════════════════════════════
-// i18n — MULTILANGUAGE
-// ══════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════
+// i18n — MULTILANGUAGE (English default, includes Italian)
+// ══════════════════════════════════════════════════════
 const LANGS = {
   it: { flag:'🇮🇹', label:'Italiano', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ In Corso', tabRemoved:'🗑️ Eliminati', filterNotNuvio:'⚠️ Non in Nuvio', filterNotStremio:'⚠️ Non in Stremio', libraryStremio:'🎬 Library Stremio', libraryNuvio:'☁️ Library Nuvio', watched:'Visti', inProgress:'In Corso', refresh:'Aggiorna', search:'Cerca titolo…', addonTitle:'🔌 Addon', addonLoad:'📥 Carica Addon', addonPush:'⏫️ Sync Addons', addonAdd:'+ Aggiungi', loadStremio:'Carica Library Stremio', loadNuvio:'Carica Library Nuvio', rememberCreds:'Ricorda credenziali' },
-  en: { flag:'🇬🇧', label:'English', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Watching', tabRemoved:'🗑️ Removed', filterNotNuvio:'⚠️ Not in Nuvio', filterNotStremio:'⚠️ Not in Stremio', libraryStremio:'🎬 Stremio Library', libraryNuvio:'☁️ Nuvio Library', watched:'Watched', inProgress:'Watching', refresh:'Refresh', search:'Search title…', addonTitle:'🔌 Addons', addonLoad:'📥 Load Addons', addonPush:'⏫️ Sync Addons', addonAdd:'+ Add', loadStremio:'Load Stremio Library', loadNuvio:'Load Nuvio Library', rememberCreds:'Remember credentials' },
+  en: { flag:'🇬🇧', label:'English', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Continue Watching', tabRemoved:'🗑️ Removed', filterNotNuvio:'⚠️ Not in Nuvio', filterNotStremio:'⚠️ Not in Stremio', libraryStremio:'🎬 Stremio Library', libraryNuvio:'☁️ Nuvio Library', watched:'Watched', inProgress:'Continue Watching', refresh:'Refresh', search:'Search title…', addonTitle:'🔌 Addons', addonLoad:'📥 Load Addons', addonPush:'⏫️ Sync Addons', addonAdd:'+ Add', loadStremio:'Load Stremio Library', loadNuvio:'Load Nuvio Library', rememberCreds:'Remember credentials' },
   es: { flag:'🇪🇸', label:'Español', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ En Curso', tabRemoved:'🗑️ Eliminados', filterNotNuvio:'⚠️ No en Nuvio', filterNotStremio:'⚠️ No en Stremio', libraryStremio:'🎬 Biblioteca Stremio', libraryNuvio:'☁️ Biblioteca Nuvio', watched:'Vistos', inProgress:'En Curso', refresh:'Actualizar', search:'Buscar título…', addonTitle:'🔌 Addons', addonLoad:'📥 Cargar Addons', addonPush:'⏫️ Sincronizar', addonAdd:'+ Añadir', loadStremio:'Cargar Biblioteca Stremio', loadNuvio:'Cargar Biblioteca Nuvio', rememberCreds:'Recordar credenciales' },
   fr: { flag:'🇫🇷', label:'Français', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ En cours', tabRemoved:'🗑️ Supprimés', filterNotNuvio:'⚠️ Pas dans Nuvio', filterNotStremio:'⚠️ Pas dans Stremio', libraryStremio:'🎬 Bibliothèque Stremio', libraryNuvio:'☁️ Bibliothèque Nuvio', watched:'Vus', inProgress:'En cours', refresh:'Actualiser', search:'Rechercher…', addonTitle:'🔌 Addons', addonLoad:'📥 Charger', addonPush:'⏫️ Synchroniser', addonAdd:'+ Ajouter', loadStremio:'Charger Stremio', loadNuvio:'Charger Nuvio', rememberCreds:'Mémoriser les identifiants' },
   de: { flag:'🇩🇪', label:'Deutsch', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Läuft', tabRemoved:'🗑️ Gelöscht', filterNotNuvio:'⚠️ Nicht in Nuvio', filterNotStremio:'⚠️ Nicht in Stremio', libraryStremio:'🎬 Stremio-Bibliothek', libraryNuvio:'☁️ Nuvio-Bibliothek', watched:'Gesehen', inProgress:'Läuft', refresh:'Aktualisieren', search:'Titel suchen…', addonTitle:'🔌 Addons', addonLoad:'📥 Laden', addonPush:'⏫️ Synchronisieren', addonAdd:'+ Hinzufügen', loadStremio:'Stremio laden', loadNuvio:'Nuvio laden', rememberCreds:'Anmeldedaten merken' },
@@ -2947,7 +2471,7 @@ const LANGS = {
   ru: { flag:'🇷🇺', label:'Русский', tabStremio:'🎬 Stremio', tabNuvio:'☁️ Nuvio', tabCW:'⏯ Смотрю', tabRemoved:'🗑️ Удалённые', filterNotNuvio:'⚠️ Нет в Nuvio', filterNotStremio:'⚠️ Нет в Stremio', libraryStremio:'🎬 Библиотека Stremio', libraryNuvio:'☁️ Библиотека Nuvio', watched:'Просмотрено', inProgress:'Смотрю', refresh:'Обновить', search:'Поиск…', addonTitle:'🔌 Аддоны', addonLoad:'📥 Загрузить', addonPush:'⏫️ Синхр.', addonAdd:'+ Добавить', loadStremio:'Загрузить Stremio', loadNuvio:'Загрузить Nuvio', rememberCreds:'Запомнить данные' },
 };
 
-let currentLang = localStorage.getItem('snt_lang') || 'it';
+let currentLang = localStorage.getItem('snt_lang') || 'en'; // default English
 
 function applyLang(code) {
   const t = LANGS[code];
@@ -2958,7 +2482,6 @@ function applyLang(code) {
   if (lbl) lbl.textContent = code.toUpperCase();
   document.documentElement.dir = code === 'ar' ? 'rtl' : 'ltr';
 
-  // Tabs
   ['stremio','nuvio','cw','removed'].forEach(tab => {
     const btn = document.querySelector(`[data-tab="${tab}"]`);
     if (!btn) return;
@@ -2968,7 +2491,6 @@ function applyLang(code) {
     btn.innerHTML = txt + ' ' + countHtml;
   });
 
-  // Filtri
   document.querySelectorAll('[data-filter-st="notnuvio"]').forEach(el => {
     const span = el.querySelector('span'); el.innerHTML = t.filterNotNuvio + (span?' '+span.outerHTML:'');
   });
@@ -2976,34 +2498,28 @@ function applyLang(code) {
     const span = el.querySelector('span'); el.innerHTML = t.filterNotStremio + (span?' '+span.outerHTML:'');
   });
 
-  // Bottoni carica
   const stBtn = document.getElementById('loadStremioBtn');
   if (stBtn) stBtn.innerHTML = '<span>📥</span> ' + t.loadStremio;
   const nuBtn = document.getElementById('loadNuvioBtn');
   if (nuBtn) nuBtn.innerHTML = '<span>☁️</span> ' + t.loadNuvio;
 
-  // Ricorda credenziali
   document.querySelectorAll('label:has(#rememberStremio), label:has(#rememberNuvio)').forEach(el => {
     const inp = el.querySelector('input');
     if (inp) { el.textContent = ''; el.appendChild(inp); el.append(' ' + t.rememberCreds); }
   });
 
-  // Refresh
   const refBtn = document.getElementById('refreshAllBtn');
   if (refBtn && !refBtn.disabled) refBtn.textContent = '🔁';
 
-  // Search
   const srch = document.getElementById('searchInput');
   if (srch) srch.placeholder = t.search;
 
-  // Stat labels
   const statMap = { statStremio:'Stremio', statNuvio:'Nuvio', statWatched:t.watched, statCW:t.inProgress };
   Object.entries(statMap).forEach(([id, txt]) => {
     const el = document.getElementById(id)?.querySelector('.stat-label');
     if (el) el.textContent = txt;
   });
 
-  // Addon
   const addonTitleEl = document.getElementById('addonTitle');
   if (addonTitleEl) addonTitleEl.textContent = t.addonTitle;
   const loadAddonsBtn = document.getElementById('loadAddonsBtn');
@@ -3013,7 +2529,6 @@ function applyLang(code) {
   const addAddonBtn = document.getElementById('addAddonBtn');
   if (addAddonBtn) addAddonBtn.textContent = t.addonAdd;
 
-  // Header librerie
   const stH = document.getElementById('stLibHeader');
   if (stH) stH.textContent = t.libraryStremio;
   const nuH = document.getElementById('nuLibHeader');
@@ -3049,19 +2564,133 @@ if (langBtn) langBtn.addEventListener('click', e => {
 
 applyLang(currentLang);
 
+// ══════════════════════════════════════════════════════
+// EVENT LISTENERS (Addon, Refresh, etc.)
+// ══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  const addAddonBtnEl = document.getElementById('addAddonBtn');
+  if (addAddonBtnEl) addAddonBtnEl.addEventListener('click', openAddAddonModal);
+
+  const refreshBtn = document.getElementById('refreshAllBtn');
+  if (refreshBtn) refreshBtn.addEventListener('click', refreshAll);
+
+  const loadAddonsEl = document.getElementById('loadAddonsBtn');
+  if (loadAddonsEl) loadAddonsEl.addEventListener('click', async () => {
+    if (!stremioAuth || !nuvioAuth) {
+      toast('Load Stremio and Nuvio first', 'warning'); return;
+    }
+    if (stremioAddons.length || nuvioAddons.length) {
+      openAddonOverlay(); return;
+    }
+    loadAddonsEl.disabled = true; loadAddonsEl.textContent = '⏳';
+    try {
+      const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
+      const [stRes, nuRes] = await Promise.all([
+        fetch('/get-stremio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email:stremioAuth.email,password:stremioAuth.password})}).then(safe),
+        fetch('/get-nuvio-addons',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password})}).then(safe),
+      ]);
+      if (!stRes.success) throw new Error('Stremio: '+stRes.error);
+      if (!nuRes.success) throw new Error('Nuvio: '+nuRes.error);
+      stremioAddons = stRes.addons||[];
+      nuvioAddons   = nuRes.addons||[];
+      renderAddonLists();
+      openAddonOverlay();
+      loadAddonsEl.style.display = 'none';
+      const syncEl = document.getElementById('pushAddonsBtn');
+      if (syncEl) { syncEl.style.display = 'flex'; syncEl.disabled = !nuvioAuth; }
+      toast(`${stremioAddons.length} Stremio · ${nuvioAddons.length} Nuvio`, 'success', 'Addons loaded');
+    } catch(e) {
+      toast(e.message, 'error', 'Error loading addons');
+    } finally {
+      loadAddonsEl.disabled = false; loadAddonsEl.textContent = '📥 Load Addons';
+    }
+  });
+
+  const syncEl = document.getElementById('pushAddonsBtn');
+  if (syncEl) syncEl.addEventListener('click', async () => {
+    if (!nuvioAuth) { toast('Load Nuvio first', 'warning'); return; }
+    if (!confirm(`☁️ SYNC ADDONS\n\nWill replace the addon list on Nuvio.\n\nContinue?`)) return;
+    syncEl.disabled = true; syncEl.textContent = '⏳ Sync…';
+    try {
+      const safe = async r => { const t=await r.text(); try{return JSON.parse(t);}catch{return{success:false,error:`HTTP ${r.status}: ${t.slice(0,150)}`};} };
+      const data = await fetch('/push-addons-to-nuvio',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({nuvioEmail:nuvioAuth.email,nuvioPassword:nuvioAuth.password,addons:nuvioAddons})}).then(safe);
+      if (!data.success) throw new Error(data.error);
+      toast(`${data.pushed} addons synced!`, 'success', 'Addons sync OK');
+      const lBtn = document.getElementById('loadAddonsBtn');
+      if (lBtn) { syncEl.style.display='none'; lBtn.style.display='inline-flex'; lBtn.click(); }
+    } catch(e) {
+      toast(e.message, 'error', 'Sync failed');
+    } finally {
+      syncEl.disabled = false; syncEl.textContent = '⏫️ Sync Addons';
+    }
+  });
+});
+
+// Auto-login
+(async function autoLogin() {
+  const stEmail = localStorage.getItem('snt_st_email');
+  const stPwd   = localStorage.getItem('snt_st_pwd');
+  const stRem   = localStorage.getItem('snt_st_remember') === '1';
+  const nuEmail = localStorage.getItem('snt_nu_email');
+  const nuPwd   = localStorage.getItem('snt_nu_pwd');
+  const nuRem   = localStorage.getItem('snt_nu_remember') === '1';
+
+  if (stEmail && stRem) {
+    document.getElementById('stremioEmail').value    = stEmail;
+    document.getElementById('stremioPassword').value = stPwd;
+    document.getElementById('rememberStremio').checked = true;
+  }
+  if (nuEmail && nuRem) {
+    document.getElementById('nuvioEmail').value    = nuEmail;
+    document.getElementById('nuvioPassword').value = nuPwd;
+    document.getElementById('rememberNuvio').checked = true;
+  }
+
+  if (stEmail && stPwd && stRem && nuEmail && nuPwd && nuRem) {
+    toast('Auto‑logging in…', 'info');
+    const [stOk, nuOk] = await Promise.all([
+      loadStremio(stEmail, stPwd),
+      loadNuvio(nuEmail, nuPwd),
+    ]);
+    if (stOk && nuOk) {
+      updateAll();
+      toast('Welcome back! Libraries loaded automatically.', 'success');
+    }
+  } else if (stEmail && stPwd && stRem) {
+    const ok = await loadStremio(stEmail, stPwd);
+    if (ok) updateAll();
+  } else if (nuEmail && nuPwd && nuRem) {
+    const ok = await loadNuvio(nuEmail, nuPwd);
+    if (ok) updateAll();
+  }
+})();
+
+// Expose some functions globally for onclick usage
+window.toggleSidebar = toggleSidebar;
+window.removeToast = removeToast;
+window.renderGridPage = renderGridPage;
+window.quickMarkWatched = quickMarkWatched;
+window.quickUnmarkWatched = quickUnmarkWatched;
+window.quickAddToNuvio = quickAddToNuvio;
+window.quickRemoveFromNuvio = quickRemoveFromNuvio;
+window.copyToClipboard = copyToClipboard;
+window.openItemActions = openItemActions;
+window.closeAddonSection = closeAddonSection;
+window.closeSyncOverlay = closeSyncOverlay;
 </script>
 
-
-<!-- SYNC OVERLAY -->
 <div class="sync-overlay" id="syncOverlay">
   <div class="sync-box">
     <div class="sync-box-title">
       <div class="sync-spinner" id="syncSpinner"></div>
-      🚀 Sync in corso…
+      🚀 Syncing…
     </div>
     <div class="sync-log-area" id="syncLogArea"></div>
     <button class="sync-done-btn" id="syncDoneBtn" onclick="closeSyncOverlay()">
-      ✅ Completato — Chiudi
+      ✅ Done — Close
     </button>
   </div>
 </div>
